@@ -206,6 +206,7 @@ The whole site is a **single stateless Cloudflare-Worker-style handler** (deploy
 ```bash
 npm install
 npx vercel dev          # local:  http://localhost:3000
+node test.js            # smoke suite (routes, client JS, generated scripts, status line)
 npx vercel --prod       # deploy
 ```
 
