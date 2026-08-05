@@ -281,6 +281,10 @@ function buildStatuslineScript(slSan, palette) {
   L.push("    const lines = buf.toString('utf8').split('\\n');");
   L.push('    for (let i = lines.length - 1; i >= 0; i--) {');
   L.push('      const Lx = lines[i];');
+  L.push('      // Usage recorded before a compaction describes a context that no longer');
+  L.push('      // exists, so stop here rather than reporting a stale (much larger) total.');
+  L.push('      // The gauge reappears as soon as the next assistant turn records usage.');
+  L.push('      if (Lx.indexOf(\'"compact_boundary"\') >= 0 || Lx.indexOf(\'"isCompactSummary":true\') >= 0) return null;');
   L.push('      if (Lx.indexOf(\'"usage"\') < 0) continue;');
   L.push('      try {');
   L.push('        const m = JSON.parse(Lx);');

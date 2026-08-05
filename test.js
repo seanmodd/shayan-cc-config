@@ -287,6 +287,32 @@ function bashCheck(src, label) {
   ok(bigRun.status === 0, 'statusline handles >200k usage', bigRun.stderr);
   ok(/641k\/1000k|64%/.test(bigPlain), 'window grows past 200k instead of pinning', bigPlain);
 
+  // after compaction, usage from before the boundary must not be reported
+  const cTr = path.join(TMP, 'compact.jsonl');
+  const slCtx = path.join(TMP, 'sl-ctx.js');
+  r = await call('/statusline.js?c=' + encodeURIComponent(b64e({ ...LEGACY, sl: { on: true, seg: ['model', 'ctx'], sep: ' | ', em: false, bar: 'blocks', ctxFmt: 'pct-of', text: '' } })));
+  fs.writeFileSync(slCtx, r.body);
+  const ctxRun = trPath => {
+    const out = cp.spawnSync('node', [slCtx], {
+      input: JSON.stringify({ transcript_path: trPath, cwd: ROOT, model: { id: 'claude-fable-5', display_name: 'Fable 5' } }),
+      encoding: 'utf8', timeout: 5000,
+    });
+    return (out.stdout || '').replace(/\x1b\[[0-9;]*m/g, '');
+  };
+  fs.writeFileSync(cTr, [
+    JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 168820, output_tokens: 0 } } }),
+    JSON.stringify({ type: 'system', subtype: 'compact_boundary' }),
+    JSON.stringify({ type: 'user', isCompactSummary: true, message: { content: 's' } }),
+  ].join('\n') + '\n');
+  const postCompact = ctxRun(cTr);
+  ok(!/%/.test(postCompact), 'ctx hides stale pre-compaction usage', postCompact);
+  fs.appendFileSync(cTr, JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 65000, output_tokens: 400 } } }) + '\n');
+  const afterTurn = ctxRun(cTr);
+  ok(/33%/.test(afterTurn), 'ctx returns with post-compaction usage', afterTurn);
+  const plainTr = path.join(TMP, 'plain.jsonl');
+  fs.writeFileSync(plainTr, JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 40000, output_tokens: 1000 } } }) + '\n');
+  ok(/21%/.test(ctxRun(plainTr)), 'ctx unaffected in a normal session', ctxRun(plainTr));
+
   console.log('— misc —');
   r = await call('/shayan.sh');
   bashCheck(r.body, 'shayan_installer');
