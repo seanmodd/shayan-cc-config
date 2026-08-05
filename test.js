@@ -243,12 +243,28 @@ function bashCheck(src, label) {
   ok(cleanTerm('ab‮c', 40) === 'abc', 'cleanTerm strips C1 + bidi', JSON.stringify(cleanTerm('ab‮c', 40)));
   ok(cleanFormat('x'.repeat(39) + '{}', 40, 'FB') === 'FB', 'format truncation cannot orphan the placeholder');
 
-  // origin header validation
-  const evilHostReq = { url: '/apply/tokyo-night.sh', headers: { host: 'x.com" ; rm -rf ~ ; echo "' } };
-  let evilBody = '';
-  handler(evilHostReq, { statusCode: 200, setHeader() {}, end(b) { evilBody = String(b); } });
-  ok(!evilBody.includes('rm -rf'), 'hostile Host header rejected', evilBody.split('\n').find(l => l.includes('ORIGIN')));
-  bashCheck(evilBody, 'evil_host_apply');
+  // origin header validation — hostile, malformed and legitimate-but-unusual hosts
+  const hostCase = h => {
+    let body = '', status = 0, threw = null;
+    try {
+      handler({ url: '/shayan.sh', headers: { host: h } },
+        { statusCode: 200, setHeader() {}, end(b) { body = String(b); status = this.statusCode; } });
+    } catch (e) { threw = e; }
+    return { body, status, threw, origin: (body.match(/^ORIGIN="(.*)"$/m) || [])[1] };
+  };
+  const evil = hostCase('x.com" ; rm -rf ~ ; echo "');
+  ok(!evil.threw && !evil.body.includes('rm -rf'), 'hostile Host header rejected', evil.origin);
+  bashCheck(evil.body, 'evil_host_apply');
+  // new URL() throws above port 65535 — an unguarded handler took the process down.
+  for (const h of ['localhost:99999', 'localhost:65536', 'localhost:0', 'a'.repeat(300)]) {
+    const c = hostCase(h);
+    ok(!c.threw && c.status === 200 && c.origin === 'https://shayan-cc-config.vercel.app',
+      `Host ${JSON.stringify(h.slice(0, 20))} falls back instead of throwing`, c.threw ? String(c.threw.message) : c.origin);
+  }
+  for (const h of ['[::1]:3177', 'my_host.local:3177', 'localhost:65535']) {
+    const c = hostCase(h);
+    ok(!c.threw && c.origin === 'https://' + h, `Host ${JSON.stringify(h)} preserved for self-hosting`, c.origin);
+  }
 
   // paletteSeedHex must agree with the rendered terminal background
   const DATA = require(path.join(ROOT, 'api/_data.js'));
@@ -267,10 +283,10 @@ function bashCheck(src, label) {
   r = await call('/apply.sh?c=' + encodeURIComponent(b64e('just a string')));
   ok(r.status === 400, '/apply.sh 400s on non-object payload', 'status ' + r.status);
 
-  // studio client: legacy padding + empty arrays honoured
+  // Studio page: structural checks only. Behavioral preview-vs-install parity is
+  // covered by test-parity.js, which runs the real client functions — substring greps
+  // here would pass on a buggy build and silently rot when the code moves.
   const cust = (await call('/customize')).body;
-  ok(cust.includes('st.um.px=1'), 'studio mirrors server paddingX=1 for legacy border payloads');
-  ok(cust.includes('if(Array.isArray(pl.vv))st.vv='), 'studio honours empty verb arrays');
   ok(cust.includes('if(allowDraft)'), 'studio guards the saved draft');
   ok(cust.includes('ownKey(SL_BARSETS,sl.bar)'), 'studio uses own-property bar check');
   ok(cust.includes('slwarn'), 'studio warns when no segments are selected');
@@ -313,9 +329,88 @@ function bashCheck(src, label) {
   fs.writeFileSync(plainTr, JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 40000, output_tokens: 1000 } } }) + '\n');
   ok(/21%/.test(ctxRun(plainTr)), 'ctx unaffected in a normal session', ctxRun(plainTr));
 
-  console.log('— misc —');
-  r = await call('/shayan.sh');
+  console.log('— shayan installer —');
+  // A real listening server in a SEPARATE process: the installed picker fetches
+  // /list.txt with curl, and spawnSync below would block this process's event loop,
+  // so an in-process server could never answer.
+  const srvScript = path.join(TMP, 'srv.js');
+  fs.writeFileSync(srvScript, [
+    "const http=require('http');",
+    `const h=require(${JSON.stringify(path.join(ROOT, 'api/index.js'))});`,
+    'const s=http.createServer((rq,rs)=>{try{h(rq,rs);}catch(e){rs.statusCode=500;rs.end("err");}});',
+    "s.listen(0,'127.0.0.1',()=>console.log(s.address().port));",
+  ].join('\n'));
+  const srvProc = cp.spawn('node', [srvScript], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const srvPort = await new Promise((resolve, reject) => {
+    let buf = '';
+    const t = setTimeout(() => reject(new Error('server did not start')), 10000);
+    srvProc.stdout.on('data', d => { buf += d; const m = /(\d+)/.exec(buf); if (m) { clearTimeout(t); resolve(+m[1]); } });
+    srvProc.on('error', reject);
+  });
+  const srvHost = '127.0.0.1:' + srvPort;
+  // x-forwarded-proto is set explicitly because the handler defaults to https (right
+  // for production behind Vercel, wrong for a plain-HTTP test server).
+  const curl = p => cp.spawnSync('curl', ['-fsS', '-H', 'x-forwarded-proto: http', 'http://' + srvHost + p],
+    { encoding: 'utf8', timeout: 10000 }).stdout || '';
+  const shBody = curl('/shayan.sh');
+  ok(shBody.includes(srvHost), 'installer targets the live test server', (shBody.match(/^ORIGIN=.*$/m) || [])[0]);
+  r = { body: shBody };
   bashCheck(r.body, 'shayan_installer');
+  // bash -n alone passed on the version that installed 0 bytes (it failed at RUNTIME
+  // under set -u), so the installer has to actually run here.
+  const instSh = path.join(TMP, 'inst.sh');
+  fs.writeFileSync(instSh, r.body);
+  const fakeHome = fs.mkdtempSync(path.join(TMP, 'home-'));
+  // A PATH without node: the installer must not depend on it.
+  const noNode = cp.spawnSync('bash', [instSh], { env: { HOME: fakeHome, PATH: '/usr/bin:/bin' }, encoding: 'utf8', timeout: 20000 });
+  const cli = path.join(fakeHome, '.local/bin/shayan');
+  ok(noNode.status === 0, 'installer succeeds without node on PATH', noNode.stderr);
+  ok(fs.existsSync(cli) && fs.statSync(cli).size > 200, 'installed CLI is non-empty',
+    fs.existsSync(cli) ? fs.statSync(cli).size + ' bytes' : 'missing');
+  ok(fs.existsSync(cli) && (fs.statSync(cli).mode & 0o111) !== 0, 'installed CLI is executable');
+  const cliBody = fs.existsSync(cli) ? fs.readFileSync(cli, 'utf8') : '';
+  ok(!cliBody.includes('__SHAYAN_ORIGIN__'), 'no unsubstituted placeholder remains');
+  ok(/^BASE="https?:\/\/[^"]+"$/m.test(cliBody), 'origin substituted into BASE', (cliBody.match(/^BASE=.*$/m) || [])[0]);
+  bashCheck(cliBody, 'installed_cli');
+  // The picker's arithmetic must not be frozen at install time, and 010 must not be octal.
+  ok(cliBody.includes('i=$((i+1))'), 'loop counter is evaluated at run time, not baked in');
+  ok(cliBody.includes("sed 's/^0*//'"), 'leading zeros stripped so 010 is not octal 8');
+  ok(/\$\{#IDS\[@\]\}/.test(cliBody), 'empty-array guard present for bash 3.2');
+  // The picker must list all 11 presets, correctly numbered.
+  const listRun = cp.spawnSync('bash', [cli], { input: 'q\n', env: { HOME: fakeHome, PATH: '/usr/bin:/bin' }, encoding: 'utf8', timeout: 20000 });
+  ok(listRun.status === 0, 'q quits cleanly', (listRun.stdout + listRun.stderr).trim().split('\n').pop());
+  ok(/ 1\) Tokyo Night/.test(listRun.stdout) && / 11\) Anthropic Stock/.test(listRun.stdout),
+    'picker numbers all 11 entries', JSON.stringify(listRun.stdout.slice(0, 120)));
+  // Valid choices must resolve to the entry the user actually saw. 010/08 are the
+  // interesting ones: bash arithmetic would read them as octal without the strip.
+  const stubBin = fs.mkdtempSync(path.join(TMP, 'bin-'));
+  fs.writeFileSync(path.join(stubBin, 'npx'), '#!/bin/sh\necho "stub npx $*"\n', { mode: 0o755 });
+  const nodeDir = path.dirname(cp.spawnSync('bash', ['-lc', 'command -v node'], { encoding: 'utf8' }).stdout.trim() || '/usr/bin/node');
+  const applyPath = `${stubBin}:${nodeDir}:/usr/bin:/bin`;
+  for (const [choice, want] of [['8', 'winter'], ['08', 'winter'], ['10', 'monochrome'], ['010', 'monochrome']]) {
+    const run = cp.spawnSync('bash', [cli], { input: choice + '\n', env: { HOME: fakeHome, PATH: applyPath }, encoding: 'utf8', timeout: 30000 });
+    const both = run.stdout + run.stderr;
+    ok(both.includes('/config/' + want + '.json'), `choice ${JSON.stringify(choice)} applies ${want}`,
+      (both.match(/\/config\/[a-z-]+\.json/) || ['no config fetch'])[0]);
+  }
+  // Invalid choices must exit non-zero with a clean message and no raw bash errors.
+  for (const choice of ['0', 'abc', '', '99']) {
+    const run = cp.spawnSync('bash', [cli], { input: choice + '\n', env: { HOME: fakeHome, PATH: '/usr/bin:/bin' }, encoding: 'utf8', timeout: 20000 });
+    const both = run.stdout + run.stderr;
+    const noisy = /unbound variable|bad array subscript|value too great|syntax error/.test(both);
+    ok(run.status === 1 && !noisy && /Invalid choice/.test(both), `choice ${JSON.stringify(choice)} rejected cleanly`,
+      'status ' + run.status + ' :: ' + both.trim().split('\n').pop());
+  }
+  // An unreachable server must say so rather than emit a bash internal error.
+  const downCli = path.join(TMP, 'shayan-down');
+  fs.writeFileSync(downCli, cliBody.replace(srvHost, '127.0.0.1:1'), { mode: 0o755 });
+  const downRun = cp.spawnSync('bash', [downCli], { input: '1\n', env: { HOME: fakeHome, PATH: '/usr/bin:/bin' }, encoding: 'utf8', timeout: 20000 });
+  const downBoth = downRun.stdout + downRun.stderr;
+  ok(downRun.status === 1 && /Could not reach/.test(downBoth) && !/unbound variable/.test(downBoth),
+    'unreachable server reports a friendly error', downBoth.trim().split('\n').pop());
+  srvProc.kill();
+
+  console.log('— misc —');
   r = await call('/nope');
   ok(r.status === 404, '404 fallback');
 

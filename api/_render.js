@@ -114,6 +114,35 @@ function mapPreview(c){
     diffAddedWord:C(c.diffAddedWord,F.text),diffRemovedWord:C(c.diffRemovedWord,F.text)};
 }
 function spinnerSeq(p){var ph=p.phases;return (p.reverseMirror&&ph.length>2)?ph.concat(ph.slice(1,-1).reverse()):ph;}
+// Exact mirrors of the server sanitizers in _term.js. The preview is only honest if
+// it applies the same truncation and stripping the installer will apply, so these
+// must stay in lockstep with cleanTerm/cleanText/cleanName/cleanFormat.
+var C_CTRL=/[\\x00-\\x1f\\x7f-\\x9f\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]/g;
+function cTerm(s,max){return String(s==null?'':s).replace(C_CTRL,'').slice(0,max);}
+function cText(s,max){return String(s==null?'':s).replace(C_CTRL,'').replace(/['"\\\\\`$]/g,'').slice(0,max);}
+function cName(s,max){
+  var out;
+  try{out=String(s==null?'':s).replace(/[^\\p{L}\\p{N}\\p{Emoji_Presentation} ._,:!?+()#@\\u00d7\\u2013\\u2014-]/gu,'');}
+  catch(e){out=String(s==null?'':s).replace(/[^0-9A-Za-z ._,:!?+()#@-]/g,'');}
+  return out.replace(/\\s+/g,' ').slice(0,max).replace(/^\\s+|\\s+$/g,'');
+}
+// Slice FIRST, then require the placeholder — a "{}" straddling the cut must not
+// pass the check and then be truncated away.
+function cFmt(s,max,fb){
+  if(typeof s!=='string')return fb;
+  var out=cTerm(s,max);
+  return out.indexOf('{}')>=0?out:fb;
+}
+// Mirror of clampInt: a value that coerces to a finite number is clamped, anything
+// else falls back to the default (so 'abc' and undefined behave identically here
+// and server-side, rather than one of them silently becoming 0).
+function cClamp(v,lo,hi,dflt){var n=Math.round(Number(v));return isFinite(n)?Math.max(lo,Math.min(hi,n)):dflt;}
+function cList(a,maxLen,maxCount){
+  if(Object.prototype.toString.call(a)!=='[object Array]')return [];
+  var out=[];
+  for(var i=0;i<a.length&&out.length<maxCount;i++){var v=cTerm(a[i],maxLen);if(v)out.push(v);}
+  return out;
+}
 function fav_get(){try{return JSON.parse(localStorage.getItem('scc_favs')||'[]');}catch(e){return [];}}
 function fav_set(a){try{localStorage.setItem('scc_favs',JSON.stringify(a));}catch(e){}}
 function fav_has(id){return fav_get().indexOf(id)>=0;}

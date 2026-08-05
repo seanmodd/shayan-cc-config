@@ -38,15 +38,19 @@ const consts = studioSrc.match(/var STATUS_COLORS=[\s\S]*?var state=null;/)[0];
 const termEnv = new Function(`${TERM_SRC.match(/var SL_SEG_META=[\s\S]*?function barsOf\(k\)\{[^}]*\}/)[0]}
   return { SL_SEG_META, SL_SEPLIST, SL_BARSETS, ownKey };`)();
 
-const libEnv = new Function('window', 'location', 'localStorage', 'document', CLIENT_LIB + '\n;return {sanePal, mapPreview, expandPalette};')(
+const LIB_EXPORTS = ['sanePal', 'mapPreview', 'expandPalette', 'cTerm', 'cText', 'cName', 'cFmt', 'cList', 'cClamp', 'okColor'];
+const libEnv = new Function('window', 'location', 'localStorage', 'document',
+  CLIENT_LIB + '\n;return {' + LIB_EXPORTS.join(',') + '};')(
   {}, { origin: 'http://x' }, { getItem: () => null, setItem() {} }, { querySelector: () => null });
 
 // Re-declare the studio functions with the library helpers in scope.
-const studio = new Function('STARTERS', 'SL_SEG_META', 'SL_SEPLIST', 'SL_BARSETS', 'ownKey', 'sanePal', 'mapPreview', 'expandPalette', `
+const TERM_EXPORTS = ['SL_SEG_META', 'SL_SEPLIST', 'SL_BARSETS', 'ownKey'];
+const studioArgs = ['STARTERS', ...TERM_EXPORTS, ...LIB_EXPORTS];
+const studio = new Function(...studioArgs, `
   ${consts}
   ${bodies.join('\n')}
   return { defaultState: defaultState, fromPayload: stateFromPayload, render: function(st){ state = st; return { after: afterModel(), out: payload() }; } };
-`)(STARTERS, termEnv.SL_SEG_META, termEnv.SL_SEPLIST, termEnv.SL_BARSETS, termEnv.ownKey, libEnv.sanePal, libEnv.mapPreview, libEnv.expandPalette);
+`)(STARTERS, ...TERM_EXPORTS.map(k => termEnv[k]), ...LIB_EXPORTS.map(k => libEnv[k]));
 
 const b64e = o => Buffer.from(JSON.stringify(o), 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const serverConfig = pl => {
@@ -74,6 +78,37 @@ const pick = a => a[Math.floor(rnd() * a.length)];
 const cases = [];
 // legacy payloads (no um/ib/sl/iv at all) for every border style
 for (const ub of BORDERS) cases.push({ label: 'legacy ub=' + ub, pl: { n: 'L', s: 'blue', p: PAL, vf: '{}… ', vv: ['A'], ph: ['.'], rm: true, ub, uc: 'rgb(1,2,3)', id: 'x' } });
+
+// Values a user can type or a link can carry that the SERVER sanitizes: the preview
+// has to apply the same truncation and stripping or it promises something else.
+const RAW = [
+  { label: 'verb over 32 chars', pl: { vv: ['ReticulatingSplinesAndAlsoPolygons', 'ok'] } },
+  { label: 'verb with zero-width space', pl: { vv: ['a​b'] } },
+  { label: 'verb with ESC + OSC', pl: { vv: ['\x1b]0;title', 'fine'] } },
+  { label: '41 verbs (server caps 40)', pl: { vv: Array.from({ length: 45 }, (_, i) => 'v' + i) } },
+  { label: 'phase over 4 chars', pl: { ph: ['abcdefg', 'o'] } },
+  { label: '30 phases (server caps 24)', pl: { ph: Array.from({ length: 30 }, (_, i) => String(i % 10)) } },
+  { label: 'sl.text with $ and backtick', pl: { sl: { on: true, seg: ['model', 'text'], sep: ' | ', em: true, bar: 'blocks', ctxFmt: 'pct', text: '$USER on `box`' } } },
+  { label: 'sl.text over 24 chars', pl: { sl: { on: true, seg: ['text'], sep: ' | ', em: true, bar: 'blocks', ctxFmt: 'pct', text: 'x'.repeat(40) } } },
+  { label: 'name with quotes + markup', pl: { n: "Sean's & Co <v2>" } },
+  { label: 'name over 60 chars', pl: { n: 'N'.repeat(80) } },
+  { label: 'verb format {} straddles cut', pl: { vf: 'x'.repeat(23) + '{}' } },
+  { label: 'umd format {} straddles cut', pl: { ub: 'single', um: { f: 'y'.repeat(39) + '{}' } } },
+  { label: 'empty um object with border', pl: { ub: 'single', um: {} } },
+  { label: 'empty um object no border', pl: { ub: 'none', um: {} } },
+  { label: 'um.px as a string', pl: { ub: 'single', um: { px: '3' } } },
+  { label: 'um.px unparseable', pl: { ub: 'single', um: { px: 'abc' } } },
+  { label: 'um.py unparseable', pl: { ub: 'single', um: { py: {} } } },
+  { label: 'iv as a numeric string', pl: { iv: '90' } },
+  { label: 'iv unparseable', pl: { iv: 'fast' } },
+  { label: 'iv out of range', pl: { iv: 99999 } },
+];
+for (const r of RAW) {
+  cases.push({
+    label: 'raw: ' + r.label,
+    pl: { n: 'R', s: 'blue', p: PAL, vf: '{}… ', vv: ['A'], ph: ['.'], rm: true, ub: 'none', uc: 'rgb(1,2,3)', id: 'raw', ...r.pl },
+  });
+}
 // randomized v2 payloads
 for (let i = 0; i < 24; i++) {
   const ub = pick(BORDERS);

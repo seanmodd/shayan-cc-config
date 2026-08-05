@@ -125,34 +125,33 @@ function stateFromPayload(pl){
     if(typeof pl.n==='string')st.n=pl.n.slice(0,60);
     if(STATUS_COLORS.indexOf(pl.s)>=0)st.s=pl.s;
     if(pl.p&&typeof pl.p==='object'){PAL_KEYS.forEach(function(k){var v=pl.p[k[0]];if(Array.isArray(v)&&v.length===3)st.p[k[0]]=[+v[0]||0,+v[1]||0,+v[2]||0].map(function(x){return Math.max(0,Math.min(255,Math.round(x)));});});}
-    if(typeof pl.vf==='string'&&pl.vf.indexOf('{}')>=0)st.vf=pl.vf.slice(0,24);
+    st.vf=cFmt(pl.vf,24,st.vf);
     // Arrays are honoured even when EMPTY — the UI can legitimately produce an empty
     // verb/phase/segment list, and resurrecting defaults would install something the
     // sharer explicitly cleared.
     if(Array.isArray(pl.vv))st.vv=pl.vv.map(function(s){return String(s).slice(0,32);}).filter(Boolean).slice(0,40);
     if(Array.isArray(pl.ph))st.ph=pl.ph.map(function(s){return String(s).slice(0,4);}).filter(Boolean).slice(0,24);
     if(pl.rm===false)st.rm=false;
-    if(typeof pl.iv==='number')st.iv=Math.max(40,Math.min(1000,Math.round(pl.iv)));
+    st.iv=cClamp(pl.iv,40,1000,120);
     if(BORDERS.indexOf(pl.ub)>=0)st.ub=pl.ub;
     if(typeof pl.uc==='string'){var m=/^rgb\\((\\d+),(\\d+),(\\d+)\\)$/.exec(pl.uc.replace(/\\s+/g,''));if(m)st.uc=hx([+m[1],+m[2],+m[3]]);else if(okHex(pl.uc))st.uc=pl.uc;}
     // The server's fallback format depends on whether there is a border (a box
     // supplies its own framing, so it drops the "> " chevron). Mirror that here or a
     // link with an unusable format would install one thing and re-emit another.
     st.um.f=(st.ub!=='none')?' {} ':' > {} ';
+    // Server buildUMD defaults, applied whether um is absent OR present-but-partial
+    // (an empty um object with a border must still get paddingX 1 and fit true).
+    var hasB=st.ub!=='none';
+    st.um.px=hasB?1:0; st.um.fit=hasB;
     if(pl.um&&typeof pl.um==='object'){
       var um=pl.um;
-      if(typeof um.f==='string'&&um.f.indexOf('{}')>=0)st.um.f=um.f.slice(0,40);
+      st.um.f=cFmt(um.f,40,st.um.f);
       if(Array.isArray(um.st))st.um.st=um.st.filter(function(s){return ['bold','italic','underline','strikethrough','inverse'].indexOf(s)>=0;});
       if(okHex(um.fg))st.um.fg=um.fg;
       if(okHex(um.bg))st.um.bg=um.bg;
-      st.um.px=Math.max(0,Math.min(4,Math.round(+um.px||0)));
-      st.um.py=Math.max(0,Math.min(2,Math.round(+um.py||0)));
-      st.um.fit=!!um.fit;
-    } else if(st.ub!=='none'){
-      // Legacy payload with a border and no um object: mirror the server's buildUMD
-      // defaults exactly (paddingX 1, fit true) so the preview matches what the
-      // install command actually applies.
-      st.um.px=1; st.um.fit=true;
+      st.um.px=cClamp(um.px,0,4,hasB?1:0);
+      st.um.py=cClamp(um.py,0,2,0);
+      if(um.fit!==undefined)st.um.fit=!!um.fit;
     }
     if(pl.ib&&typeof pl.ib==='object'){st.ib.rb=!!pl.ib.rb;if(CHEVRONS.indexOf(pl.ib.ch)>0)st.ib.ch=pl.ib.ch;}
     if(pl.sl&&typeof pl.sl==='object'){
@@ -163,7 +162,7 @@ function stateFromPayload(pl){
       st.sl.em=sl.em!==false;
       if(ownKey(SL_BARSETS,sl.bar))st.sl.bar=sl.bar;
       if(['pct','pct-of','tokens'].indexOf(sl.ctxFmt)>=0)st.sl.ctxFmt=sl.ctxFmt;
-      if(typeof sl.text==='string')st.sl.text=sl.text.replace(/["'\\\\]/g,'').slice(0,24);
+      if(typeof sl.text==='string')st.sl.text=cText(sl.text,24);
     }
     if(typeof pl.id==='string')st.id=pl.id.slice(0,16);
   }catch(e){}
@@ -205,20 +204,23 @@ function payload(){
 // mirrored here rather than being allowed to diverge.
 function afterModel(){
   var full=expandPalette(sanePal(state.p));
-  var verbs=state.vv.length?state.vv:['Working'];
-  var phases=state.ph.length?state.ph:['·','✶','✳','✶','✻','✽'];
+  // Every user-authored string goes through the same sanitizer the installer uses,
+  // so what the AFTER pane shows is what actually lands in Claude Code — including
+  // the truncation and control-character stripping.
+  var verbs=cList(state.vv,32,40); if(!verbs.length)verbs=['Working'];
+  var phases=cList(state.ph,4,24); if(!phases.length)phases=['·','✶','✳','✶','✻','✽'];
   var slLive=state.sl.on&&state.sl.seg.length>0;
   return {
-    name:state.n||'Custom',
+    name:cName(state.n,60)||'Custom',
     colors:mapPreview(full),
-    umd:{format:state.um.f,styling:state.um.st,
+    umd:{format:cFmt(state.um.f,40,state.ub!=='none'?' {} ':' > {} '),styling:state.um.st,
       foregroundColor:state.um.fg?hexToRgbStr(state.um.fg):'default',
       backgroundColor:state.um.bg?hexToRgbStr(state.um.bg):null,
       borderStyle:state.ub,borderColor:hexToRgbStr(state.uc),
       paddingX:state.um.px,paddingY:state.um.py,fitBoxToContent:state.um.fit},
-    verbs:verbs,verbFormat:state.vf,phases:phases,reverseMirror:state.rm,interval:state.iv,
+    verbs:verbs,verbFormat:cFmt(state.vf,24,'{}… '),phases:phases,reverseMirror:state.rm,interval:state.iv,
     ib:{rb:state.ib.rb,ch:state.ib.ch},
-    sl:{on:slLive,seg:state.sl.seg,sep:state.sl.sep,em:state.sl.em,bar:state.sl.bar,ctxFmt:state.sl.ctxFmt,text:state.sl.text}
+    sl:{on:slLive,seg:state.sl.seg,sep:state.sl.sep,em:state.sl.em,bar:state.sl.bar,ctxFmt:state.sl.ctxFmt,text:cText(state.sl.text,24)}
   };
 }
 function beforeModel(pe){
@@ -420,7 +422,7 @@ function buildControls(){
   $('#c_slon').addEventListener('change',function(){state.sl.on=this.checked;paintSegs();edited();});
   paintSegs();
   $('#c_sltext').value=state.sl.text;
-  $('#c_sltext').addEventListener('input',function(){state.sl.text=this.value.replace(/["'\\\\]/g,'');if(state.sl.text&&state.sl.seg.indexOf('text')<0){state.sl.seg.push('text');paintSegs();}edited();});
+  $('#c_sltext').addEventListener('input',function(){state.sl.text=cText(this.value,24);if(state.sl.text&&state.sl.seg.indexOf('text')<0){state.sl.seg.push('text');paintSegs();}edited();});
   var sepSel=$('#c_slsep');
   SL_SEPLIST.forEach(function(sp){var o=document.createElement('option');o.value=sp;o.textContent='"'+sp+'"';sepSel.appendChild(o);});
   sepSel.value=state.sl.sep;

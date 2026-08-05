@@ -118,29 +118,36 @@ node -e 'const fs=require("fs"),os=require("os");const f=os.homedir()+"/.claude/
 function shayanInstaller(origin) {
   return `#!/bin/bash
 # shayan-cc-config — installs the \`shayan\` command for one-word setup switching.
-set -euo pipefail
+set -eu
+ORIGIN="${origin}"
 BIN="$HOME/.local/bin"; mkdir -p "$BIN"
-# QUOTED delimiter: the installing shell performs no expansion on the body, so the
-# inner script lands verbatim. The origin is patched in afterwards rather than being
-# interpolated into the heredoc, which keeps the body escaping-free.
-cat > "$BIN/shayan" <<'SHAYAN_CLI_EOF'
+# Two heredocs, so the body needs no escaping and the install needs nothing but
+# bash + curl: the first is UNQUOTED purely to expand $ORIGIN (already whitelisted
+# server-side), the second is QUOTED so the shell touches nothing in the script.
+cat > "$BIN/shayan" <<SHAYAN_CLI_HEAD
 #!/bin/bash
 # shayan — pick or apply a Claude Code setup from shayan-cc-config
-set -uo pipefail
-BASE="__SHAYAN_ORIGIN__"
+set -u
+BASE="$ORIGIN"
+SHAYAN_CLI_HEAD
+cat >> "$BIN/shayan" <<'SHAYAN_CLI_BODY'
 if [ -n "\${1:-}" ]; then curl -fsSL "$BASE/apply/$1.sh" | bash; exit $?; fi
 echo "shayan-cc-config — choose a setup:"; echo
 IDS=(); NAMES=()
-while IFS=$'\\t' read -r id name; do IDS+=("$id"); NAMES+=("$name"); done < <(curl -fsSL "$BASE/list.txt")
+while IFS=$'\\t' read -r id name; do IDS+=("$id"); NAMES+=("$name"); done < <(curl -fsSL "$BASE/list.txt" || true)
+# bash 3.2 (macOS) treats an empty array's [@] as unset under set -u, so count first.
+if [ "\${#IDS[@]}" -eq 0 ]; then echo "Could not reach $BASE — check your connection."; exit 1; fi
 i=1; for n in "\${NAMES[@]}"; do printf "  %2d) %s\\n" "$i" "$n"; i=$((i+1)); done
 echo; printf "Number (or q to quit): "; read -r choice
 [ "$choice" = "q" ] && exit 0
+# Reject non-digits, then strip leading zeros so 010 is not read as octal 8.
 case "$choice" in ''|*[!0-9]*) echo "Invalid choice"; exit 1;; esac
+choice="$(printf '%s' "$choice" | sed 's/^0*//')"
+[ -n "$choice" ] || { echo "Invalid choice"; exit 1; }
 idx=$((choice-1))
-[ -n "\${IDS[$idx]:-}" ] || { echo "Invalid choice"; exit 1; }
+[ "$idx" -ge 0 ] && [ "$idx" -lt "\${#IDS[@]}" ] || { echo "Invalid choice"; exit 1; }
 curl -fsSL "$BASE/apply/\${IDS[$idx]}.sh" | bash
-SHAYAN_CLI_EOF
-node -e 'const fs=require("fs");const f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").split("__SHAYAN_ORIGIN__").join(${JSON.stringify(origin)}));' "$BIN/shayan"
+SHAYAN_CLI_BODY
 chmod +x "$BIN/shayan"
 
 # Ensure ~/.local/bin is on PATH in the user's shell rc.
@@ -155,10 +162,28 @@ echo "         shayan dracula    # apply a setup directly"
 }
 
 // Host/proto come from client-controllable headers and are interpolated into the
-// shell scripts we hand out, so both are whitelisted before use.
-const safeHost = h => (typeof h === 'string' && /^[a-z0-9.-]+(:\d{1,5})?$/i.test(h)) ? h : null;
+// shell scripts we hand out, so both are whitelisted before use. Underscores and
+// bracketed IPv6 literals are allowed so self-hosting on either still works; the
+// port must be a real port, since new URL() throws above 65535.
+function safeHost(h) {
+  if (typeof h !== 'string' || h.length > 260) return null;
+  const m = /^(\[[0-9a-f:.]{2,45}\]|[a-z0-9._-]+)(?::(\d{1,5}))?$/i.exec(h);
+  if (!m) return null;
+  if (m[2] !== undefined) { const p = +m[2]; if (!p || p > 65535) return null; }
+  return h;
+}
 
 module.exports = (req, res) => {
+  try { return route(req, res); }
+  catch (e) {
+    // A malformed request must never take the process down.
+    res.statusCode = 500;
+    res.setHeader('content-type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify({ error: 'request failed', detail: cleanText(e && e.message, 120) }));
+  }
+};
+
+function route(req, res) {
   const host = safeHost(req.headers['x-forwarded-host']) || safeHost(req.headers.host) || 'shayan-cc-config.vercel.app';
   const rawProto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
   const proto = (rawProto === 'http' || rawProto === 'https') ? rawProto : 'https';
@@ -233,4 +258,4 @@ module.exports = (req, res) => {
   }
 
   return sendJSON({ error: 'not found', path }, 404);
-};
+}
