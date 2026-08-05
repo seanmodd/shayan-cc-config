@@ -73,23 +73,27 @@ shayan dracula       # apply a setup directly by id
 
 ---
 
-## 🎛️ Build your own
+## 🎛️ Build your own — the Studio
 
 ![customizing a setup with live preview](media/customizer.gif)
 
-The [**customizer**](https://shayan-cc-config.vercel.app/customize) gives you a live-updating terminal preview while you tweak:
+The [**Studio**](https://shayan-cc-config.vercel.app/customize) shows two **fully interactive Claude Code terminals side by side — BEFORE (your current setup) and AFTER (your custom one)**. Both are real scrollable sessions with user messages, thinking spinners, tool calls, diffs and a status line. **Type a message into either terminal** (or fire a sample prompt) and watch both respond in their own style. Pick any preset as your "before" to compare against.
 
-- **14-color palette** (background, text, accent, success/error/warning, and more) with native color pickers — start from Tokyo Night, Catppuccin, Nord, Solarized, Sunset or Matrix and go from there,
-- **thinking verbs** (your own word list + format string, e.g. `{}… `),
-- **spinner** style (braille, moon, circle, pulse, blocks…) with optional bounce,
-- **user-message box** border + color,
-- **status-line accent**.
+Everything you tweak updates the AFTER terminal live:
+
+- **14-color palette** (background, text, accent, success/error/warning, and more) with native color pickers — start from Tokyo Night, Catppuccin, Nord, Solarized, Sunset or Matrix, or seed *everything* from any preset,
+- **thinking verbs** (your own word list + format string, e.g. `{}… `) and **spinner** (braille, moon, circle, pulse, blocks, arrows, or fully custom phases) with speed slider + optional bounce,
+- **your messages** — this is how you tell your prompts apart from Claude's output: format string (`" ❯ {} "`), bold/italic/underline/strikethrough/inverse, custom text + background colors, 11 border styles, padding, fit-to-content,
+- **input box** — remove the border, tint the idle `>` chevron,
+- **status line builder** — compose the bottom bar from segments (model, folder, git branch + dirty flag, context bar + %, session cost, duration, lines ±, output style, CC version, clock, custom text), reorder them, pick separators and bar styles, emoji on/off. The installer writes a real status-line script to `~/.claude/statusline-shayan.js` and registers it in `~/.claude/settings.json`.
 
 When you love it:
 
 - **Copy install command** — a self-contained command that encodes your whole setup, runs anywhere,
 - **⭐ Publish to homepage** — your setup appears as a card on your gallery (saved in your browser),
-- **🔗 Share link** — anyone who opens it gets your setup added to their gallery.
+- **🔗 Share link** — anyone who opens it lands in the Studio with your exact setup loaded.
+
+Your work-in-progress is kept in the URL and in a local draft, so refreshing never loses it. Every preset card on the homepage has a **Customize** button that opens the Studio seeded with that setup; your published customs get an **Edit** button.
 
 No account, no backend — your custom config travels inside the link and the install command.
 
@@ -136,6 +140,12 @@ The installer only edits `~/.claude/scripts/context-bar.sh` if that file exists 
 </details>
 
 <details>
+<summary><b>My custom status line didn't show up</b></summary>
+
+The installer writes `~/.claude/statusline-shayan.js` and points `statusLine` at it in `~/.claude/settings.json` — it appears in **new** Claude Code sessions. To remove it, delete the `statusLine` key from `~/.claude/settings.json`.
+</details>
+
+<details>
 <summary><b>"command not found: npx"</b></summary>
 
 You need Node.js (which provides `npx`). Install it via [nodejs.org](https://nodejs.org) or `brew install node`, then re-run.
@@ -164,11 +174,12 @@ Everything is a plain HTTP endpoint — no auth, CORS-open, stateless.
 | Route | Description |
 |---|---|
 | `GET /` | The gallery |
-| `GET /customize` | The live customizer |
+| `GET /customize` | The Studio — interactive before/after customizer (`?from=<id>` seeds from a preset, `?c=<blob>` opens a shared setup) |
 | `GET /apply/:id.sh` | Installer for a built-in setup (pipe to `bash`) |
 | `GET /config/:id.json` | The `tweakcc` settings JSON for a setup |
 | `GET /apply.sh?c=<blob>` | Installer for a **custom** setup (palette encoded in `c`) |
 | `GET /config.json?c=<blob>` | `tweakcc` settings for a custom setup |
+| `GET /statusline.js?c=<blob>` | The generated status-line script for a custom setup |
 | `GET /shayan.sh` | Installs the `shayan` CLI helper |
 | `GET /list.txt` | `id⇥name` per line (used by the helper) |
 | `GET /api/presets` | Full preset data as JSON |
