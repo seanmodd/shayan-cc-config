@@ -1,0 +1,7 @@
+{
+  "name": "shayan-cc-config",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A gallery of Claude Code setups — pick one, run one command, tweakcc applies it to your terminal.",
+  "engines": { "node": ">=18" }
+}
