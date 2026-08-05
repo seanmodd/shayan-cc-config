@@ -135,6 +135,10 @@ function stateFromPayload(pl){
     if(typeof pl.iv==='number')st.iv=Math.max(40,Math.min(1000,Math.round(pl.iv)));
     if(BORDERS.indexOf(pl.ub)>=0)st.ub=pl.ub;
     if(typeof pl.uc==='string'){var m=/^rgb\\((\\d+),(\\d+),(\\d+)\\)$/.exec(pl.uc.replace(/\\s+/g,''));if(m)st.uc=hx([+m[1],+m[2],+m[3]]);else if(okHex(pl.uc))st.uc=pl.uc;}
+    // The server's fallback format depends on whether there is a border (a box
+    // supplies its own framing, so it drops the "> " chevron). Mirror that here or a
+    // link with an unusable format would install one thing and re-emit another.
+    st.um.f=(st.ub!=='none')?' {} ':' > {} ';
     if(pl.um&&typeof pl.um==='object'){
       var um=pl.um;
       if(typeof um.f==='string'&&um.f.indexOf('{}')>=0)st.um.f=um.f.slice(0,40);
@@ -146,9 +150,9 @@ function stateFromPayload(pl){
       st.um.fit=!!um.fit;
     } else if(st.ub!=='none'){
       // Legacy payload with a border and no um object: mirror the server's buildUMD
-      // defaults exactly (format ' {} ', paddingX 1, fit true) so the preview matches
-      // what the install command actually applies.
-      st.um.f=' {} '; st.um.px=1; st.um.fit=true;
+      // defaults exactly (paddingX 1, fit true) so the preview matches what the
+      // install command actually applies.
+      st.um.px=1; st.um.fit=true;
     }
     if(pl.ib&&typeof pl.ib==='object'){st.ib.rb=!!pl.ib.rb;if(CHEVRONS.indexOf(pl.ib.ch)>0)st.ib.ch=pl.ib.ch;}
     if(pl.sl&&typeof pl.sl==='object'){

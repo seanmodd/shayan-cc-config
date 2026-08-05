@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "description": "A gallery of Claude Code setups — pick one, run one command, tweakcc applies it to your terminal.",
-  "scripts": { "test": "node test.js" },
+  "scripts": { "test": "node test.js && node test-parity.js" },
   "engines": { "node": ">=18" }
 }
