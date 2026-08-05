@@ -46,6 +46,15 @@ const STUDIO_CSS = `
   .inline2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   .inline3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
   .hint{color:var(--faint);text-transform:none;letter-spacing:0;font-size:11px;font-weight:400;}
+  .cap{display:flex;align-items:center;gap:4px;flex-wrap:wrap;}
+  .i{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;flex:none;border:1px solid var(--border);background:#10141b;color:var(--faint);border-radius:50%;font:italic 700 10px/1 Georgia,serif;cursor:help;padding:0;margin-left:2px;}
+  .i:hover,.i.on{border-color:var(--accent);color:var(--accent);background:rgba(122,162,247,.12);}
+  .i:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .tip{position:absolute;z-index:200;width:330px;max-width:calc(100vw - 24px);background:#0b0e14;border:1px solid var(--accent);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.55;color:var(--text);box-shadow:0 16px 38px rgba(0,0,0,.65);}
+  .tip b{display:block;color:var(--accent);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;}
+  .modrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+  .modrow .stychips{margin-bottom:0;}
+  .modrow input[type=color]{width:34px;height:26px;border:1px solid var(--border);border-radius:6px;background:#0b0e14;padding:2px;cursor:pointer;flex:none;}
   .swatches{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
   .sw{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);}
   .sw input[type=color]{width:34px;height:26px;border:1px solid var(--border);border-radius:6px;background:#0b0e14;padding:2px;cursor:pointer;flex:none;}
@@ -182,6 +191,13 @@ function stateFromPreset(pe){
   if(typeof u.format==='string'&&u.format.indexOf('{}')>=0)st.um.f=u.format;
   st.um.st=(u.styling||[]).slice();
   st.um.px=u.paddingX||0;st.um.py=u.paddingY||0;st.um.fit=!!u.fitBoxToContent;
+  // Message colours, which this used to drop on the floor: seeding from a preset
+  // that styles user messages produced everything EXCEPT its colours. 'default'
+  // and null both mean "follow the theme", which is the empty string here.
+  var fgm=/^rgb\\((\\d+),\\s*(\\d+),\\s*(\\d+)\\)$/.exec(u.foregroundColor||'');
+  if(fgm)st.um.fg=hx([+fgm[1],+fgm[2],+fgm[3]]);else if(okHex(u.foregroundColor))st.um.fg=u.foregroundColor;
+  var bgm=/^rgb\\((\\d+),\\s*(\\d+),\\s*(\\d+)\\)$/.exec(u.backgroundColor||'');
+  if(bgm)st.um.bg=hx([+bgm[1],+bgm[2],+bgm[3]]);else if(okHex(u.backgroundColor))st.um.bg=u.backgroundColor;
   return st;
 }
 // Hash EVERY field that changes the installed setup — a narrower hash makes two
@@ -287,6 +303,116 @@ function refreshAfter(){termA.setModel(afterModel());drawOutputs();}
 // are safe to persist as their draft.
 function edited(){allowDraft=true;refreshAfter();}
 
+// ── Explanations ────────────────────────────────────────────────────────────
+// Every control gets an (i). The terms here are Claude Code's and tweakcc's, not
+// ones a newcomer can be expected to know, so each entry says what the option
+// does, what it affects, and — where two options look similar — how they differ.
+var HELP={
+ name:{t:'Setup name',d:'What this setup is called. It shows up in the install command and in tweakcc’s theme list, so you can pick it again later. A label only — it changes nothing about how the terminal looks.'},
+ start:{t:'Start from a starter palette',d:'Replaces ONLY the colours below with a hand‑picked set. Everything else you have set — thinking verbs, spinner, message style, input box, status line — is left exactly as it is. Use this when you like your setup and just want it in different colours.'},
+ seed:{t:'…or seed everything from a preset',d:'Replaces your WHOLE setup with a complete ready‑made one: the colours and the verbs, spinner, message format, input box and status line. Use this to start over from a finished look. It overwrites the panels below, so if you only want new colours use the starter palette above instead.'},
+ palette:{t:'Palette',d:'The colour Claude Code uses for each job. These are roles, not decoration: Accent tints Claude’s own name and spinner, Cyan is plan mode, Success / Error / Warning colour tool results, Remember is the memory notice. Change one and every place that uses it changes in the AFTER preview.'},
+ verbs:{t:'Thinking verbs',d:'The words shown while Claude works — the “Cooking” in “Cooking… (esc to interrupt)”. One per line, and Claude Code shows one of them each time it starts thinking. Add as many as you like; empty lines are ignored.'},
+ vf:{t:'Verb format',d:'The wrapper around each verb. {} is where the verb goes and everything else is printed literally, so “{}… ” gives “Cooking… ” and “· {} ·” gives “· Cooking ·”. It must contain {} or the change is ignored.'},
+ spin:{t:'Spinner',d:'The small animation that turns next to the verb. Picking one here fills in the frames below. Edit those frames yourself and this drops to “custom”.'},
+ phases:{t:'Custom phases',d:'The individual animation frames, separated by spaces. The spinner shows them in order, one per tick, then starts again. Any characters work, emoji included — up to 24 frames.'},
+ iv:{t:'Speed',d:'How long each frame is held, in milliseconds. Lower is faster: 40ms is nearly a blur, 400ms is a slow pulse.'},
+ rm:{t:'bounce (mirror)',d:'Plays the frames forward and then backwards, instead of snapping from the last frame straight back to the first. On an uneven spinner this reads as a sweep back and forth rather than a jump.'},
+ umf:{t:'Message format',d:'How YOUR typed messages are drawn in the transcript — this is the main way to tell your lines apart from Claude’s. {} is your message text, everything else is literal, so “ ❯ {} ” puts a chevron in front of every message you send. Must contain {}.'},
+ umst:{t:'Text style',d:'Terminal text attributes applied to your messages. “inverse” swaps the text and background colours, which is the loudest option and the easiest to spot while scrolling. Combine as many as you like; very old terminals ignore some of them.'},
+ fg:{t:'Text colour',d:'The colour of your own messages. “Theme” follows the palette’s Text colour, so it keeps matching if you change palettes later. “Custom” pins the exact colour in the picker — useful when you want your lines in a different colour from Claude’s replies.'},
+ bg:{t:'Background strip',d:'A block of colour painted behind your messages, so your lines read as a solid band rather than plain text. “Theme” follows the palette’s message background; “Custom” pins the colour in the picker. Switching to Custom starts from the colour already showing, so nothing jumps.'},
+ ub:{t:'Border',d:'Draws a box around each of your messages out of line characters. “none” is no box, “round” has curved corners, and the topBottom… options draw only a rule above and below instead of a full frame. Turning a border on also switches the message format to “ {} ”, since the box already separates your text.'},
+ uc:{t:'Border colour',d:'The colour of the box drawn around your messages. Only visible when Border is something other than “none”.'},
+ px:{t:'Pad X',d:'Blank columns between the border and your text, on the left and right. 0 to 4. Only visible with a border.'},
+ py:{t:'Pad Y',d:'Blank lines between the border and your text, above and below. 0 to 2. Only visible with a border.'},
+ fit:{t:'fit box',d:'The box hugs the width of your text instead of stretching the full width of the terminal, so a short message gets a short box.'},
+ ibrb:{t:'remove the input‑box border',d:'Hides the rounded frame around the prompt you type into, leaving just the chevron and your text. Cleaner, at the cost of the visible edge that shows where the input area is.'},
+ ibch:{t:'Idle chevron colour',d:'The colour of the ❯ in front of the prompt before you start typing. The options are palette roles rather than fixed colours, so “claude” matches Claude’s accent and “planMode” matches plan mode, and they follow your palette.'},
+ slon:{t:'Install a custom status line',d:'The status line is the single row along the very bottom of Claude Code. Ticked, the install command writes a statusLine entry into ~/.claude/settings.json pointing at a generated script. Unticked, your existing status line is left completely alone.'},
+ segs:{t:'Segments',d:'Which pieces of information the bottom row shows, and in which order. Tick one to include it; use ▲▼ to move it. They print left to right in the order listed here. With none ticked, no status line is installed at all.'},
+ sltext:{t:'Custom text segment',d:'Any text you want pinned in the status line — a project name, a reminder, an emoji. Typing here switches the “Custom text” segment on for you.'},
+ slsep:{t:'Separator',d:'The characters printed between one segment and the next.'},
+ slbar:{t:'Bar style',d:'Which pair of characters draws the context gauge — one for the filled part, one for the empty part. “shade” is solid blocks, “braille” is the finest grained. Only matters if the Context bar segment is on.'},
+ slctx:{t:'Context as',d:'How the context window is written: a bare percentage, a percentage with the window size after it, or used and total tokens.'},
+ slem:{t:'emoji icons',d:'Puts a small emoji in front of each segment instead of a plain label. Shorter, but it needs a terminal font that has them — if you see boxes, turn this off.'},
+ status:{t:'Legacy context‑bar.sh accent',d:'Only affects the older standalone context‑bar.sh script, if you happen to use one. It has NO effect on the status line built above, and nothing in the preview changes when you touch it. Leave it alone unless you know you want it.'},
+ seg_model:{t:'Model name',d:'The model answering right now, e.g. Opus 5.'},
+ seg_dir:{t:'Folder',d:'The name of the folder Claude Code is working in — just the last part, not the whole path.'},
+ seg_git:{t:'Git branch',d:'The branch currently checked out, with a marker when the working tree has uncommitted changes. Blank outside a git repository.'},
+ seg_ctx:{t:'Context bar',d:'A small gauge of how much of the context window is in use, drawn with the Bar style characters and written in the Context as format.'},
+ seg_cost:{t:'Session cost',d:'What this session has cost so far, in dollars.'},
+ seg_dur:{t:'Duration',d:'How long this session has been running, in minutes (or hours and minutes once it passes an hour).'},
+ seg_lines:{t:'Lines +/−',d:'How many lines this session has added and removed across all its edits.'},
+ seg_style:{t:'Output style',d:'The active output style, if you have set one. Blank when you have not.'},
+ seg_ver:{t:'CC version',d:'The version of Claude Code you are running.'},
+ seg_clock:{t:'Clock',d:'The current time, as HH:MM.'},
+ seg_text:{t:'Custom text',d:'Whatever you typed into the Custom text segment field.'}
+};
+function ihtml(k){return '<button type="button" class="i" data-h="'+k+'" aria-label="Explain this option">i</button>';}
+var _tip=null,_tipBtn=null,_tipPinned=false;
+function tipNode(){
+  if(!_tip){
+    _tip=document.createElement('div');_tip.className='tip';_tip.setAttribute('role','tooltip');
+    _tip.appendChild(document.createElement('b'));_tip.appendChild(document.createElement('span'));
+    _tip.style.display='none';document.body.appendChild(_tip);
+  }
+  return _tip;
+}
+function hideTip(){
+  if(_tip)_tip.style.display='none';
+  if(_tipBtn)_tipBtn.classList.remove('on');
+  _tipBtn=null;_tipPinned=false;
+}
+function showTip(btn){
+  var k=btn.getAttribute('data-h');
+  if(!ownKey(HELP,k))return;
+  var h=HELP[k],t=tipNode();
+  // textContent, never innerHTML: the copy is ours, but this is the one place a
+  // future entry with an angle bracket in it could otherwise become markup.
+  t.firstChild.textContent=h.t;t.lastChild.textContent=h.d;
+  t.style.display='block';t.style.left='0px';t.style.top='0px';
+  if(_tipBtn)_tipBtn.classList.remove('on');
+  _tipBtn=btn;btn.classList.add('on');
+  var r=btn.getBoundingClientRect(),w=t.offsetWidth,hh=t.offsetHeight;
+  var vw=document.documentElement.clientWidth,vh=document.documentElement.clientHeight;
+  var left=r.left+window.pageXOffset-8;
+  var maxL=window.pageXOffset+vw-w-12;
+  if(left>maxL)left=maxL;
+  if(left<window.pageXOffset+12)left=window.pageXOffset+12;
+  // The install bar is position:fixed across the bottom, so "fits on screen" ends
+  // above it, not at the viewport edge — otherwise the last few tooltips in the
+  // Status line panel open underneath it and cannot be read.
+  var barEl=document.querySelector('.barbot');
+  var floor=vh-(barEl?barEl.offsetHeight+8:8);
+  var below=r.bottom+7,above=r.top-7-hh,top;
+  if(below+hh<=floor)top=below;
+  else if(above>=4)top=above;
+  else top=Math.max(4,Math.min(floor-hh,below));
+  t.style.left=left+'px';t.style.top=(top+window.pageYOffset)+'px';
+}
+document.addEventListener('mouseover',function(e){
+  var b=e.target&&e.target.closest?e.target.closest('.i'):null;
+  if(b&&!_tipPinned)showTip(b);
+});
+document.addEventListener('mouseout',function(e){
+  var b=e.target&&e.target.closest?e.target.closest('.i'):null;
+  if(b&&!_tipPinned&&b===_tipBtn)hideTip();
+});
+// Click pins it open, which is the only way this works on a touch screen and the
+// only way the text stays put long enough to read a long explanation.
+document.addEventListener('click',function(e){
+  var b=e.target&&e.target.closest?e.target.closest('.i'):null;
+  if(b){
+    e.preventDefault();e.stopPropagation();
+    if(_tipPinned&&b===_tipBtn){hideTip();return;}
+    showTip(b);_tipPinned=true;return;
+  }
+  if(_tipPinned&&(!_tip||!_tip.contains(e.target)))hideTip();
+},true);
+document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();});
+window.addEventListener('scroll',function(){if(_tipBtn)hideTip();},true);
+
 function chip(label,on,cb){
   var el=document.createElement('span');el.className='stychip'+(on?' on':'');el.textContent=label;
   el.addEventListener('click',function(){cb(!el.classList.contains('on'));el.classList.toggle('on');});
@@ -296,59 +422,110 @@ function detectSpinner(){
   for(var k in SPINNERS){if(!ownKey(SPINNERS,k)||!SPINNERS[k])continue;if(SPINNERS[k].join(',')===state.ph.join(','))return k;}
   return 'custom';
 }
+// Text/background colour for your own messages.
+//
+// This replaced a checkbox captioned "theme text color" sitting next to a colour
+// picker, which was unreadable in both directions: ticked meant "ignore the picker",
+// and unticking it applied whatever the picker happened to hold — a hardcoded Tokyo
+// Night value, so on any other palette the message colour jumped to something
+// unrelated to the theme. Now the two states are named, and the picker always shows
+// the colour currently in force, so switching to Custom starts where Theme left off.
+var _syncFg=null,_syncBg=null;
+function rgbToHex(v){
+  var m=/^rgb\\((\\d+),\\s*(\\d+),\\s*(\\d+)\\)$/.exec(String(v||''));
+  if(m)return hx([+m[1],+m[2],+m[3]]);
+  return okHex(v)?v:'#000000';
+}
+// The colour the theme is currently using for that slot, straight from the same
+// mapping the AFTER preview renders with.
+function themeColorHex(which){
+  var c=mapPreview(expandPalette(sanePal(state.p)));
+  return rgbToHex(which==='fg'?c.text:c.userMsgBg);
+}
+function modeChip(label,on,cb){
+  var el=document.createElement('span');
+  el.className='stychip'+(on?' on':'');el.textContent=label;
+  el.addEventListener('click',function(){if(!el.classList.contains('on'))cb();});
+  return el;
+}
+function buildColorMode(which){
+  var isFg=which==='fg';
+  var host=$(isFg?'#c_fgmode':'#c_bgmode');
+  var pick=$(isFg?'#c_fg':'#c_bg');
+  var hint=$(isFg?'#c_fghint':'#c_bghint');
+  function cur(){return isFg?state.um.fg:state.um.bg;}
+  function set(v){if(isFg)state.um.fg=v;else state.um.bg=v;}
+  function sync(){
+    var custom=!!cur();
+    host.innerHTML='';
+    host.appendChild(modeChip('Theme',!custom,function(){set('');sync();edited();}));
+    // Seeding Custom from the picker's current value — which in Theme mode is the
+    // live theme colour — is what stops the colour jumping when you switch.
+    host.appendChild(modeChip('Custom',custom,function(){set(pick.value);sync();edited();}));
+    pick.value=custom?cur():themeColorHex(which);
+    hint.textContent=custom?'custom':'following the palette';
+  }
+  pick.addEventListener('input',function(){set(this.value);sync();edited();});
+  sync();
+  return sync;
+}
+// Called whenever the palette changes: in Theme mode the picker must keep showing
+// the colour actually in force, not the one from the palette before last.
+function resyncColorModes(){if(_syncFg)_syncFg();if(_syncBg)_syncBg();}
+
 function buildControls(){
   var host=$('#controls');
   host.innerHTML=
   '<div class="panel"><h3>\u{1F3AF} Setup</h3>'+
-    '<label class="ctl">Name<input id="c_name" type="text" maxlength="60"></label>'+
-    '<label class="ctl">Start from a starter palette<select id="c_start"><option value="">— pick —</option></select></label>'+
-    '<label class="ctl">…or seed everything from a preset<select id="c_seed"><option value="">— pick —</option></select></label>'+
-    '<div class="ctl"><span>Palette</span><div class="swatches" id="c_swatches"></div></div>'+
+    '<label class="ctl"><span class="cap">Name'+ihtml('name')+'</span><input id="c_name" type="text" maxlength="60"></label>'+
+    '<label class="ctl"><span class="cap">Start from a starter palette'+ihtml('start')+'</span><select id="c_start"><option value="">— pick —</option></select></label>'+
+    '<label class="ctl"><span class="cap">…or seed everything from a preset'+ihtml('seed')+'</span><select id="c_seed"><option value="">— pick —</option></select></label>'+
+    '<div class="ctl"><span class="cap">Palette'+ihtml('palette')+'</span><div class="swatches" id="c_swatches"></div></div>'+
   '</div>'+
   '<div class="panel"><h3>✳ Thinking &amp; spinner</h3>'+
-    '<label class="ctl">Thinking verbs <span class="hint">(one per line)</span><textarea id="c_verbs" rows="5"></textarea></label>'+
+    '<label class="ctl"><span class="cap">Thinking verbs <span class="hint">(one per line)</span>'+ihtml('verbs')+'</span><textarea id="c_verbs" rows="5"></textarea></label>'+
     '<div class="inline2">'+
-    '<label class="ctl">Verb format <span class="hint">{} = verb</span><input id="c_vf" type="text" maxlength="24"></label>'+
-    '<label class="ctl">Spinner<select id="c_spin"></select></label>'+
+    '<label class="ctl"><span class="cap">Verb format <span class="hint">{} = verb</span>'+ihtml('vf')+'</span><input id="c_vf" type="text" maxlength="24"></label>'+
+    '<label class="ctl"><span class="cap">Spinner'+ihtml('spin')+'</span><select id="c_spin"></select></label>'+
     '</div>'+
-    '<label class="ctl">Custom phases <span class="hint">(space-separated characters)</span><input id="c_phases" type="text"></label>'+
+    '<label class="ctl"><span class="cap">Custom phases <span class="hint">(space-separated characters)</span>'+ihtml('phases')+'</span><input id="c_phases" type="text"></label>'+
     '<div class="inline2">'+
-    '<label class="ctl">Speed <span class="hint" id="c_ivlbl"></span><input id="c_iv" type="range" min="40" max="400" step="10"></label>'+
-    '<label class="ctl2" style="margin-top:20px"><input id="c_rm" type="checkbox"> bounce (mirror)</label>'+
+    '<label class="ctl"><span class="cap">Speed <span class="hint" id="c_ivlbl"></span>'+ihtml('iv')+'</span><input id="c_iv" type="range" min="40" max="400" step="10"></label>'+
+    '<label class="ctl2" style="margin-top:20px"><input id="c_rm" type="checkbox"> bounce (mirror)'+ihtml('rm')+'</label>'+
     '</div>'+
   '</div>'+
   '<div class="panel"><h3>\u{1F4AC} Your messages</h3>'+
-    '<label class="ctl">Format <span class="hint">{} = your message, e.g. " ❯ {} "</span><input id="c_umf" type="text" maxlength="40"></label>'+
-    '<div class="ctl"><span>Text style</span><div class="stychips" id="c_umst"></div></div>'+
-    '<div class="colorrow"><label class="ctl2" style="margin:0"><input type="checkbox" id="c_fgD"> theme text color</label><input type="color" id="c_fg"><span>custom</span></div>'+
-    '<div class="colorrow"><label class="ctl2" style="margin:0"><input type="checkbox" id="c_bgD"> theme background strip</label><input type="color" id="c_bg"><span>custom</span></div>'+
+    '<label class="ctl"><span class="cap">Format <span class="hint">{} = your message, e.g. " ❯ {} "</span>'+ihtml('umf')+'</span><input id="c_umf" type="text" maxlength="40"></label>'+
+    '<div class="ctl"><span class="cap">Text style'+ihtml('umst')+'</span><div class="stychips" id="c_umst"></div></div>'+
+    '<div class="ctl"><span class="cap">Text colour'+ihtml('fg')+'</span><div class="modrow"><span class="stychips" id="c_fgmode"></span><input type="color" id="c_fg"><span class="hint" id="c_fghint"></span></div></div>'+
+    '<div class="ctl"><span class="cap">Background strip'+ihtml('bg')+'</span><div class="modrow"><span class="stychips" id="c_bgmode"></span><input type="color" id="c_bg"><span class="hint" id="c_bghint"></span></div></div>'+
     '<div class="inline2">'+
-    '<label class="ctl">Border<select id="c_ub"></select></label>'+
-    '<div class="colorrow" style="margin-top:20px"><input type="color" id="c_uc"><span>border color</span></div>'+
+    '<label class="ctl"><span class="cap">Border'+ihtml('ub')+'</span><select id="c_ub"></select></label>'+
+    '<div class="colorrow" style="margin-top:20px"><input type="color" id="c_uc"><span>border colour</span>'+ihtml('uc')+'</div>'+
     '</div>'+
     '<div class="inline3">'+
-    '<label class="ctl">Pad X<input id="c_px" type="number" min="0" max="4"></label>'+
-    '<label class="ctl">Pad Y<input id="c_py" type="number" min="0" max="2"></label>'+
-    '<label class="ctl2" style="margin-top:20px"><input id="c_fit" type="checkbox"> fit box</label>'+
+    '<label class="ctl"><span class="cap">Pad X'+ihtml('px')+'</span><input id="c_px" type="number" min="0" max="4"></label>'+
+    '<label class="ctl"><span class="cap">Pad Y'+ihtml('py')+'</span><input id="c_py" type="number" min="0" max="2"></label>'+
+    '<label class="ctl2" style="margin-top:20px"><input id="c_fit" type="checkbox"> fit box'+ihtml('fit')+'</label>'+
     '</div>'+
   '</div>'+
   '<div class="panel"><h3>⌨ Input box</h3>'+
-    '<label class="ctl2"><input id="c_ibrb" type="checkbox"> remove the input-box border</label>'+
-    '<label class="ctl">Idle chevron (&gt;) color<select id="c_ibch"></select></label>'+
+    '<label class="ctl2"><input id="c_ibrb" type="checkbox"> remove the input-box border'+ihtml('ibrb')+'</label>'+
+    '<label class="ctl"><span class="cap">Idle chevron (&gt;) colour'+ihtml('ibch')+'</span><select id="c_ibch"></select></label>'+
     '<div class="hint" style="margin-top:6px">Patched into Claude Code by tweakcc, previewed live above.</div>'+
   '</div>'+
   '<div class="panel"><h3>\u{1F4CA} Status line</h3>'+
-    '<label class="ctl2"><input id="c_slon" type="checkbox"> install a custom status line <span class="hint">(~/.claude/settings.json)</span></label>'+
+    '<label class="ctl2"><input id="c_slon" type="checkbox"> install a custom status line <span class="hint">(~/.claude/settings.json)</span>'+ihtml('slon')+'</label>'+
     '<div id="slwarn" class="hint" style="display:none;color:#e5c07b;margin:-4px 0 10px">Pick at least one segment — with none selected, no status line gets installed.</div>'+
-    '<div class="seglist" id="c_segs"></div>'+
-    '<label class="ctl">Custom text segment<input id="c_sltext" type="text" maxlength="24"></label>'+
+    '<div class="ctl"><span class="cap">Segments'+ihtml('segs')+'</span><div class="seglist" id="c_segs"></div></div>'+
+    '<label class="ctl"><span class="cap">Custom text segment'+ihtml('sltext')+'</span><input id="c_sltext" type="text" maxlength="24"></label>'+
     '<div class="inline3">'+
-    '<label class="ctl">Separator<select id="c_slsep"></select></label>'+
-    '<label class="ctl">Bar style<select id="c_slbar"></select></label>'+
-    '<label class="ctl">Context as<select id="c_slctx"><option value="pct">42%</option><option value="pct-of">42% of 200k</option><option value="tokens">84k/200k</option></select></label>'+
+    '<label class="ctl"><span class="cap">Separator'+ihtml('slsep')+'</span><select id="c_slsep"></select></label>'+
+    '<label class="ctl"><span class="cap">Bar style'+ihtml('slbar')+'</span><select id="c_slbar"></select></label>'+
+    '<label class="ctl"><span class="cap">Context as'+ihtml('slctx')+'</span><select id="c_slctx"><option value="pct">42%</option><option value="pct-of">42% of 200k</option><option value="tokens">84k/200k</option></select></label>'+
     '</div>'+
-    '<label class="ctl2"><input id="c_slem" type="checkbox"> emoji icons</label>'+
-    '<label class="ctl">Legacy context-bar.sh accent<select id="c_status"></select></label>'+
+    '<label class="ctl2"><input id="c_slem" type="checkbox"> emoji icons'+ihtml('slem')+'</label>'+
+    '<label class="ctl"><span class="cap">Legacy context-bar.sh accent'+ihtml('status')+'</span><select id="c_status"></select></label>'+
   '</div>';
 
   $('#c_name').value=state.n;
@@ -356,7 +533,7 @@ function buildControls(){
 
   var startSel=$('#c_start');
   Object.keys(STARTERS).forEach(function(k){var o=document.createElement('option');o.value=k;o.textContent=k;startSel.appendChild(o);});
-  startSel.addEventListener('change',function(){if(!this.value)return;state.p=copyObj(STARTERS[this.value]);paintSwatches();edited();this.value='';});
+  startSel.addEventListener('change',function(){if(!this.value)return;state.p=copyObj(STARTERS[this.value]);paintSwatches();resyncColorModes();edited();this.value='';});
   var seedSel=$('#c_seed');
   PRESETS.forEach(function(pe){var o=document.createElement('option');o.value=pe.id;o.textContent=pe.name;seedSel.appendChild(o);});
   seedSel.addEventListener('change',function(){if(!this.value)return;state=stateFromPreset(presetById(this.value));buildControls();edited();toast('Seeded from “'+presetById(this.value).name+'”');});
@@ -390,14 +567,8 @@ function buildControls(){
       edited();
     }));
   });
-  $('#c_fgD').checked=!state.um.fg;
-  $('#c_fg').value=state.um.fg||'#c0caf5';
-  $('#c_fgD').addEventListener('change',function(){state.um.fg=this.checked?'':$('#c_fg').value;edited();});
-  $('#c_fg').addEventListener('input',function(){state.um.fg=this.value;$('#c_fgD').checked=false;edited();});
-  $('#c_bgD').checked=!state.um.bg;
-  $('#c_bg').value=state.um.bg||'#292e42';
-  $('#c_bgD').addEventListener('change',function(){state.um.bg=this.checked?'':$('#c_bg').value;edited();});
-  $('#c_bg').addEventListener('input',function(){state.um.bg=this.value;$('#c_bgD').checked=false;edited();});
+  _syncFg=buildColorMode('fg');
+  _syncBg=buildColorMode('bg');
   var ubSel=$('#c_ub');
   BORDERS.forEach(function(b){var o=document.createElement('option');o.value=b;o.textContent=b;ubSel.appendChild(o);});
   ubSel.value=state.ub;
@@ -445,7 +616,7 @@ function paintSwatches(){
   PAL_KEYS.forEach(function(k){
     var lab=document.createElement('label');lab.className='sw';
     var inp=document.createElement('input');inp.type='color';inp.value=hx(state.p[k[0]]);
-    inp.addEventListener('input',function(){state.p[k[0]]=toRGBarr(this.value);edited();});
+    inp.addEventListener('input',function(){state.p[k[0]]=toRGBarr(this.value);resyncColorModes();edited();});
     var sp=document.createElement('span');sp.textContent=k[1];
     lab.appendChild(inp);lab.appendChild(sp);host.appendChild(lab);
   });
@@ -469,6 +640,8 @@ function paintSegs(){
     });
     var nm=document.createElement('span');nm.className='nm';nm.textContent=meta.name;
     row.appendChild(cb);row.appendChild(nm);
+    // Each segment explains itself; "Lines +/-" and "Output style" are not self-evident.
+    var ib=document.createElement('span');ib.innerHTML=ihtml('seg_'+id);row.appendChild(ib.firstChild);
     if(on){
       var up=document.createElement('button');up.textContent='▲';
       var dn=document.createElement('button');dn.textContent='▼';

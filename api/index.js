@@ -60,6 +60,49 @@ function buildCustomSettings(pl) {
   return settings;
 }
 
+// tweakcc locates Claude Code by looking for `claude` on PATH. Inside cmux, some
+// VS Code tasks and other agent harnesses, the first `claude` on PATH is a tiny
+// wrapper shim in a temp directory; tweakcc reads the shim, sees a text file with
+// no version string in it, and stops with "No VERSION strings found in JS file".
+// So resolve the real installation here and put it first on PATH. Emitted into
+// both installers, because either one hits the same wall.
+function claudePathBlock() {
+  return `# --- locate the real Claude Code (not a wrapper shim) -----------------------
+CC_REAL=""
+_scc_is_shim() {
+  case "$1" in
+    *-shims/*|*cmux*|/tmp/*|/private/var/folders/*|/var/folders/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+for _c in "$HOME/.local/bin/claude" "$HOME/.claude/local/claude"; do
+  if [ -e "$_c" ]; then CC_REAL="$_c"; break; fi
+done
+if [ -z "$CC_REAL" ]; then
+  _root="$(npm root -g 2>/dev/null || true)"
+  if [ -n "$_root" ] && [ -f "$_root/@anthropic-ai/claude-code/cli.js" ]; then
+    CC_REAL="$_root/@anthropic-ai/claude-code/cli.js"
+  fi
+fi
+if [ -z "$CC_REAL" ]; then
+  _p="$(command -v claude 2>/dev/null || true)"
+  if [ -n "$_p" ] && ! _scc_is_shim "$_p"; then CC_REAL="$_p"; fi
+fi
+SCC_TMPBIN=""
+if [ -n "$CC_REAL" ]; then
+  SCC_TMPBIN="$(mktemp -d)"
+  ln -sf "$CC_REAL" "$SCC_TMPBIN/claude"
+  PATH="$SCC_TMPBIN:$PATH"
+  export PATH
+  echo "  Claude Code: $CC_REAL"
+else
+  echo "  note: no Claude Code install found in the usual places — letting tweakcc look"
+fi
+_scc_cleanup() { if [ -n "\${SCC_TMPBIN:-}" ]; then rm -rf "$SCC_TMPBIN"; fi; }
+trap _scc_cleanup EXIT
+`;
+}
+
 function presetApplyScript(origin, p) {
   const name = cleanName(p.name, 60);
   return `#!/bin/bash
@@ -67,7 +110,8 @@ set -euo pipefail
 # shayan-cc-config — apply "${name}"
 ORIGIN="${origin}"
 echo "▸ Applying '${name}' to Claude Code via tweakcc…"
-npx -y tweakcc@latest --apply --config-url "$ORIGIN/config/${p.id}.json"
+${claudePathBlock()}
+npx -y tweakcc@latest --apply --yes --config-url "$ORIGIN/config/${p.id}.json"
 ${activationBlock(p.activeThemeId, p.statuslineColor)}
 echo ""
 echo "✓ '${name}' applied. Start a new claude session to see it."
@@ -83,7 +127,8 @@ function customApplyScript(origin, rawC, pl) {
 set -euo pipefail
 # shayan-cc-config — apply custom setup "${name}"
 echo "▸ Applying your custom setup '${name}' via tweakcc…"
-npx -y tweakcc@latest --apply --config-url "${cfgUrl}"
+${claudePathBlock()}
+npx -y tweakcc@latest --apply --yes --config-url "${cfgUrl}"
 ${activationBlock('custom', statusColorOf(pl))}
 ${slSan ? statuslineBlock(buildStatuslineScript(slSan, pl.p)) : ''}
 echo ""
