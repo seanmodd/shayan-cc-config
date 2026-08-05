@@ -218,7 +218,13 @@ function route(req, res) {
   if (path === '/config.json') {
     const c = u.searchParams.get('c');
     if (!c) return sendJSON({ error: 'missing c param' }, 400);
-    try { return sendJSON(buildCustomSettings(decodeCustom(c))); }
+    try {
+      const pl = decodeCustom(c);
+      // Same guard as /apply.sh, so a payload is never accepted by one route and
+      // rejected by the other.
+      if (!pl || typeof pl !== 'object' || Array.isArray(pl)) throw new Error('payload must be an object');
+      return sendJSON(buildCustomSettings(pl));
+    }
     catch (e) { return sendJSON({ error: 'bad custom payload: ' + e.message }, 400); }
   }
   if (path === '/apply.sh') {

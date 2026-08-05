@@ -506,7 +506,16 @@ $('#c_replay').addEventListener('click',function(){
 $('#c_copy').addEventListener('click',function(){copyText($('#cmdtext').textContent);this.textContent='Copied ✓';var b=this;setTimeout(function(){b.textContent='Copy install command';},1600);});
 $('#c_share').addEventListener('click',function(){var link=ORIGIN+'/customize?c='+encodeURIComponent(b64e(payload()));copyText(link);toast('Shareable studio link copied — anyone who opens it can preview & install your setup');});
 $('#c_publish').addEventListener('click',function(){var cs=customs_get();var pl=payload();cs=cs.filter(function(x){return x.id!==pl.id;});cs.push(pl);customs_set(cs);toast('Published “'+pl.n+'” to your homepage ⭐');});
-$('#c_reset').addEventListener('click',function(){state=defaultState();allowDraft=false;try{localStorage.removeItem('scc_draft');}catch(e){}history.replaceState(null,'','/customize');buildControls();refreshAfter();toast('Reset to defaults');});
+$('#c_reset').addEventListener('click',function(){
+  state=defaultState();allowDraft=false;
+  try{localStorage.removeItem('scc_draft');}catch(e){}
+  buildControls();refreshAfter();
+  // refreshAfter schedules a debounced URL write; cancel it so the address bar stays
+  // a bare /customize instead of being re-stamped with the default-state payload.
+  clearTimeout(_urlT);
+  history.replaceState(null,'','/customize');
+  toast('Reset to defaults');
+});
 `;
 
 function renderCustomize(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {

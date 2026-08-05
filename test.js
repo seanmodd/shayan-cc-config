@@ -279,9 +279,14 @@ function bashCheck(src, label) {
   }).filter(Boolean);
   ok(mismatches.length === 0, 'every preset seeds the bg the preview paints', mismatches.join('; '));
 
-  // /apply.sh rejects payloads /config.json rejects
-  r = await call('/apply.sh?c=' + encodeURIComponent(b64e('just a string')));
-  ok(r.status === 400, '/apply.sh 400s on non-object payload', 'status ' + r.status);
+  // /apply.sh and /config.json must agree about what they accept
+  for (const junk of ['just a string', 42, [1, 2, 3], null]) {
+    const enc = encodeURIComponent(b64e(junk));
+    const ap = await call('/apply.sh?c=' + enc);
+    const cf = await call('/config.json?c=' + enc);
+    ok(ap.status === 400 && cf.status === 400, `both routes reject ${JSON.stringify(junk)}`,
+      `apply=${ap.status} config=${cf.status}`);
+  }
 
   // Studio page: structural checks only. Behavioral preview-vs-install parity is
   // covered by test-parity.js, which runs the real client functions — substring greps
@@ -290,6 +295,7 @@ function bashCheck(src, label) {
   ok(cust.includes('if(allowDraft)'), 'studio guards the saved draft');
   ok(cust.includes('ownKey(SL_BARSETS,sl.bar)'), 'studio uses own-property bar check');
   ok(cust.includes('slwarn'), 'studio warns when no segments are selected');
+  ok(/c_reset[\s\S]{0,400}clearTimeout\(_urlT\)/.test(cust), 'reset cancels the pending URL write');
   extractScripts(cust).forEach((s, i) => nodeCheck(s, 'customize_fixed_script' + i));
 
   // usage beyond the assumed window: full bar, count alone, no impossible fraction
