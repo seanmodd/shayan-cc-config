@@ -292,7 +292,7 @@ function bashCheck(src, label) {
   ok(cust.includes('slwarn'), 'studio warns when no segments are selected');
   extractScripts(cust).forEach((s, i) => nodeCheck(s, 'customize_fixed_script' + i));
 
-  // context window no longer pins at 99
+  // usage beyond the assumed window: full bar, count alone, no impossible fraction
   const bigTr = path.join(TMP, 'big.jsonl');
   fs.writeFileSync(bigTr, JSON.stringify({ message: { usage: { input_tokens: 640000, output_tokens: 1000 } } }) + '\n');
   const bigRun = cp.spawnSync('node', [slFile], {
@@ -301,7 +301,7 @@ function bashCheck(src, label) {
   });
   const bigPlain = (bigRun.stdout || '').replace(/\x1b\[[0-9;]*m/g, '');
   ok(bigRun.status === 0, 'statusline handles >200k usage', bigRun.stderr);
-  ok(/641k\/1000k|64%/.test(bigPlain), 'window grows past 200k instead of pinning', bigPlain);
+  ok(bigPlain.includes('641k') && !/641k\/200k/.test(bigPlain), 'no impossible fraction past the window', bigPlain);
 
   // after compaction, usage from before the boundary must not be reported
   const cTr = path.join(TMP, 'compact.jsonl');
@@ -328,6 +328,59 @@ function bashCheck(src, label) {
   const plainTr = path.join(TMP, 'plain.jsonl');
   fs.writeFileSync(plainTr, JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 40000, output_tokens: 1000 } } }) + '\n');
   ok(/21%/.test(ctxRun(plainTr)), 'ctx unaffected in a normal session', ctxRun(plainTr));
+
+  console.log('— statusline robustness —');
+  // A generated script runs on every prompt render, so degenerate status JSON must
+  // never crash it, print NaN, add a line, or blank the whole status line.
+  const slAll = path.join(TMP, 'sl-all.js');
+  r = await call('/statusline.js?c=' + encodeURIComponent(b64e({
+    ...LEGACY,
+    sl: { on: true, seg: ['model', 'dir', 'git', 'ctx', 'cost', 'dur', 'lines', 'style', 'ver', 'clock', 'text'], sep: ' | ', em: false, bar: 'blocks', ctxFmt: 'pct-of', text: 'tail' },
+  })));
+  fs.writeFileSync(slAll, r.body);
+  const runSl = stdin => {
+    const out = cp.spawnSync('node', [slAll], { input: typeof stdin === 'string' ? stdin : JSON.stringify(stdin), encoding: 'utf8', timeout: 5000 });
+    return { code: out.status, plain: (out.stdout || '').replace(/\x1b\[[0-9;]*m/g, ''), err: out.stderr || '' };
+  };
+  const mkTr = (obj, name) => { const p = path.join(TMP, name); fs.writeFileSync(p, JSON.stringify(obj) + '\n'); return p; };
+
+  // the 100% -> 40% collapse: output_tokens pushing the sum past 200k must not retier
+  const nearFull = mkTr({ message: { usage: { input_tokens: 198000, output_tokens: 500 } } }, 'near.jsonl');
+  const justOver = mkTr({ message: { usage: { input_tokens: 198000, output_tokens: 4000 } } }, 'over.jsonl');
+  const a = runSl({ transcript_path: nearFull, cwd: ROOT, model: { id: 'claude-fable-5', display_name: 'M' } });
+  const b = runSl({ transcript_path: justOver, cwd: ROOT, model: { id: 'claude-fable-5', display_name: 'M' } });
+  const pctOf = s => { const m = /(\d+)%/.exec(s); return m ? +m[1] : null; };
+  ok(pctOf(a.plain) === 99 && pctOf(b.plain) === 100,
+    'gauge rises to 100% instead of collapsing when 200k fills', `${pctOf(a.plain)}% then ${pctOf(b.plain)}%`);
+  ok(/of 200k/.test(b.plain), 'window stays 200k rather than inventing a larger tier', b.plain);
+  const oneM = runSl({ transcript_path: justOver, cwd: ROOT, model: { id: 'claude-sonnet-5[1m]', display_name: 'M' } });
+  ok(/of 1000k/.test(oneM.plain), '1m marker still selects the 1m window', oneM.plain);
+
+  // non-numeric fields must degrade, never print NaN
+  const badTok = mkTr({ message: { usage: { input_tokens: 'lots', output_tokens: 5 } } }, 'badtok.jsonl');
+  const bad = runSl({ transcript_path: badTok, cwd: ROOT, model: { id: 'm', display_name: 'M' }, cost: { total_duration_ms: 'abc', total_lines_added: 'abc', total_lines_removed: {} }, output_style: { name: 'x' }, version: '1' });
+  ok(bad.code === 0 && !/NaN/.test(bad.plain), 'non-numeric tokens/duration/lines never print NaN', bad.plain);
+
+  // control characters in echoed strings must not add lines or retitle the terminal
+  const ctrl = runSl({ cwd: ROOT, model: { display_name: 'M\nEVIL' }, output_style: { name: 'a]0;pwnedb' }, version: '1\n2' });
+  ok(ctrl.code === 0 && !ctrl.plain.includes('\n') && !ctrl.plain.includes(']'),
+    'echoed strings are stripped of control sequences', JSON.stringify(ctrl.plain));
+
+  // degenerate stdin and paths
+  for (const [label, stdin] of [['literal null', 'null'], ['array', '[1,2,3]'], ['number', '42'], ['garbage', 'nope'], ['empty', '']]) {
+    const res2 = runSl(stdin);
+    ok(res2.code === 0 && !/statusline error/.test(res2.plain), `stdin ${label} handled`, res2.plain.slice(0, 60));
+  }
+  const nonStr = runSl({ transcript_path: 12345, cwd: ROOT, model: { display_name: 'M' } });
+  ok(nonStr.code === 0 && !/Deprecation|DEP0187/.test(nonStr.err), 'non-string transcript_path emits no deprecation warning', nonStr.err.slice(0, 80));
+  const badWs = runSl({ workspace: { current_dir: 42 }, model: { display_name: 'M' } });
+  ok(badWs.code === 0 && !/statusline error/.test(badWs.plain), 'non-string current_dir handled', badWs.plain.slice(0, 60));
+
+  // a truncated install must still render rather than crash with a stack
+  const truncated = path.join(TMP, 'sl-trunc.js');
+  fs.writeFileSync(truncated, r.body.replace(/Buffer\.from\('[A-Za-z0-9+/=]+'/, "Buffer.from('bm90LWJhc2U2NC0='"));
+  const tr2 = cp.spawnSync('node', [truncated], { input: JSON.stringify({ cwd: ROOT, model: { display_name: 'M' } }), encoding: 'utf8', timeout: 5000 });
+  ok(tr2.status === 0 && !/at Object|Error:/.test(tr2.stderr), 'corrupted embedded config degrades instead of crashing', (tr2.stderr || '').slice(0, 80));
 
   console.log('— shayan installer —');
   // A real listening server in a SEPARATE process: the installed picker fetches

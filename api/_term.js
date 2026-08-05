@@ -205,33 +205,44 @@ function buildStatuslineScript(slSan, palette) {
   L.push('// shayan-cc-config status line (generated) \u2014 reads Claude Code status JSON on stdin,');
   L.push('// prints one ANSI-colored line. Rebuild yours at https://shayan-cc-config.vercel.app/customize');
   L.push("const fs = require('fs'), path = require('path'), cp = require('child_process');");
-  L.push("const CFG = JSON.parse(Buffer.from('" + b64 + "', 'base64').toString('utf8'));");
+  // The embedded config is the one thing a truncated or hand-edited install would
+  // break, so its parse is guarded like everything else rather than crashing at load.
+  L.push('const FALLBACK_CFG = ' + JSON.stringify({ seg: ['model', 'dir'], sep: ' | ', em: false, ctxFmt: 'pct', text: '', barChars: SL_BARS.blocks, colors: cfg.colors }) + ';');
+  L.push('let CFG = FALLBACK_CFG;');
+  L.push("try { CFG = JSON.parse(Buffer.from('" + b64 + "', 'base64').toString('utf8')); } catch (e) {}");
   L.push('const ESC = String.fromCharCode(27), RST = ESC + "[0m";');
   L.push('const fg = c => ESC + "[38;2;" + c.join(";") + "m";');
+  // Values echoed from the status JSON reach the terminal every render, so control
+  // sequences (which could retitle the terminal or add lines) are stripped first.
+  L.push('const CTRL = /[\\u0000-\\u001f\\u007f-\\u009f\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]/g;');
+  L.push("const txt = (v, max) => (typeof v === 'string' ? v : '').replace(CTRL, '').slice(0, max || 60);");
+  L.push('const num = v => { const n = Number(v); return Number.isFinite(n) ? n : null; };');
   L.push("let raw = '';");
   L.push("process.stdin.on('data', d => raw += d);");
-  L.push("process.stdin.on('end', () => { let j = {}; try { j = JSON.parse(raw); } catch (e) {} try { main(j); } catch (e) { process.stdout.write('statusline error: ' + e.message); } });");
+  L.push("process.stdin.on('end', () => { let j = null; try { j = JSON.parse(raw); } catch (e) {} if (!j || typeof j !== 'object' || Array.isArray(j)) j = {}; try { main(j); } catch (e) { process.stdout.write('statusline error: ' + e.message); } });");
   L.push('function main(j) {');
-  L.push('  const C = CFG.colors;');
+  L.push('  const C = CFG.colors || FALLBACK_CFG.colors;');
   L.push('  const k = { A: fg(C.accent), D: fg(C.dim), T: fg(C.text), G: fg(C.green), R: fg(C.red), S: fg(C.subtle), em: CFG.em };');
-  L.push('  const cwd = (j.workspace && j.workspace.current_dir) || j.cwd || process.cwd();');
+  L.push("  const ws = (j.workspace && typeof j.workspace === 'object') ? j.workspace : {};");
+  L.push("  const cwd = (typeof ws.current_dir === 'string' && ws.current_dir) || (typeof j.cwd === 'string' && j.cwd) || process.cwd();");
   L.push('  const parts = [];');
-  L.push('  for (const id of CFG.seg) { const s = seg(id, j, cwd, k); if (s) parts.push(s); }');
-  L.push('  process.stdout.write(parts.join(k.D + CFG.sep) + RST);');
+  L.push('  const segs = Array.isArray(CFG.seg) ? CFG.seg : FALLBACK_CFG.seg;');
+  L.push('  for (const id of segs) { const s = seg(id, j, cwd, k); if (s) parts.push(s); }');
+  L.push("  process.stdout.write(parts.join(k.D + txt(CFG.sep, 8)) + RST);");
   L.push('}');
   L.push('function seg(id, j, cwd, k) {');
   L.push('  switch (id) {');
-  L.push("    case 'model': return (j.model && j.model.display_name) ? k.A + j.model.display_name : '';");
-  L.push("    case 'dir': return k.T + (k.em ? '\\u{1F4C1}' : '') + path.basename(cwd);");
+  L.push("    case 'model': { const n = txt(j.model && j.model.display_name, 40); return n ? k.A + n : ''; }");
+  L.push("    case 'dir': return k.T + (k.em ? '\\u{1F4C1}' : '') + txt(path.basename(cwd), 40);");
   L.push("    case 'git': return gitSeg(cwd, k);");
   L.push("    case 'ctx': return ctxSeg(j, k);");
-  L.push("    case 'cost': { const c = j.cost && j.cost.total_cost_usd; return (typeof c === 'number') ? k.T + (k.em ? '\\u{1F4B0}' : '') + '$' + c.toFixed(2) : ''; }");
-  L.push("    case 'dur': { const ms = j.cost && j.cost.total_duration_ms; if (!ms) return ''; const m = Math.round(ms / 60000); return k.T + (k.em ? '\\u23F1 ' : '') + (m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + 'm'); }");
-  L.push("    case 'lines': { const c = j.cost || {}; if (c.total_lines_added == null && c.total_lines_removed == null) return ''; return k.G + '+' + (c.total_lines_added || 0) + k.D + '/' + k.R + '-' + (c.total_lines_removed || 0); }");
-  L.push("    case 'style': { const s = j.output_style && j.output_style.name; return s ? k.T + (k.em ? '\\u{1F3A8}' : '') + s : ''; }");
-  L.push("    case 'ver': return j.version ? k.D + 'v' + j.version : '';");
+  L.push("    case 'cost': { const c = num(j.cost && j.cost.total_cost_usd); return c == null ? '' : k.T + (k.em ? '\\u{1F4B0}' : '') + '$' + c.toFixed(2); }");
+  L.push("    case 'dur': { const ms = num(j.cost && j.cost.total_duration_ms); if (!ms) return ''; const m = Math.round(ms / 60000); return k.T + (k.em ? '\\u23F1 ' : '') + (m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + 'm'); }");
+  L.push("    case 'lines': { const c = j.cost || {}; const a = num(c.total_lines_added), d = num(c.total_lines_removed); if (a == null && d == null) return ''; return k.G + '+' + (a || 0) + k.D + '/' + k.R + '-' + (d || 0); }");
+  L.push("    case 'style': { const s = txt(j.output_style && j.output_style.name, 24); return s ? k.T + (k.em ? '\\u{1F3A8}' : '') + s : ''; }");
+  L.push("    case 'ver': { const v = txt(j.version, 16); return v ? k.D + 'v' + v : ''; }");
   L.push("    case 'clock': { const d = new Date(); const pad = n => String(n).padStart(2, '0'); return k.T + (k.em ? '\\u{1F550}' : '') + pad(d.getHours()) + ':' + pad(d.getMinutes()); }");
-  L.push("    case 'text': return CFG.text ? k.D + CFG.text : '';");
+  L.push("    case 'text': { const t = txt(CFG.text, 24); return t ? k.D + t : ''; }");
   L.push('  }');
   L.push("  return '';");
   L.push('}');
@@ -248,29 +259,29 @@ function buildStatuslineScript(slSan, palette) {
   L.push('function ctxSeg(j, k) {');
   L.push('  const used = usedTokens(j);');
   L.push("  if (used == null) return '';");
-  L.push('  const win = contextWindow(j, used);');
-  L.push('  const pct = Math.max(0, Math.min(999, Math.round(used / win * 100)));');
+  L.push('  const win = contextWindow(j);');
+  L.push('  const pct = Math.max(0, Math.min(100, Math.round(used / win * 100)));');
   L.push('  const cells = 8, fill = Math.max(0, Math.min(cells, Math.round(pct / 100 * cells)));');
   L.push('  const B = (Array.isArray(CFG.barChars) && CFG.barChars.length === 2) ? CFG.barChars : ["\\u25ae", "\\u25af"];');
   L.push('  const bar = k.A + B[0].repeat(fill) + k.S + B[1].repeat(cells - fill);');
   L.push("  const kk = n => n >= 1000 ? Math.round(n / 1000) + 'k' : String(n);");
-  L.push("  if (CFG.ctxFmt === 'tokens') return bar + ' ' + k.T + kk(used) + k.D + '/' + kk(win);");
+  // Past the assumed window our guess is wrong, so print the count alone rather than
+  // an impossible fraction like 641k/200k.
+  L.push("  if (CFG.ctxFmt === 'tokens') return bar + ' ' + k.T + kk(used) + (used > win ? '' : k.D + '/' + kk(win));");
   L.push("  if (CFG.ctxFmt === 'pct') return bar + ' ' + k.T + pct + '%';");
   L.push("  return bar + ' ' + k.T + pct + '% ' + k.D + 'of ' + kk(win);");
   L.push('}');
-  L.push('// Context window: trust an explicit 1m marker, otherwise assume 200k but grow');
-  L.push('// to the next known tier if observed usage already exceeds it (so the gauge');
-  L.push('// never sits pinned at the top for a model with a larger window).');
-  L.push('function contextWindow(j, used) {');
-  L.push("  const mid = String((j.model && j.model.id) || '');");
-  L.push('  if (/1m|\\[1m\\]/i.test(mid)) return 1000000;');
-  L.push('  for (const w of [200000, 500000, 1000000]) if (used <= w) return w;');
-  L.push('  return 1000000;');
+  L.push('// Context window from the model id only. It must NOT be inferred from observed');
+  L.push('// usage: tiering up the moment usage crosses 200k made the gauge jump from full');
+  L.push('// down to ~40% exactly when the context filled, which is when it matters most.');
+  L.push('function contextWindow(j) {');
+  L.push("  const mid = String((j.model && typeof j.model === 'object' && j.model.id) || '');");
+  L.push('  return /1m|\\[1m\\]/i.test(mid) ? 1000000 : 200000;');
   L.push('}');
   L.push('function usedTokens(j) {');
   L.push('  try {');
   L.push('    const tp = j.transcript_path;');
-  L.push('    if (!tp || !fs.existsSync(tp)) return null;');
+  L.push("    if (typeof tp !== 'string' || !tp || !fs.existsSync(tp)) return null;");
   L.push('    const size = fs.statSync(tp).size;');
   L.push('    if (!size) return null;');
   L.push('    const take = Math.min(size, 262144);');
@@ -289,7 +300,11 @@ function buildStatuslineScript(slSan, palette) {
   L.push('      try {');
   L.push('        const m = JSON.parse(Lx);');
   L.push('        const u = (m.message && m.message.usage) || m.usage;');
-  L.push('        if (u && u.input_tokens != null) return (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.output_tokens || 0);');
+  L.push("        if (u && typeof u === 'object' && u.input_tokens != null) {");
+  L.push("          const t = ['input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens', 'output_tokens']");
+  L.push('            .reduce((sum, key) => sum + (num(u[key]) || 0), 0);');
+  L.push('          if (Number.isFinite(t) && t >= 0) return t;');
+  L.push('        }');
   L.push('      } catch (e) {}');
   L.push('    }');
   L.push('    return null;');
@@ -350,7 +365,7 @@ function slHTML(m,T){
     else if(id==='ctx'){
       var fill=Math.max(0,Math.min(8,Math.round(d.pct/100*8)));
       var bar=span(c.accent,Array(fill+1).join(B[0]))+span(c.subtle,Array(8-fill+1).join(B[1]));
-      if(sl.ctxFmt==='tokens')h=bar+' '+span(c.text,kk(d.used))+span(c.inactive,'/'+kk(d.win));
+      if(sl.ctxFmt==='tokens')h=bar+' '+span(c.text,kk(d.used))+(d.used>d.win?'':span(c.inactive,'/'+kk(d.win)));
       else if(sl.ctxFmt==='pct')h=bar+' '+span(c.text,d.pct+'%');
       else h=bar+' '+span(c.text,d.pct+'% ')+span(c.inactive,'of '+kk(d.win));
     }
