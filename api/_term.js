@@ -334,7 +334,11 @@ var SL_SEPLIST=[' | ',' \u00b7 ','  ',' \u2014 ',' \u203a '];
 // own-property test: SL_BARSETS['constructor'] etc. are truthy but not real bar styles
 function ownKey(o,k){return typeof k==='string'&&Object.prototype.hasOwnProperty.call(o,k);}
 function barsOf(k){return ownKey(SL_BARSETS,k)?SL_BARSETS[k]:SL_BARSETS.blocks;}
-function eH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+// Quotes are escaped too, so this stays interchangeable with esc() in _render.js.
+// Every current call site is text-node position, where quotes are inert — but the two
+// helpers look alike, and a future edit that moves output into an attribute should not
+// have to know which one it picked.
+function eH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function mdI(s){
   var h=eH(s);
   h=h.replace(/\\*\\*([^*]+)\\*\\*/g,'<b>$1</b>');
