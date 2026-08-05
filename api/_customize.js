@@ -71,6 +71,16 @@ const STUDIO_CSS = `
   .minilinks{font-size:11px;color:var(--faint);width:100%;}
   .minilinks a{color:var(--dim);}
   select.tsel{background:#0b0e14;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;padding:3px 6px;max-width:170px;}
+  /* The fixed action bar is generous on desktop; on phones it has to earn its
+     height back so the terminals stay readable. */
+  @media(max-width:640px){
+    .swrap{padding:0 12px 40px;}
+    .barbot{padding:8px 12px;gap:7px;}
+    .barbot .cmd{flex:1 1 100%;order:-1;font-size:11px;padding:6px 9px;}
+    .barbot button{padding:9px 12px;font-size:12.5px;flex:1 1 auto;}
+    .barbot .minilinks{display:none;}
+    .tcol .xterm{height:min(58vh,420px);}
+  }
 `;
 
 const STUDIO_JS = `
