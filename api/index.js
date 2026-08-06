@@ -9,6 +9,8 @@ const { sanitizeCmux, buildGhosttyLines, buildCmuxJson, cmuxApplyBlock } = requi
 const { renderCmux } = require('./_cmux_page.js');
 const { sanitizeHerdr, buildHerdrToml, herdrApplyBlock } = require('./_herdr.js');
 const { renderHerdr } = require('./_herdr_page.js');
+const { sanitizeZellij, buildZellijKdl, buildAgentLayout, zellijApplyBlock } = require('./_zellij.js');
+const { renderZellij } = require('./_zellij_page.js');
 const {
   sanitizeSL, buildUMD, buildInputBox, buildStatuslineScript,
   cleanText, cleanTerm, cleanName, cleanFormat, sanePalette, clampInt,
@@ -131,9 +133,11 @@ function customApplyScript(origin, rawC, pl) {
   // Claude Code AND the terminal it runs in. Absent or off, nothing is emitted.
   const cmSan = sanitizeCmux(pl.cm);
   const hdSan = sanitizeHerdr(pl.hd);
+  const zjSan = sanitizeZellij(pl.zj);
   // Each terminal layer is independent and additive: a payload can carry none, one, or
   // both, and the summary line names whichever actually ran.
-  const layers = ['Claude Code'].concat(cmSan ? ['cmux'] : []).concat(hdSan ? ['herdr'] : []);
+  const layers = ['Claude Code'].concat(cmSan ? ['cmux'] : [])
+    .concat(hdSan ? ['herdr'] : []).concat(zjSan ? ['Zellij'] : []);
   return `#!/bin/bash
 set -euo pipefail
 # shayan-cc-config — apply custom setup "${name}"
@@ -144,6 +148,7 @@ ${activationBlock('custom', statusColorOf(pl))}
 ${slSan ? statuslineBlock(buildStatuslineScript(slSan, pl.p)) : ''}
 ${cmSan ? cmuxApplyBlock(cmSan, pl.p) : ''}
 ${hdSan ? herdrApplyBlock(hdSan) : ''}
+${zjSan ? zellijApplyBlock(zjSan) : ''}
 echo ""
 echo "✓ '${name}' applied — ${layers.join(' + ')}. Start a new claude session to see it."
 echo "  Build another at ${origin}/customize"
@@ -302,6 +307,24 @@ function route(req, res) {
   if (path === '/herdr' || path === '/herdr/') {
     return sendHTML(renderHerdr(DATA, CSS, CLIENT_LIB, FAVICON, GH_SVG, GITHUB_URL));
   }
+  if (path === '/zellij' || path === '/zellij/') {
+    return sendHTML(renderZellij(DATA, CSS, CLIENT_LIB, FAVICON, GH_SVG, GITHUB_URL));
+  }
+  // Both files the Zellij layer writes. The page splits on the marker rather than making
+  // two requests, and rebuilds neither in the browser — one KDL builder, so the preview
+  // is the installer's own output.
+  if (path === '/zellij-files.txt') {
+    const c = u.searchParams.get('c');
+    if (!c) return sendText('missing ?c= payload', 'text/plain; charset=utf-8', 400);
+    try {
+      const pl = decodeCustom(c);
+      const zjSan = sanitizeZellij(pl.zj);
+      if (!zjSan) return sendText('this setup has no Zellij layer enabled', 'text/plain; charset=utf-8', 404);
+      const body = buildZellijKdl(zjSan)
+        + '@@LAYOUT@@' + (zjSan.agentLayout ? buildAgentLayout(zjSan) : '');
+      return sendText(body, 'text/plain; charset=utf-8');
+    } catch (e) { return sendText('bad payload: ' + cleanText(e.message, 120), 'text/plain; charset=utf-8', 400); }
+  }
   // The single file the herdr layer writes, verbatim. The page fetches this rather than
   // building TOML in the browser too — one builder, so the preview cannot drift from
   // what the installer actually writes.
@@ -311,6 +334,7 @@ function route(req, res) {
     try {
       const pl = decodeCustom(c);
       const hdSan = sanitizeHerdr(pl.hd);
+  const zjSan = sanitizeZellij(pl.zj);
       if (!hdSan) return sendText('this setup has no herdr layer enabled', 'text/plain; charset=utf-8', 404);
       return sendText(buildHerdrToml(hdSan), 'text/plain; charset=utf-8');
     } catch (e) { return sendText('bad payload: ' + cleanText(e.message, 120), 'text/plain; charset=utf-8', 400); }

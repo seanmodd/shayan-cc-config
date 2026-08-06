@@ -26,6 +26,10 @@ const PAGES = [
     id: 'herdr', path: '/herdr', icon: '\u{1F9AC}', label: 'herdr', short: 'herdr',
     sub: 'the multiplexer that tracks agent state',
   },
+  {
+    id: 'zellij', path: '/zellij', icon: '\u{1F9E9}', label: 'Zellij', short: 'Zellij',
+    sub: 'layouts you commit, sessions that survive',
+  },
 ];
 
 const GITHUB_URL = 'https://github.com/seanmodd/shayan-cc-config';
