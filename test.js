@@ -946,6 +946,20 @@ function bashCheck(src, label) {
   ]) ok(cmPage.includes(needle), '/cmux: ' + label);
   // Our Community has to render above the community themes: it is the shortest list and
   // the one you came back for.
+  // The "which one do you want" block. It carries claims about four tools, so the test
+  // that matters is that it names all four and marks the page you are on — a block that
+  // silently lost a tool would still look fine.
+  const { TOOLS } = require(path.join(ROOT, 'api/_compare.js'));
+  ok(cmPage.includes('id="compare"'), '/cmux: has the comparison block');
+  for (const t of TOOLS) ok(cmPage.includes('>' + t.name + '\n') || cmPage.includes(t.name),
+    '/cmux: comparison covers ' + t.name);
+  ok(/class="cmpcard here"/.test(cmPage), '/cmux: the comparison marks the current page');
+  // It sits under the preview, which is where the reader is told to look for it.
+  ok(cmPage.indexOf('id="pair"') < cmPage.indexOf('id="compare"'),
+    '/cmux: the comparison sits below the preview');
+  // A wide table must scroll in its own box rather than sending the page sideways.
+  ok(cmPage.includes('cmptablewrap'), '/cmux: the comparison table scrolls in its own box');
+
   // Naming a saved setup must not go through prompt(): the browser counts every second
   // that a modal is open as time the click handler blocked the main thread, so naming one
   // at human speed reported a ~6s interaction and Chrome flagged the page for it.

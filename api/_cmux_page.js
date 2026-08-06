@@ -15,6 +15,7 @@
 
 const { TERM_CSS } = require('./_term.js');
 const { topBar, navPayload } = require('./_nav.js');
+const { compareBlock, COMPARE_CSS } = require('./_compare.js');
 const { STARTERS } = require('./_theme.js');
 const { STUDIO_CSS } = require('./_customize.js');
 const { presetsForClient } = require('./_cmux_presets.js');
@@ -334,7 +335,7 @@ function renderCmux(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   const lines = JSON.stringify(LINES);
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>cmux · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${CMUX_CSS}</style></head><body>
+<title>cmux · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${CMUX_CSS}</style></head><body>
 ${topBar('cmux', ghSvg)}
 <header class="chead"><h1>🪟 cmux</h1>
 <p class="sub" style="margin-top:8px">The terminal <b>around</b> Claude Code. cmux is a native macOS terminal built on Ghostty — sidebar workspaces, split panes, surface tabs. Style it here and it layers <b>on top of</b> the Claude Code theme you picked, so the whole window is one setup. One command applies both.</p></header>
@@ -364,6 +365,8 @@ ${topBar('cmux', ghSvg)}
       <span class="gbar"></span><span class="gtxt">drag to resize</span><span class="gbar"></span>
     </div>
   </div>
+
+${compareBlock('cmux')}
 
   <div class="panel presetpanel"><h3>\u{1F3AC} Start from a theme</h3>
     <p class="phint">Pick a starting point, then change anything below. A community
