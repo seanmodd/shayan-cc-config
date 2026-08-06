@@ -250,7 +250,7 @@ function renderCmux(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   <button id="c_copy">Copy install command</button>
   <button id="c_share">🔗 Share</button>
   <button id="c_reset" class="ghost" style="font-weight:500">Reset</button>
-  <div class="minilinks">writes <span class="mono">~/.config/ghostty/config</span> and <span class="mono">~/.config/cmux/cmux.json</span> — both merged, both backed up first. Reload with <span class="mono">Cmd+Shift+,</span> or <span class="mono">cmux reload-config</span>.</div>
+  <div class="minilinks">writes <span class="mono">~/.config/cmux/cmux.json</span> plus every Ghostty config on your machine — <span class="mono">~/.config/ghostty/config</span> and, if you have one, <span class="mono">~/Library/Application&nbsp;Support/com.mitchellh.ghostty/config</span>, because on macOS that second one is read last and wins. All merged, all backed up first. Reload with <span class="mono">Cmd+Shift+,</span> or <span class="mono">cmux reload-config</span>.</div>
 </div>
 <div style="height:120px"></div>
 <div id="toast"></div>

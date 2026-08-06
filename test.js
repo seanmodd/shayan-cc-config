@@ -557,6 +557,54 @@ function bashCheck(src, label) {
   ok(JSON.parse(fs.readFileSync(jPath, 'utf8')).myUnmanagedKey === 'keep me',
     'unmanaged keys survive a second run too');
 
+  // Ghostty reads two config files on macOS and the Application Support one wins,
+  // because a later directive overrides an earlier one. Writing only to ~/.config left
+  // every colour we set losing to whatever the user had set through Ghostty's own UI —
+  // which is where most macOS configs actually live. Verified with a real installed
+  // Ghostty: a background in ~/.config lost to a different background in Application
+  // Support. So the block goes into both, and the Application Support one is never
+  // created from nothing.
+  const macRel = 'Library/Application Support/com.mitchellh.ghostty/config';
+
+  // Only the XDG config present: the macOS file must NOT be conjured up.
+  const xdgOnly = path.join(TMP, 'gh-xdg');
+  fs.mkdirSync(path.join(xdgOnly, '.config', 'ghostty'), { recursive: true });
+  fs.writeFileSync(path.join(xdgOnly, '.config/ghostty/config'), 'font-thicken = true\n');
+  bash(cmFile, xdgOnly);
+  ok(fs.readFileSync(path.join(xdgOnly, '.config/ghostty/config'), 'utf8').includes('shayan-cc-config (cmux)'),
+    'the XDG ghostty config is always written');
+  ok(!fs.existsSync(path.join(xdgOnly, macRel)),
+    'the macOS ghostty config is not created when it does not exist');
+
+  // Both present: both get the block, and ours must land AFTER theirs in the file
+  // Ghostty reads last, or it does not win.
+  const bothHome = path.join(TMP, 'gh-both');
+  fs.mkdirSync(path.join(bothHome, '.config', 'ghostty'), { recursive: true });
+  fs.mkdirSync(path.dirname(path.join(bothHome, macRel)), { recursive: true });
+  fs.writeFileSync(path.join(bothHome, '.config/ghostty/config'), 'font-thicken = true\n');
+  fs.writeFileSync(path.join(bothHome, macRel), '# set through the ghostty UI\nfont-size = 9\n');
+  bash(cmFile, bothHome);
+  const macText = fs.readFileSync(path.join(bothHome, macRel), 'utf8');
+  ok(macText.includes('shayan-cc-config (cmux)'), 'the macOS ghostty config is written when it exists');
+  ok(/# set through the ghostty UI/.test(macText), 'their own macOS config keys survive');
+  ok(macText.indexOf('# >>> shayan-cc-config') > macText.indexOf('font-size = 9'),
+    'our block sits after their directives, so ours is the one that wins');
+  ok(fs.readdirSync(path.dirname(path.join(bothHome, macRel))).some(f => /config[.]backup-/.test(f)),
+    'the macOS ghostty config is backed up before being touched');
+  bash(cmFile, bothHome);
+  ok((fs.readFileSync(path.join(bothHome, macRel), 'utf8').match(/>>> shayan-cc-config/g) || []).length === 1,
+    're-running does not stack a second block in the macOS config');
+
+  // XDG_CONFIG_HOME must be honoured rather than assuming ~/.config.
+  const xdgHome = path.join(TMP, 'gh-xdgenv');
+  fs.mkdirSync(path.join(xdgHome, 'custom'), { recursive: true });
+  cp.spawnSync('bash', [cmFile], {
+    encoding: 'utf8',
+    env: Object.assign({}, process.env, { HOME: xdgHome, XDG_CONFIG_HOME: path.join(xdgHome, 'custom') }),
+  });
+  ok(fs.existsSync(path.join(xdgHome, 'custom/ghostty/config')),
+    'XDG_CONFIG_HOME is honoured instead of assuming ~/.config');
+
   // An unparseable cmux.json is a file we do not understand. Guessing would destroy
   // someone's config, so the installer stops and says so.
   const badHome = path.join(TMP, 'cmuxbad');

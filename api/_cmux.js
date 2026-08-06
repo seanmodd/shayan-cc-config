@@ -320,11 +320,33 @@ echo "▸ Applying the cmux layer…"
 CMUX_STAMP="$(date +%Y%m%d-%H%M%S)"
 
 # ---- 1. Ghostty config (terminal rendering) --------------------------------
-GHOSTTY_DIR="$HOME/.config/ghostty"
-GHOSTTY_CFG="$GHOSTTY_DIR/config"
-mkdir -p "$GHOSTTY_DIR"
-[ -f "$GHOSTTY_CFG" ] || : > "$GHOSTTY_CFG"
-cp "$GHOSTTY_CFG" "$GHOSTTY_CFG.backup-$CMUX_STAMP" 2>/dev/null || true
+# Ghostty reads TWO config files on macOS, in this order:
+#
+#   1. $XDG_CONFIG_HOME/ghostty/config   (i.e. ~/.config/ghostty/config)
+#   2. ~/Library/Application Support/com.mitchellh.ghostty/config
+#
+# and the second one wins, because a later directive overrides an earlier one. That
+# second path is the one Ghostty's own macOS UI writes to, so it is where most people's
+# real config actually lives — and writing only to ~/.config left our colours silently
+# losing to it. Verified: with background set in ~/.config and a different background in
+# Application Support, ghostty +show-config reports the Application Support value.
+#
+# So the block goes into every config Ghostty will read. Both are marker-fenced and
+# backed up, so this stays idempotent and reversible either way.
+GHOSTTY_XDG="\${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config"
+GHOSTTY_MAC="$HOME/Library/Application Support/com.mitchellh.ghostty/config"
+
+# The XDG one always: it is what the cmux docs point at, and it is created if absent.
+mkdir -p "$(dirname "$GHOSTTY_XDG")"
+[ -f "$GHOSTTY_XDG" ] || : > "$GHOSTTY_XDG"
+
+# A plain for-loop rather than a pipe, so there is no subshell to lose state in. The
+# macOS file is written ONLY if it already exists: creating one would be worse than
+# leaving it alone, because Ghostty treats its presence as meaningful and a brand-new
+# file there would start overriding an XDG config the user may be managing deliberately.
+for GHOSTTY_CFG in "$GHOSTTY_XDG" "$GHOSTTY_MAC"; do
+  [ -f "$GHOSTTY_CFG" ] || continue
+  cp "$GHOSTTY_CFG" "$GHOSTTY_CFG.backup-$CMUX_STAMP" 2>/dev/null || true
 
 python3 - "$GHOSTTY_CFG" <<'SCC_GHOSTTY_PY'
 import sys
@@ -352,6 +374,8 @@ with open(path, "w", encoding="utf-8") as f:
     f.write(out)
 print("  ghostty config  " + path)
 SCC_GHOSTTY_PY
+
+done
 
 # ---- 2. cmux.json (everything cmux owns) -----------------------------------
 CMUX_DIR="$HOME/.config/cmux"
