@@ -1,28 +1,33 @@
 // Warp configuration — the server half.
 //
-// Warp spreads its configuration across four places in ~/.warp, and they are NOT equal:
+// Warp spreads its configuration across several places in ~/.warp, and they are NOT
+// equal in how safe they are to write:
 //
-//   ~/.warp/themes/<name>.yaml            a theme. ADDITIVE — a new file, nothing else
-//                                         touched. Safe to write.
-//   ~/.warp/launch_configurations/*.yaml  a saved window/tab/pane layout. Also ADDITIVE.
-//   ~/.warp/keybindings.yaml              overrides only; Warp keeps its defaults for
-//                                         anything absent. Small and user-owned.
-//   ~/.warp/settings.toml                 everything the Settings UI writes. Warp OWNS
-//                                         this file and rewrites it whenever you change
-//                                         a setting in the app.
+//   ~/.warp/themes/<name>.yaml       a theme. ADDITIVE — a new file, nothing else
+//                                    touched. Safe to write.
+//   ~/.warp/tab_configs/<name>.toml  a saved pane layout. Also ADDITIVE, and the current
+//                                    format: Warp has deprecated launch_configurations
+//                                    in favour of these, so nothing here writes the old
+//                                    directory.
+//   ~/.warp/keybindings.yaml         overrides only; Warp keeps its defaults for anything
+//                                    absent. Small, user-owned, may already exist.
+//   ~/.warp/settings.toml            everything the Settings UI writes — one file, 200-odd
+//                                    keys, hot-reloading and bidirectional with the GUI.
 //
-// That last distinction decides the shape of this module. Schemas below were taken from
-// a real Warp install on 2026-08-06 — actual files on disk, not documentation — so the
-// theme and launch-config formats here are exactly what Warp itself writes.
+// Schemas here came from a real Warp install on 2026-08-06 — the files it had already
+// written, plus its own bundled contract at
+// /Applications/Warp.app/Contents/Resources/settings_schema.json. That schema is what the
+// app validates against, which matters because a wrong enum value does not error: Warp
+// falls back to the default and shows a dismissible banner.
 //
-// WHY settings.toml IS NOT WRITTEN. It is a single ~7KB file holding notification
-// preferences, global hotkeys, agent execution profiles with command allow/deny lists,
-// and account state. Replacing it wholesale to change a font size would throw all of
-// that away, and Warp rewrites the file from the GUI anyway, so an external write can be
-// clobbered on the next settings change. There is no stdlib TOML *writer* in Python to
-// do a surgical merge with either. So the page generates the appearance keys as a
-// snippet you can paste, and the installer does not touch the file. Refusing to write it
-// is the honest option; silently overwriting somebody's agent denylist is not.
+// WHY settings.toml IS NOT WRITTEN. Not because editing it is wrong — it is explicitly
+// designed to be hand-edited, hot-reloads on save, and is meant to live in a dotfiles
+// repo. The problem is REPLACING it. It is one file that also holds notification
+// preferences, global hotkeys and agent execution profiles including command allow and
+// deny lists, so overwriting it to change a font size would take all of that with it.
+// A surgical merge would need a TOML writer, which the Python available in the installer
+// does not have (tomllib reads only). So the page generates the keys as a snippet to
+// paste — real key names, your values — and the installer leaves the file alone.
 
 const { clampInt } = require('./_term.js');
 
@@ -51,7 +56,7 @@ const WARP_DEFAULTS = {
   details: 'darker',
   // launch configuration
   launchConfig: true,
-  lcName: 'claude-code',
+  lcName: 'agent_dev',
   lcTitle: 'Claude Code',
   lcSplit: 'horizontal',
   lcColor: 'magenta',
@@ -66,7 +71,8 @@ const WARP_DEFAULTS = {
   fontSize: 13,
   cursorType: 'bar',
   inputMode: 'pinned_to_bottom',
-  spacing: 'compact',
+  spacing: 'normal',
+  inputBoxType: 'classic',
   opacity: 100,
   blur: 0,
   showBlockDividers: true,
@@ -76,9 +82,19 @@ const WARP_DEFAULTS = {
 // Only values seen written by Warp itself. Anything not on these lists would be a guess,
 // and an out-of-enum value in settings.toml is exactly the kind of thing that fails
 // quietly.
+// Read out of Warp's own bundled contract at
+// /Applications/Warp.app/Contents/Resources/settings_schema.json, which is the exact
+// schema the app validates against — not from the docs, and not guessed. An earlier
+// version of this file offered spacing values ("standard", "comfortable") and an
+// input_mode value ("classic") that do not exist; Warp falls back to the default and
+// shows a banner rather than telling you the value was nonsense, so a wrong enum here
+// is close to invisible.
 const CURSOR_TYPES = ['bar', 'block', 'underline'];
-const INPUT_MODES = ['pinned_to_bottom', 'classic'];
-const SPACINGS = ['compact', 'standard', 'comfortable'];
+const INPUT_MODES = ['pinned_to_bottom', 'pinned_to_top', 'waterfall'];
+const SPACINGS = ['normal', 'compact'];
+// terminal.input.input_box_type_setting — a DIFFERENT setting from input_mode, and the
+// one people actually mean by "classic".
+const INPUT_BOX_TYPES = ['universal', 'classic'];
 const SPLITS = ['horizontal', 'vertical'];
 
 const pick = (v, list, dflt) => (list.includes(v) ? v : dflt);
@@ -122,6 +138,7 @@ function sanitizeWarp(wp) {
     cursorType: pick(wp.cursorType, CURSOR_TYPES, d.cursorType),
     inputMode: pick(wp.inputMode, INPUT_MODES, d.inputMode),
     spacing: pick(wp.spacing, SPACINGS, d.spacing),
+    inputBoxType: pick(wp.inputBoxType, INPUT_BOX_TYPES, d.inputBoxType),
     opacity: clampInt(wp.opacity, 20, 100, d.opacity),
     blur: clampInt(wp.blur, 0, 30, d.blur),
     showBlockDividers: bool(wp.showBlockDividers, d.showBlockDividers),
@@ -188,40 +205,63 @@ function buildWarpTheme(s, palette) {
 }
 
 // ── launch configuration ────────────────────────────────────────────────────────
-// Shape verified against real ~/.warp/launch_configurations/*.yaml files.
+// A TAB CONFIG, not a launch configuration. Warp deprecated launch configurations in
+// favour of these: "Existing Launch Configurations continue to work, but new features
+// are not being added. For new setups, use Tab Configs." Tab configs also have the
+// things launch configs lack — agent panes, per-pane shell, and parameters.
 //
-// FLAT on purpose. Two shapes are attested on disk: a single-pane tab, where `layout`
-// carries cwd/is_focused directly, and a split, where `layout` carries `split_direction`
-// plus a flat `panes` list. Nesting a split inside a pane is NOT attested anywhere, and
-// this file is read by Warp — so the panes go side by side in one split rather than
-// shipping a guessed structure.
+// Two constraints shape what is emitted:
 //
-// cwd is omitted deliberately: the panes then open wherever you launch the configuration
-// from, instead of baking in a path belonging to whoever generated the link.
-function buildWarpLaunch(s) {
+//  1. The pane structs use serde's deny_unknown_fields, so an unrecognised key is a HARD
+//     parse error rather than a shrug. Only the documented keys appear below.
+//  2. `commands` run sequentially and each waits for the last, so a long-running or
+//     interactive command never returns and anything after it never runs. Each pane
+//     therefore gets at most one command, and the agent is alone in its pane.
+//
+// `directory` is omitted so the panes open wherever you open the tab from, rather than
+// baking in a path belonging to whoever generated the link. (Unlike a launch config's
+// `cwd`, which had to be absolute or the file would not show up at all, `directory` is
+// genuinely optional here.)
+function buildWarpTabConfig(s) {
   const L = [];
-  L.push('---');
-  L.push('# ~/.warp/launch_configurations/' + s.lcName + '.yaml');
-  L.push('# Open it from the command palette: "Launch Configuration".');
-  L.push('# Docs: https://docs.warp.dev/features/sessions/launch-configurations');
-  L.push('name: ' + s.lcName);
-  L.push('active_window_index: 0');
-  L.push('windows:');
-  L.push('  - active_tab_index: 0');
-  L.push('    tabs:');
-  L.push('      - title: ' + s.lcTitle);
-  L.push('        layout:');
-  L.push('          split_direction: ' + s.lcSplit);
-  L.push('          panes:');
-  L.push('            - is_focused: true');
-  L.push('              commands:');
-  L.push('                - exec: ' + s.lcAgentCommand);
-  L.push('            - {}');
+  L.push('# ~/.warp/tab_configs/' + s.lcName + '.toml');
+  L.push('# Opens from the + menu, or: open "warp://tab_config/' + s.lcName + '"');
+  L.push('# Docs: https://docs.warp.dev/terminal/sessions/tab-configs');
+  L.push('name = "' + s.lcTitle + '"');
+  L.push('title = "' + s.lcTitle + '"');
+  if (s.lcColor) L.push('color = "' + s.lcColor + '"');
+  L.push('');
+  // The first [[panes]] entry is the root. A node with split+children is a split;
+  // anything else is a leaf.
+  L.push('# The first entry is the root of the layout.');
+  L.push('[[panes]]');
+  L.push('id = "root"');
+  L.push('split = "' + s.lcSplit + '"');
+  L.push('children = ["agent", ' + (s.lcGitPane ? '"side"' : '"shell"') + ']');
+  L.push('');
+  L.push('[[panes]]');
+  L.push('id = "agent"');
+  L.push('type = "terminal"');
+  L.push('commands = ["' + s.lcAgentCommand + '"]');
+  L.push('is_focused = true');
   if (s.lcGitPane) {
-    L.push('            - commands:');
-    L.push('                - exec: git status');
+    L.push('');
+    L.push('[[panes]]');
+    L.push('id = "side"');
+    L.push('split = "' + (s.lcSplit === 'horizontal' ? 'vertical' : 'horizontal') + '"');
+    L.push('children = ["shell", "git"]');
   }
-  if (s.lcColor) L.push('        color: ' + s.lcColor);
+  L.push('');
+  L.push('[[panes]]');
+  L.push('id = "shell"');
+  L.push('type = "terminal"');
+  if (s.lcGitPane) {
+    L.push('');
+    L.push('[[panes]]');
+    L.push('id = "git"');
+    L.push('type = "terminal"');
+    L.push('commands = ["git status"]');
+  }
   return L.join('\n') + '\n';
 }
 
@@ -265,15 +305,21 @@ function buildWarpSettingsSnippet(s) {
     '[appearance.input]',
     'input_mode = "' + s.inputMode + '"',
     '',
+    '[terminal.input]',
+    'input_box_type_setting = "' + s.inputBoxType + '"',
+    '',
+    '# A CUSTOM theme is not a bare string — that form is only for Warp’s built-ins.',
+    '# It is a table naming the theme and the file, and both are required.',
     '[appearance.themes]',
-    'theme = "' + s.themeName + '"',
+    'theme = { custom = { name = "' + s.themeName + '", '
+      + 'path = "~/.warp/themes/' + s.themeName + '.yaml" } }',
   ].join('\n') + '\n';
 }
 
 // ── the installer ───────────────────────────────────────────────────────────────
 function warpApplyBlock(s, palette) {
   const theme = buildWarpTheme(s, palette);
-  const launch = buildWarpLaunch(s);
+  const tabcfg = buildWarpTabConfig(s);
   const keys = buildWarpKeybindings(s);
   return `
 echo ""
@@ -287,7 +333,7 @@ fi
 
 WARP_STAMP="$(date +%Y%m%d-%H%M%S)"
 WARP_DIR="$HOME/.warp"
-mkdir -p "$WARP_DIR/themes" "$WARP_DIR/launch_configurations"
+mkdir -p "$WARP_DIR/themes" "$WARP_DIR/tab_configs"
 
 # 1. The theme. A new file, so nothing existing is touched — this is why the theme is the
 # part the installer is happy to write.
@@ -295,10 +341,11 @@ cat > "$WARP_DIR/themes/${s.themeName}.yaml" <<'SCC_WARP_THEME'
 ${theme}SCC_WARP_THEME
 echo "  wrote $WARP_DIR/themes/${s.themeName}.yaml"
 ${s.launchConfig ? `
-# 2. The launch configuration. Also a new file.
-cat > "$WARP_DIR/launch_configurations/${s.lcName}.yaml" <<'SCC_WARP_LAUNCH'
-${launch}SCC_WARP_LAUNCH
-echo "  wrote $WARP_DIR/launch_configurations/${s.lcName}.yaml"` : ''}
+# 2. The tab config. Also a new file. Tab configs replaced launch configurations; the
+# old directory is left alone entirely.
+cat > "$WARP_DIR/tab_configs/${s.lcName}.toml" <<'SCC_WARP_TABCFG'
+${tabcfg}SCC_WARP_TABCFG
+echo "  wrote $WARP_DIR/tab_configs/${s.lcName}.toml"` : ''}
 ${s.keybindings ? `
 # 3. Keybindings. This one CAN already exist and is yours, so it is backed up first.
 if [ -f "$WARP_DIR/keybindings.yaml" ]; then
@@ -321,7 +368,7 @@ echo "  The appearance settings to match are printed on the /warp page."`;
 
 module.exports = {
   WARP_DEFAULTS, DETAILS, ANSI, PANE_COLORS, CURSOR_TYPES, INPUT_MODES, SPACINGS,
-  SPLITS, AGENT_COMMANDS,
-  sanitizeWarp, warpColors, buildWarpTheme, buildWarpLaunch, buildWarpKeybindings,
+  SPLITS, AGENT_COMMANDS, INPUT_BOX_TYPES,
+  sanitizeWarp, warpColors, buildWarpTheme, buildWarpTabConfig, buildWarpKeybindings,
   buildWarpSettingsSnippet, warpApplyBlock,
 };

@@ -18,7 +18,7 @@ const { topBar, navPayload } = require('./_nav.js');
 const { compareBlock, COMPARE_CSS } = require('./_compare.js');
 const {
   WARP_DEFAULTS, DETAILS, PANE_COLORS, CURSOR_TYPES, INPUT_MODES,
-  SPACINGS, SPLITS, AGENT_COMMANDS,
+  SPACINGS, SPLITS, AGENT_COMMANDS, INPUT_BOX_TYPES,
 } = require('./_warp.js');
 
 const WARP_CSS = `
@@ -57,8 +57,8 @@ const WARP_CSS = `
   .wbout{padding:3px 9px 5px;font-size:var(--wp-font);line-height:1.6;}
   .wbout .l{white-space:pre-wrap;word-break:break-word;}
 
-  /* The input editor. Warp pins it to the bottom by default; "classic" puts it inline
-     after the last block, which the mock reflects. */
+  /* The input editor. terminal.input.input_box_type_setting decides whether it reads as
+     the classic box or the AI-first universal one. */
   .winput{flex:none;margin:0 8px 8px;border:1px solid var(--wp-accent);
     border-radius:8px;background:var(--wp-blockbg);
     display:flex;align-items:center;gap:7px;padding:5px 9px;font-size:var(--wp-font);}
@@ -121,6 +121,7 @@ function renderWarp(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   const opts = JSON.stringify({
     details: DETAILS, paneColors: PANE_COLORS, cursors: CURSOR_TYPES,
     inputModes: INPUT_MODES, spacings: SPACINGS, splits: SPLITS,
+    inputBoxTypes: INPUT_BOX_TYPES,
     agentCommands: AGENT_COMMANDS,
   });
 
@@ -129,7 +130,7 @@ function renderWarp(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
 ${topBar('warp', ghSvg)}
 <header class="whead"><h1>\u{1F300} Warp</h1>
 <p class="sub" style="margin-top:8px">The terminal that puts every command in its own <b>block</b> — with its own exit status, its own output,
-and its own share link. Build a theme from your Claude Code palette here, plus a launch configuration that opens the agent, a shell
+and its own share link. Build a theme from your Claude Code palette here, plus a tab config that opens the agent, a shell
 and a git pane in one go. Both are new files, so nothing you already have gets overwritten.</p></header>
 
 <div class="wwrap">
@@ -167,10 +168,11 @@ and a git pane in one go. Both are new files, so nothing you already have gets o
       <b>select it</b> in Settings → Appearance → Themes once.</p>
       <div class="wfiles" id="themeOut"></div>
     </div>
-    <div class="panel"><h3>\u{1F5C2} launch_configurations/&lt;name&gt;.yaml</h3>
-      <p class="phint">Also a new file. Open it from the command palette with
-      <b>Launch Configuration</b>. No <span class="mono">cwd</span> is baked in, so the panes open
-      wherever you launch it from.</p>
+    <div class="panel"><h3>\u{1F5C2} tab_configs/&lt;name&gt;.toml</h3>
+      <p class="phint">Also a new file, and the <b>current</b> format — Warp has deprecated launch
+      configurations in favour of tab configs, so the old directory is left alone. Opens from the
+      <span class="mono">+</span> menu. No directory is baked in, so the panes open wherever you
+      open it from.</p>
       <div class="wfiles" id="launchOut"></div>
     </div>
   </div>
@@ -180,13 +182,18 @@ and a git pane in one go. Both are new files, so nothing you already have gets o
       <span class="wmtag">not written by the installer</span>
       <button type="button" id="copySettings">Copy this snippet</button>
     </div>
-    <p class="phint" style="margin-bottom:9px"><b>Why this one is different.</b> Warp owns
-    <span class="mono">~/.warp/settings.toml</span> and rewrites it whenever you change anything in the
-    Settings UI. It is a single file holding your notification preferences, global hotkeys, and agent
-    execution profiles <i>including the command allow and deny lists</i>. Replacing all of that to change
-    a font size would be a bad trade, and an external write can be clobbered the next time you touch a
-    setting anyway. So the keys are real and the values are yours — but you paste them, or set them in
-    the Settings UI, and the installer leaves the file alone.</p>
+    <p class="phint" style="margin-bottom:9px"><b>Why this one is different.</b> Not because editing it
+    is wrong — <span class="mono">settings.toml</span> is designed to be hand-edited, it hot-reloads on
+    save, and it belongs in your dotfiles. The problem is <i>replacing</i> it. It is one file that also
+    holds your notification preferences, global hotkeys and agent execution profiles
+    <i>including the command allow and deny lists</i>, so overwriting it to change a font size would
+    take all of that with it. A surgical merge needs a TOML writer the installer does not have. So the
+    keys below are real and the values are yours — you paste them, or set them in the Settings UI, and
+    the installer leaves the file alone.</p>
+    <p class="phint" style="margin-bottom:9px">Every key and value here is checked against
+    <span class="mono">settings_schema.json</span> inside the Warp app itself, which is the contract it
+    validates against. That matters: a value Warp does not recognise does not raise an error, it
+    quietly falls back to the default behind a dismissible banner.</p>
     <div class="wfiles wmanual" id="settingsOut"></div>
   </div>
 
@@ -200,7 +207,7 @@ ${compareBlock('warp')}
   <button id="c_reset" class="ghost" style="font-weight:500">Reset</button>
   <div class="minilinks">Schemas taken from real files a Warp install wrote, not from docs ·
   <a href="https://docs.warp.dev/terminal/appearance/custom-themes" target="_blank" rel="noreferrer">theme docs</a> ·
-  <a href="https://docs.warp.dev/features/sessions/launch-configurations" target="_blank" rel="noreferrer">launch configurations</a></div>
+  <a href="https://docs.warp.dev/terminal/sessions/tab-configs" target="_blank" rel="noreferrer">tab configs</a></div>
 </div>
 <div style="height:110px"></div>
 <div id="toast"></div>
@@ -264,6 +271,7 @@ function saneWarp(o){
     cursorType:wPick(o.cursorType,WP_OPTS.cursors,d.cursorType),
     inputMode:wPick(o.inputMode,WP_OPTS.inputModes,d.inputMode),
     spacing:wPick(o.spacing,WP_OPTS.spacings,d.spacing),
+    inputBoxType:wPick(o.inputBoxType,WP_OPTS.inputBoxTypes,d.inputBoxType),
     opacity:wNum(o.opacity,20,100,d.opacity),
     blur:wNum(o.blur,0,30,d.blur),
     showBlockDividers:wBool(o.showBlockDividers,d.showBlockDividers),
@@ -327,13 +335,16 @@ function winHTML(s,stock){
   };
   var L=function(col,t){return '<div class="l"><span style="color:'+col+'">'+esc(t)+'</span></div>';};
 
-  var body=blk('npm test','ok',L(palHex(p.green,'#9ece6a'),'12 passing (0.9s)'),' dim')
-    +blk('claude','run',
+  var older=blk('npm test','ok',L(palHex(p.green,'#9ece6a'),'12 passing (0.9s)'),' dim');
+  var newer=blk('claude','run',
       L(c.accent,'\\u2733 Working\\u2026')+L(c.fg,'\\u25cf Edit(src/upload.ts)')
       +L(palHex(p.green,'#9ece6a'),'  \\u2514 +18 \\u22123'),' on');
+  // pinned_to_top puts the newest block first; otherwise newest is last.
+  var body=(!stock&&s.inputMode==='pinned_to_top')?(newer+older):(older+newer);
 
   var cur=stock?'bar':s.cursorType;
-  var input='<div class="winput'+((!stock&&s.inputMode==='classic')?' classic':'')+'">'
+  // The input box style is what makes it read as classic; block flow is a separate key.
+  var input='<div class="winput'+((!stock&&s.inputBoxType==='classic')?' classic':'')+'">'
     +'<span class="wichev">\\u276f</span>'
     +'<span class="wiph">run a command, or ask in plain English</span>'
     +'<span class="wicur '+cur+'"></span></div>';
@@ -355,9 +366,10 @@ var TIPS={
   fromPalette:{t:'Colours from your palette',d:'Builds the theme out of the Claude Code palette carried in the link, so the terminal and the agent inside it match. Turn it off to pick the three base colours by hand.'},
   details:{t:'Details',d:'How Warp shades its own chrome against your background \\u2014 darker for a dark theme, lighter for a light one. Getting this wrong makes the UI furniture disappear into the background.'},
   showBlockDividers:{t:'Block dividers',d:'The border around each command block. Off is cleaner; on makes it obvious where one command ends and the next begins, which is most of the reason to use Warp.'},
-  inputMode:{t:'Input position',d:'pinned_to_bottom keeps the editor at the bottom of the window always. classic puts it inline after the last block, the way an ordinary terminal behaves.'},
+  inputMode:{t:'Block flow',d:'Which way blocks flow in the viewport \\u2014 newest at the bottom, newest at the top, or waterfall. This is appearance.input.input_mode, and it is NOT the setting that makes the input box look classic; that one is below.'},
+  inputBoxType:{t:'Input box style',d:'terminal.input.input_box_type_setting. universal is the AI-first input, classic is the ordinary one. Easy to confuse with Block flow above \\u2014 they are different keys in different sections.'},
   spacing:{t:'Spacing',d:'How much air sits between blocks.'},
-  launchConfig:{t:'Launch configuration',d:'A saved window layout you open from the command palette. This one puts the agent in a focused pane with a shell beside it, and optionally a git pane. It writes a NEW file, so it cannot disturb any launch configuration you already have.'},
+  launchConfig:{t:'Tab config',d:'A saved pane layout you open from the + menu. This one puts the agent in a focused pane with a shell beside it, and optionally a git pane. Tab configs replaced launch configurations \\u2014 this writes a NEW file under tab_configs and never touches the old directory. Each pane gets at most one command, because Warp runs them in sequence and an interactive one never returns.'},
   lcAgentCommand:{t:'What the first pane runs',d:'Picked from a list rather than typed: this value is executed when the layout opens, and a config built from a shared link does not get to choose what runs on your machine.'},
   keybindings:{t:'Keybindings',d:'Writes ~/.warp/keybindings.yaml, which holds OVERRIDES only \\u2014 Warp keeps its own default for every action you do not name. Unlike the theme and the launch config this file may already exist, so it is backed up first.'},
   themeName:{t:'Theme name',d:'Becomes the filename under ~/.warp/themes and the label in the theme picker. Restricted to letters, numbers, spaces, dashes and underscores, because it is a path.'},
@@ -394,7 +406,8 @@ function buildControls(){
     chk('f_showBlockDividers','Block dividers',s.showBlockDividers,'showBlockDividers')
     +chk('f_dimInactivePanes','Dim inactive panes',s.dimInactivePanes)
     +'<label class="ctl"><span class="cap">Spacing'+ihtml('spacing')+'</span>'+sel('f_spacing',WP_OPTS.spacings,s.spacing)+'</label>'
-    +'<label class="ctl"><span class="cap">Input position'+ihtml('inputMode')+'</span>'+sel('f_inputMode',WP_OPTS.inputModes,s.inputMode)+'</label>'
+    +'<label class="ctl"><span class="cap">Block flow'+ihtml('inputMode')+'</span>'+sel('f_inputMode',WP_OPTS.inputModes,s.inputMode)+'</label>'
+    +'<label class="ctl"><span class="cap">Input box style'+ihtml('inputBoxType')+'</span>'+sel('f_inputBoxType',WP_OPTS.inputBoxTypes,s.inputBoxType)+'</label>'
     +'<label class="ctl"><span class="cap">Cursor</span>'+sel('f_cursorType',WP_OPTS.cursors,s.cursorType)+'</label>'
     +'<div class="inline2">'
     +'<label class="ctl"><span class="cap">Opacity'+ihtml('opacity')+'</span><input type="number" id="f_opacity" min="20" max="100" value="'+s.opacity+'"></label>'
@@ -408,8 +421,8 @@ function buildControls(){
     +'<input type="number" id="f_fontSize" min="8" max="32" value="'+s.fontSize+'"></label>'
     +'<p class="hint" style="margin-top:-4px">These two live in settings.toml, so they show in the snippet below rather than being written for you.</p>');
 
-  h+=panel('\\u{1F5C2} Launch configuration',
-    chk('f_launchConfig','Write a launch configuration',s.launchConfig,'launchConfig')
+  h+=panel('\\u{1F5C2} Tab config',
+    chk('f_launchConfig','Write a tab config',s.launchConfig,'launchConfig')
     +'<label class="ctl"><span class="cap">File / config name</span>'
     +'<input type="text" id="f_lcName" value="'+esc(s.lcName)+'" maxlength="40"></label>'
     +'<label class="ctl"><span class="cap">Tab title</span>'
@@ -450,7 +463,7 @@ function refresh(){
   fetch('/warp-files.txt?c='+c).then(function(r){return r.text();}).then(function(t){
     var parts=t.split('@@SPLIT@@');
     $('#themeOut').textContent=parts[0]||'';
-    $('#launchOut').textContent=parts[1]||'(launch configuration turned off)';
+    $('#launchOut').textContent=parts[1]||'(tab config turned off)';
     $('#settingsOut').textContent=parts[2]||'';
   }).catch(function(){});
   clearTimeout(refresh._t);

@@ -1186,6 +1186,72 @@ function bashCheck(src, label) {
   ok(!/settings\.toml"?\s*<</.test(wpSh) && !/> *"\$WARP_DIR\/settings\.toml/.test(wpSh),
     '/warp: the installer never writes settings.toml');
   ok(/themes\/My Theme\.yaml/.test(wpSh), '/warp: the installer writes the theme');
+  // Tab configs replaced launch configurations, and their pane structs use
+  // deny_unknown_fields — an unrecognised key is a hard parse error, not a warning.
+  const wpTab = WP.buildWarpTabConfig(wpOk);
+  ok(/tab_configs\//.test(wpSh) && !/launch_configurations\//.test(wpSh),
+    '/warp: the installer writes a tab config, not the deprecated launch config');
+  ok(/^id = "root"$/m.test(wpTab) && /^children = \[/m.test(wpTab),
+    '/warp: the tab config has a root split');
+  // Each pane gets at most one command: Warp runs them in sequence and an interactive
+  // one never returns, so anything after it would silently never run.
+  for (const line of wpTab.split('\n').filter(l => l.startsWith('commands = '))) {
+    ok((line.match(/","/g) || []).length === 0, '/warp: one command per pane — ' + line.trim());
+  }
+  // A CUSTOM theme is a table, not a bare string; a bare name is only valid for Warp's
+  // own built-ins and would fall back silently.
+  const wpSnip = WP.buildWarpSettingsSnippet(wpOk);
+  ok(/theme = \{ custom = \{ name = "My Theme", path = "~\/\.warp\/themes\/My Theme\.yaml" \} \}/.test(wpSnip),
+    '/warp: a custom theme is referenced as a table with name and path');
+
+  // The strongest check this page can make: validate the snippet against the schema
+  // bundled inside the Warp app, which is the contract Warp itself validates against.
+  // Warp does not error on an unknown key or a bad enum — it falls back to the default
+  // behind a dismissible banner — so nothing else would catch a wrong value.
+  const wpSchemaPath = '/Applications/Warp.app/Contents/Resources/settings_schema.json';
+  if (fs.existsSync(wpSchemaPath)) {
+    const schema = JSON.parse(fs.readFileSync(wpSchemaPath, 'utf8'));
+    const defs = schema.$defs || {};
+    const deref = n => { while (n && n.$ref) n = defs[n.$ref.split('/').pop()]; return n; };
+    const constsOf = n => {
+      n = deref(n);
+      if (!n) return null;
+      if (n.enum) return new Set(n.enum);
+      if (n.oneOf) { const c = n.oneOf.filter(o => 'const' in o).map(o => o.const); return c.length ? new Set(c) : null; }
+      return null;
+    };
+    // A deliberately minimal TOML reader: the snippet is ours, so it only has to handle
+    // [section] headers and key = value lines.
+    const cfg = {};
+    let cur = cfg;
+    for (const raw of wpSnip.split('\n')) {
+      const line = raw.trim();
+      if (!line || line.startsWith('#')) continue;
+      const sec = /^\[([a-z0-9_.]+)\]$/.exec(line);
+      if (sec) { cur = cfg; for (const part of sec[1].split('.')) cur = (cur[part] = cur[part] || {}); continue; }
+      const kv = /^([a-z0-9_]+) = (.+)$/.exec(line);
+      if (kv) cur[kv[1]] = kv[2];
+    }
+    const problems = [];
+    (function check(node, sch, p) {
+      sch = deref(sch);
+      const props = (sch && sch.properties) || {};
+      for (const [k, v] of Object.entries(node)) {
+        const at = p ? p + '.' + k : k;
+        if (!(k in props)) { problems.push('unknown key ' + at); continue; }
+        const sub = deref(props[k]);
+        if (v && typeof v === 'object') { if (sub && sub.properties) check(v, sub, at); continue; }
+        const str = /^"(.*)"$/.exec(String(v));
+        if (!str) continue;
+        const allowed = constsOf(props[k]);
+        if (allowed && !allowed.has(str[1])) problems.push(at + ' = "' + str[1] + '"');
+      }
+    })(cfg, schema, '');
+    ok(problems.length === 0,
+      '/warp: the settings snippet validates against Warp’s own schema', problems.join('; '));
+  } else {
+    console.log('  – Warp not installed, skipping the settings-schema check');
+  }
 
   // A hostile payload: the theme name becomes a FILENAME and the agent command is
   // EXECUTED, so both are the interesting ones.

@@ -11,7 +11,7 @@ const { sanitizeHerdr, buildHerdrToml, herdrApplyBlock } = require('./_herdr.js'
 const { renderHerdr } = require('./_herdr_page.js');
 const { sanitizeZellij, buildZellijKdl, buildAgentLayout, zellijApplyBlock } = require('./_zellij.js');
 const { renderZellij } = require('./_zellij_page.js');
-const { sanitizeWarp, buildWarpTheme, buildWarpLaunch, buildWarpSettingsSnippet, warpApplyBlock } = require('./_warp.js');
+const { sanitizeWarp, buildWarpTheme, buildWarpTabConfig, buildWarpSettingsSnippet, warpApplyBlock } = require('./_warp.js');
 const { renderWarp } = require('./_warp_page.js');
 const {
   sanitizeSL, buildUMD, buildInputBox, buildStatuslineScript,
@@ -329,7 +329,7 @@ function route(req, res) {
       const wpSan = sanitizeWarp(pl.wp);
       if (!wpSan) return sendText('this setup has no Warp layer enabled', 'text/plain; charset=utf-8', 404);
       const body = buildWarpTheme(wpSan, pl.p)
-        + '@@SPLIT@@' + (wpSan.launchConfig ? buildWarpLaunch(wpSan) : '')
+        + '@@SPLIT@@' + (wpSan.launchConfig ? buildWarpTabConfig(wpSan) : '')
         + '@@SPLIT@@' + buildWarpSettingsSnippet(wpSan);
       return sendText(body, 'text/plain; charset=utf-8');
     } catch (e) { return sendText('bad payload: ' + cleanText(e.message, 120), 'text/plain; charset=utf-8', 400); }
