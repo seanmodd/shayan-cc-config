@@ -218,6 +218,19 @@ const CMUX_CSS = `
   /* Our Community: saved setups, and the card that saves one. */
   .pchip.savechip{border-style:dashed;}
   .pchip.savechip .pcname{color:var(--accent);}
+  /* The save card is a div, so its call-to-action carries the button styling. */
+  .savecta{display:block;width:100%;text-align:left;padding:0;margin:0 0 3px;border:none;
+    background:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;
+    color:var(--accent);}
+  .saveinput{width:100%;margin:5px 0 7px;padding:7px 9px;border:1px solid var(--accent);
+    border-radius:7px;background:#080b10;color:var(--text);font-family:inherit;font-size:13px;}
+  .saveinput:focus{outline:none;box-shadow:0 0 0 2px rgba(122,162,247,.25);}
+  .saverow{display:flex;gap:7px;}
+  .saverow button{cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:600;
+    border:1px solid var(--border);border-radius:7px;background:#161c26;color:var(--text);
+    padding:6px 11px;min-height:32px;}
+  .saverow button:hover{border-color:var(--accent);}
+  .saverow .saveno{background:transparent;color:var(--dim);font-weight:500;}
   .pctag.ours{border-color:var(--accent);color:var(--accent);}
   .ouracts{display:flex;gap:10px;margin-top:6px;}
   .ouract{font-size:10.5px;color:var(--dim);border-bottom:1px solid var(--border);
@@ -227,6 +240,9 @@ const CMUX_CSS = `
     #jsonEdit{min-height:180px;font-size:16px;}
     .jsonbar button{min-height:44px;}
     .pchip.savechip .pcblurb{display:block;}
+    /* 16px, or iOS Safari zooms the page on focus and never zooms back out. */
+    .saveinput{font-size:16px;}
+    .saverow button{min-height:44px;}
   }
   .chead{padding-bottom:2px;}
   .chead h1{font-size:32px;}
@@ -1100,17 +1116,7 @@ function paintPresets(){
     mineSaved.length
       ? mineSaved.length+' saved in this browser \u2014 share a link to pass one on'
       : 'nothing saved yet \u2014 build a look and press Save'));
-  var saveBtn=document.createElement('button');
-  saveBtn.type='button';saveBtn.className='pchip savechip';
-  var sb=document.createElement('div');sb.className='pcbody';
-  var sn=document.createElement('div');sn.className='pcname';
-  sn.textContent='\uFF0B  Save this setup';sb.appendChild(sn);
-  var sbl=document.createElement('div');sbl.className='pcblurb';
-  sbl.textContent='Keeps the whole thing \u2014 cmux settings, colours and your Claude Code side.';
-  sb.appendChild(sbl);
-  saveBtn.appendChild(sb);
-  saveBtn.addEventListener('click',saveOurs);
-  host.appendChild(saveBtn);
+  host.appendChild(saveCard());
 
   mineSaved.forEach(function(item){
     var b=document.createElement('button');
@@ -1529,7 +1535,9 @@ $('#c_reset').addEventListener('click',function(){
       JSON.parse(this.value);
       say('Valid JSON \u2014 Apply to load it into the controls.','ok');
     }catch(e){
-      say(String(e.message).replace(/^JSON.parse:?\s*/i,'').slice(0,90),'bad');
+      // Doubled, because this regex is written inside a template literal: a single
+      // backslash is eaten there and the class reaches the browser as a literal "s".
+      say(String(e.message).replace(/^JSON.parse:?\\s*/i,'').slice(0,90),'bad');
     }
   });
   $('#jsonApply').addEventListener('click',function(){
@@ -1563,9 +1571,72 @@ function ours_get(){
 }
 function ours_set(a){try{localStorage.setItem('scc_cmux_saved',JSON.stringify(a));}catch(e){}}
 
-function saveOurs(){
-  var name=(prompt('Name this setup:', (ccPayload.n||'My cmux setup'))||'').trim();
-  if(!name)return;
+// The card that saves one, in two states: a button, and the button replaced by a name
+// field. It used to call prompt() instead, which is a synchronous modal \u2014 the browser
+// counts every second that dialog is open as time your click handler spent blocking the
+// main thread, so naming a setup at human speed reported a ~6s interaction and Chrome
+// flagged the page for it. Nothing was actually slow; the dialog just cannot be
+// measured any other way. An inline field returns to the event loop immediately.
+//
+// A <div>, not the <button> this used to be: an <input> inside a <button> is invalid
+// HTML, and browsers will not reliably let you focus or type into one.
+function saveCard(){
+  var card=document.createElement('div');
+  card.className='pchip savechip';
+  var body=document.createElement('div');
+  body.className='pcbody';
+  card.appendChild(body);
+
+  function idle(){
+    body.textContent='';
+    var b=document.createElement('button');
+    b.type='button';b.className='savecta';
+    b.textContent='\uff0b  Save this setup';
+    var bl=document.createElement('div');bl.className='pcblurb';
+    bl.textContent='Keeps the whole thing \u2014 cmux settings, colours and your Claude Code side.';
+    body.appendChild(b);body.appendChild(bl);
+    b.addEventListener('click',naming);
+  }
+
+  function naming(){
+    body.textContent='';
+    var lab=document.createElement('label');
+    lab.className='pcname';lab.setAttribute('for','oursName');
+    lab.textContent='Name this setup';
+    var inp=document.createElement('input');
+    inp.type='text';inp.id='oursName';inp.className='saveinput';
+    inp.setAttribute('maxlength','40');
+    inp.setAttribute('autocomplete','off');
+    inp.value=ccPayload.n||'My cmux setup';
+    var row=document.createElement('div');row.className='saverow';
+    var go=document.createElement('button');
+    go.type='button';go.className='savego';go.textContent='Save';
+    var no=document.createElement('button');
+    no.type='button';no.className='saveno';no.textContent='Cancel';
+    row.appendChild(go);row.appendChild(no);
+    body.appendChild(lab);body.appendChild(inp);body.appendChild(row);
+
+    function commit(){
+      var n=(inp.value||'').trim();
+      if(!n){inp.focus();return;}
+      commitSave(n);
+    }
+    go.addEventListener('click',commit);
+    no.addEventListener('click',idle);
+    inp.addEventListener('keydown',function(e){
+      if(e.key==='Enter'){e.preventDefault();commit();}
+      else if(e.key==='Escape'){e.preventDefault();idle();}
+    });
+    // Safe here and not in idle(): naming() only ever runs from a click, by which
+    // point the card is in the document. focus() on a detached node does nothing.
+    inp.focus();inp.select();
+  }
+
+  idle();
+  return card;
+}
+
+function commitSave(name){
   var pl=payload();
   pl.n=name.slice(0,40);
   var all=ours_get().filter(function(x){return x.name!==pl.n;});
@@ -1576,6 +1647,7 @@ function saveOurs(){
     payload: pl
   });
   ours_set(all);
+  // Repaints the grid, which rebuilds this card in its idle state.
   paintPresets();
   toast('Saved \u201c'+pl.n+'\u201d to Our Community');
 }

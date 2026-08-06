@@ -931,6 +931,24 @@ function bashCheck(src, label) {
   ]) ok(cmPage.includes(needle), '/cmux: ' + label);
   // Our Community has to render above the community themes: it is the shortest list and
   // the one you came back for.
+  // Naming a saved setup must not go through prompt(): the browser counts every second
+  // that a modal is open as time the click handler blocked the main thread, so naming one
+  // at human speed reported a ~6s interaction and Chrome flagged the page for it.
+  // Comment lines dropped first, or the note above the fix matches its own description.
+  const cmCode = extractScripts(cmPage).join('\n')
+    .split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
+  ok(!/[^.\w]prompt\s*\(/.test(cmCode), '/cmux: saving does not open a blocking prompt()');
+  ok(cmCode.includes("'oursName'") && cmCode.includes("'saveinput'"),
+    '/cmux: a setup is named in an inline field instead');
+  // An <input> inside a <button> is invalid HTML and will not reliably focus.
+  ok(/saveCard[\s\S]{0,300}createElement\('div'\)/.test(cmPage),
+    '/cmux: the save card is a div, so it can hold that field');
+
+  // Regex written inside a template literal loses a single backslash on the way to the
+  // browser, so \\s must be doubled in the source. This one shipped as a literal "s".
+  ok(!/replace\(\/\^JSON\.parse:\?s\*/.test(cmPage),
+    '/cmux: the JSON error cleanup keeps its whitespace class');
+
   ok(cmPage.indexOf("'Our Community'") > 0
     && cmPage.indexOf("'Our Community'") < cmPage.indexOf("'Popular in the community'"),
     '/cmux: Our Community is ordered above Popular in the community');
