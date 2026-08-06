@@ -29,6 +29,24 @@ const { clampInt, cleanText } = require('./_term.js');
 // genuinely stock cmux.
 const GHOSTTY_FONTS = ['', 'SF Mono', 'Menlo', 'Monaco', 'JetBrains Mono', 'Fira Code',
   'IBM Plex Mono', 'Cascadia Code', 'Hack', 'Source Code Pro', 'Berkeley Mono'];
+// Where to actually get each font, so "not installed" is actionable rather than a
+// dead end. Cask names were verified against the local Homebrew (brew info --cask);
+// homepages were verified to resolve. Menlo and Monaco have no cask because they ship
+// with macOS, and Berkeley Mono has none because it is a paid commercial typeface —
+// saying "free download" there would be wrong.
+const FONT_SOURCES = {
+  'SF Mono':         { url: 'https://developer.apple.com/fonts/',                     cask: 'font-sf-mono',         cost: 'free' },
+  'Menlo':           { url: '',                                                       cask: '',                     cost: 'macos' },
+  'Monaco':          { url: '',                                                       cask: '',                     cost: 'macos' },
+  'JetBrains Mono':  { url: 'https://www.jetbrains.com/lp/mono/',                     cask: 'font-jetbrains-mono',  cost: 'free' },
+  'Fira Code':       { url: 'https://github.com/tonsky/FiraCode',                     cask: 'font-fira-code',       cost: 'free' },
+  'IBM Plex Mono':   { url: 'https://github.com/IBM/plex',                            cask: 'font-ibm-plex-mono',   cost: 'free' },
+  'Cascadia Code':   { url: 'https://github.com/microsoft/cascadia-code',             cask: 'font-cascadia-code',   cost: 'free' },
+  'Hack':            { url: 'https://sourcefoundry.org/hack/',                        cask: 'font-hack',            cost: 'free' },
+  'Source Code Pro': { url: 'https://github.com/adobe-fonts/source-code-pro',         cask: 'font-source-code-pro', cost: 'free' },
+  'Berkeley Mono':   { url: 'https://berkeleygraphics.com/typefaces/berkeley-mono/',  cask: '',                     cost: 'paid' },
+};
+
 const APPEARANCES = ['system', 'light', 'dark'];
 const PLACEMENTS = ['top', 'afterCurrent', 'end'];
 const ALIGNMENTS = ['left', 'center', 'right'];
@@ -463,6 +481,7 @@ fi
 }
 
 module.exports = {
+  FONT_SOURCES,
   schemeLines,
   sanitizeCmux,
   buildGhosttyLines,

@@ -19,7 +19,7 @@ const { STUDIO_CSS } = require('./_customize.js');
 const { presetsForClient } = require('./_cmux_presets.js');
 const {
   CMUX_DEFAULTS, GHOSTTY_FONTS, APPEARANCES, PLACEMENTS,
-  ALIGNMENTS, BRANCH_LAYOUTS, INDICATOR_STYLES,
+  ALIGNMENTS, BRANCH_LAYOUTS, INDICATOR_STYLES, FONT_SOURCES,
 } = require('./_cmux.js');
 
 const CMUX_CSS = `
@@ -155,6 +155,45 @@ const CMUX_CSS = `
   .ovnote{display:block;margin-top:4px;font-size:10.5px;color:var(--gold);
     letter-spacing:.01em;}
   .ctl2.overridden .ovnote{margin-left:26px;}
+  /* "not installed" has to be actionable, so it comes with the install line and the
+     download link rather than just the bad news. */
+  .fontget{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:6px;}
+  .fontget code{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#b7c3d6;
+    background:#0b0e14;border:1px solid var(--border);border-radius:6px;padding:4px 8px;
+    white-space:nowrap;overflow-x:auto;max-width:100%;}
+  .fontget .fcopy{cursor:pointer;font-family:inherit;font-size:10.5px;font-weight:600;
+    letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--border);
+    background:#161c26;color:var(--dim);border-radius:6px;padding:4px 8px;min-height:28px;}
+  .fontget .fcopy:hover{border-color:var(--accent);color:var(--text);}
+  .fontget a{color:var(--accent);font-size:11.5px;text-decoration:none;
+    border-bottom:1px solid transparent;}
+  .fontget a:hover{border-bottom-color:var(--accent);}
+  .fontget .fpaid{font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--gold);border:1px solid var(--gold);border-radius:20px;padding:1px 6px;}
+  @media(max-width:700px),(max-height:520px){
+    .fontget .fcopy{min-height:40px;}
+    .fontget code{font-size:10.5px;}
+  }
+  .switchrow{display:flex;align-items:center;gap:10px;margin-bottom:2px;}
+  .switchrow .paneswitch{flex:1;}
+  .pinbtn{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-family:inherit;
+    font-size:12.5px;font-weight:600;letter-spacing:.02em;border:1px solid var(--border);
+    background:#10141b;color:var(--dim);border-radius:10px;padding:0 12px;min-height:38px;
+    white-space:nowrap;transition:all .14s;}
+  .pinbtn:hover{border-color:var(--accent);color:var(--text);}
+  .pinbtn.on{border-color:var(--accent);color:var(--accent);background:rgba(122,162,247,.12);}
+  .pinbtn .pico{font-size:13px;}
+
+  /* Pinned: the mock rides the top of the viewport with the controls sliding under it.
+     The terminal takes a fixed height while pinned so the window's own height stops
+     depending on the font size — otherwise raising the font from 13pt to 28pt grew the
+     mock from 201px to 626px and it spilled over the controls underneath. Clipping the
+     transcript is the right trade here: pinned, you are watching the chrome and the
+     colours, and the top of the transcript is what matters. */
+  body.pinned .cmuxpair{position:sticky;top:0;z-index:45;background:var(--bg);
+    padding-bottom:12px;box-shadow:0 16px 20px -14px rgba(0,0,0,.75);}
+  body.pinned .cterm{height:min(26dvh,200px);flex:none;overflow:hidden;}
+  body.pinned .cwin{box-shadow:0 8px 22px rgba(0,0,0,.4);}
   .chead{padding-bottom:2px;}
   .chead h1{font-size:32px;}
 
@@ -200,6 +239,12 @@ const CMUX_CSS = `
     .ctitle .tdot{width:9px;height:9px;}
     .cpanels{grid-template-columns:1fr;}
     .filebox{font-size:10.5px;padding:9px 10px;}
+    .switchrow{flex-wrap:wrap;gap:7px;}
+    .switchrow .paneswitch{flex:1 1 100%;}
+    .pinbtn{flex:1 1 100%;justify-content:center;min-height:44px;}
+    /* A pinned mock may not take more than half the screen on a phone, or there is
+       nothing left to scroll the controls in. */
+    body.pinned .cmuxpair{max-height:52dvh;overflow:hidden;height:auto;}
   }
   /* Landscape has width to spare and almost no height. */
   @media(max-height:460px){
@@ -233,6 +278,7 @@ function renderCmux(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   const opts = JSON.stringify({
     fonts: GHOSTTY_FONTS, appearances: APPEARANCES, placements: PLACEMENTS,
     alignments: ALIGNMENTS, branchLayouts: BRANCH_LAYOUTS, indicators: INDICATOR_STYLES,
+    fontSources: FONT_SOURCES,
   });
   const starters = JSON.stringify(STARTERS);
   const lines = JSON.stringify(LINES);
@@ -246,9 +292,14 @@ function renderCmux(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
 <p class="sub" style="margin-top:8px">The terminal <b>around</b> Claude Code. cmux is a native macOS terminal built on Ghostty — sidebar workspaces, split panes, surface tabs. Style it here and it layers <b>on top of</b> the Claude Code theme you picked, so the whole window is one setup. One command applies both.</p></header>
 
 <div class="cwrap">
-  <div class="paneswitch" data-pane-toggle role="tablist" aria-label="Which window to show">
-    <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
-    <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
+  <div class="switchrow">
+    <div class="paneswitch" data-pane-toggle role="tablist" aria-label="Which window to show">
+      <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
+      <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
+    </div>
+    <button type="button" id="pinbtn" class="pinbtn" aria-pressed="false"
+      title="Keep the preview on screen while you scroll through the controls">
+      <span class="pico">\u{1F4CC}</span><span class="ptxt">Pin preview</span></button>
   </div>
   <div class="cmuxpair" data-pane="after" id="pair">
     <div class="cmuxcol cmuxcol-before">
@@ -502,19 +553,65 @@ function fontAvailable(name){
 }
 function paintFontNote(){
   var el=$('#fontnote'); if(!el)return;
-  if(!state.fontFamily){
-    el.textContent='Leaving your terminal font alone.';
+  var name=state.fontFamily;
+  if(!name){
     el.className='hint';
+    el.textContent='Leaving your terminal font alone.';
     return;
   }
-  if(fontAvailable(state.fontFamily)){
-    el.textContent='Installed here \u2014 the preview above is using it.';
+  var src=(CMUX_OPTS.fontSources&&Object.prototype.hasOwnProperty.call(CMUX_OPTS.fontSources,name))
+    ? CMUX_OPTS.fontSources[name] : null;
+
+  if(fontAvailable(name)){
     el.className='hint ok';
-  }else{
-    el.textContent='Not installed on this Mac, so the preview falls back to a system '
-      +'mono. cmux will still use it once you install it.';
-    el.className='hint warn';
+    el.textContent='Installed here \u2014 the preview above is using it.';
+    return;
   }
+
+  // Not installed: say so, then say exactly how to get it. A dead end here is what
+  // made the control feel broken in the first place.
+  el.className='hint warn';
+  el.innerHTML='';
+  var line=document.createElement('span');
+  line.textContent='Not installed on this Mac, so the preview falls back to a system mono. '
+    +'cmux will use it once you install it.';
+  el.appendChild(line);
+
+  if(!src||(!src.url&&!src.cask)){
+    if(src&&src.cost==='macos'){
+      // Ships with macOS, so "not installed" almost certainly means the detection is
+      // wrong rather than the font being absent. Say that instead of offering a link.
+      el.className='hint';
+      el.textContent=name+' ships with macOS, so it should already be there \u2014 '
+        +'if the preview looks unchanged, that is the detection being cautious, not a problem.';
+    }
+    return;
+  }
+
+  var row=document.createElement('span');
+  row.className='fontget';
+  if(src.cask){
+    var cmd='brew install --cask '+src.cask;
+    var code=document.createElement('code');
+    code.textContent=cmd;
+    row.appendChild(code);
+    var copy=document.createElement('button');
+    copy.type='button';copy.className='fcopy';copy.textContent='copy';
+    copy.addEventListener('click',function(){copyText(cmd);toast('Copied \u2014 paste it in a terminal');});
+    row.appendChild(copy);
+  }
+  if(src.url){
+    var a=document.createElement('a');
+    a.href=src.url;a.target='_blank';a.rel='noreferrer noopener';
+    a.textContent=src.cost==='paid'?'buy it \u2197':'download \u2197';
+    row.appendChild(a);
+  }
+  if(src.cost==='paid'){
+    var paid=document.createElement('span');
+    paid.className='fpaid';paid.textContent='paid font';
+    row.appendChild(paid);
+  }
+  el.appendChild(row);
 }
 
 /**
@@ -1004,6 +1101,31 @@ document.addEventListener('click',function(e){
 },true);
 document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();});
 window.addEventListener('scroll',function(){if(_tipBtn)hideTip();},true);
+
+// ── pin the preview ──────────────────────────────────────────────────────────
+// Adjusting a control you cannot see the effect of is the whole problem with a long
+// settings page. Pinning sticks the window mock to the top of the viewport at whatever
+// height it currently has, so the controls scroll underneath it.
+//
+// position:sticky rather than fixed: sticky keeps the element in normal flow, so the
+// controls below do not jump up by the mock's height the moment you pin it, and it
+// stops sticking naturally when you scroll back past it.
+(function(){
+  var btn=$('#pinbtn'); if(!btn)return;
+  function apply(on){
+    document.body.classList.toggle('pinned',on);
+    btn.classList.toggle('on',on);
+    btn.setAttribute('aria-pressed',on?'true':'false');
+    $('.ptxt',btn).textContent=on?'Preview pinned':'Pin preview';
+    // No height freeze needed: while pinned the terminal has a fixed height, so the
+    // mock does not resize when a control changes and the page cannot jump.
+    try{localStorage.setItem('scc_cmux_pin',on?'1':'0');}catch(e){}
+  }
+  btn.addEventListener('click',function(){apply(!document.body.classList.contains('pinned'));});
+  var saved='0';
+  try{saved=localStorage.getItem('scc_cmux_pin')||'0';}catch(e){}
+  if(saved==='1')apply(true);
+})();
 
 // ── before/after switch ───────────────────────────────────────────────────────
 (function(){
