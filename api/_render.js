@@ -51,7 +51,26 @@ const CSS = `
   .cmd .dollar{color:var(--ok);}
   button.copy{cursor:pointer;border-radius:8px;border:1px solid var(--border);background:#161c26;color:var(--text);padding:9px 14px;font-size:13px;transition:all .15s;}
   button.copy:hover{border-color:var(--accent);color:var(--accent);}
-  .sectlabel{max-width:1200px;margin:30px auto 0;padding:0 26px;font-size:13px;color:var(--gold);text-transform:uppercase;letter-spacing:.1em;display:flex;align-items:center;gap:8px;}
+  .sectlabel{max-width:1200px;margin:30px auto 0;padding:0 24px;font-size:13px;color:var(--gold);text-transform:uppercase;letter-spacing:.1em;display:flex;align-items:center;gap:8px;}
+  /* ── Favorites ──────────────────────────────────────────────────────────────
+     Two kinds of starred thing, one region. A Claude Code setup on its own and a
+     recipe pairing one with a terminal are genuinely different objects, so they get
+     a section each rather than one mixed list where you cannot tell which is which.
+     Both fold, and remember whether you folded them. */
+  /* Tight under #favlabel, which is this region's heading rather than a separate band. */
+  .favwrap{max-width:1200px;margin:12px auto 0;padding:0 24px;display:flex;flex-direction:column;gap:10px;}
+  .favsec{background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+  .favsec>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:13px 16px;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);}
+  .favsec>summary::-webkit-details-marker{display:none;}
+  /* The twisty is drawn here rather than left to the browser, so it points the same
+     way everywhere and can sit to the left of the label. */
+  .favsec>summary::before{content:'\\25B8';font-size:11px;color:var(--dim);display:inline-block;transition:transform .15s;}
+  .favsec[open]>summary::before{transform:rotate(90deg);}
+  .favsec>summary:hover{background:#11161f;}
+  .favn{background:#0b0e14;border:1px solid var(--border);border-radius:20px;padding:1px 8px;font-size:11px;color:var(--dim);letter-spacing:.04em;}
+  .favsub{margin-left:auto;text-transform:none;letter-spacing:0;font-size:11.5px;color:var(--faint);}
+  .favbody{padding:0 16px 15px;}
+  .favbody.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(350px,1fr));gap:22px;}
   main{max-width:1200px;margin:14px auto 60px;padding:0 24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(350px,1fr));gap:22px;}
   .card{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px;transition:transform .15s,border-color .15s,box-shadow .15s;}
   .card:hover{transform:translateY(-3px);box-shadow:0 12px 34px rgba(0,0,0,.45);}
@@ -100,6 +119,15 @@ const CSS = `
        unbreakable lines, and the grid blew out to 625px on a 390px screen. */
     #grid{grid-template-columns:minmax(0,1fr)!important;gap:12px;}
     #grid>*{min-width:0;}
+    /* #favlabel is the only .sectlabel, and it heads .favwrap — so the two have to
+       keep the same gutter on a phone or the heading sits proud of its own region. */
+    .sectlabel{padding:0 12px;margin-top:22px;}
+    .favwrap{padding:0 12px;}
+    /* The description drops to its own line rather than squeezing the count off the
+       right edge. */
+    .favsub{margin-left:0;flex-basis:100%;}
+    .favbody.cards{grid-template-columns:minmax(0,1fr);gap:12px;}
+    .favbody.cards>*{min-width:0;}
     .card{padding:12px;}
     footer{padding:8px 16px 40px;font-size:12px;}
     /* Wide, unbreakable install commands must scroll in their own box, never the
@@ -605,16 +633,42 @@ function render(){
   var favs=fav_get();var all=models();
   var favModels=all.filter(function(m){return favs.indexOf(m.id)>=0;});
   var rest=all.filter(function(m){return favs.indexOf(m.id)<0;});
-  var grid=$('#grid');
-  Array.prototype.forEach.call(grid.querySelectorAll('.card'),function(el){if(el._t1)clearInterval(el._t1);if(el._t2)clearInterval(el._t2);});
-  grid.innerHTML='';
-  var favLabel=$('#favlabel');
-  if(favModels.length){favLabel.style.display='flex';favModels.forEach(function(m){grid.appendChild(card(m));});
-    var sep=document.createElement('div');sep.style.gridColumn='1/-1';sep.style.height='1px';sep.style.background='var(--border)';sep.style.margin='6px 0';grid.appendChild(sep);
-  } else {favLabel.style.display='none';}
+  // Cards animate on intervals and now live in two containers, so tear down by class
+  // rather than by container — scoping this to #grid would leak two timers per card
+  // into the favorites section on every repaint.
+  Array.prototype.forEach.call(document.querySelectorAll('.card'),function(el){if(el._t1)clearInterval(el._t1);if(el._t2)clearInterval(el._t2);});
+  var grid=$('#grid');grid.innerHTML='';
+  var fg=$('#favccgrid');fg.innerHTML='';
+  // Starred setups move into the favorites section rather than being copied there, so
+  // the gallery below is what is left to discover.
+  favModels.forEach(function(m){fg.appendChild(card(m));});
   rest.forEach(function(m){grid.appendChild(card(m));});
+  paintFavWrap();
   paintSel();
 }
+// The region hides itself when nothing is starred. An empty scaffold with two empty
+// sections is a worse first impression than no region at all, and the star on each card
+// is where you learn what it is for.
+function paintFavWrap(){
+  var cc=$('#favccgrid').children.length, rc=$('#favrecgrid').children.length;
+  $('#favccn').textContent=cc;
+  $('#favrecn').textContent=rc;
+  $('#favcc').style.display=cc?'':'none';
+  $('#favrec').style.display=rc?'':'none';
+  var any=cc||rc;
+  $('#favwrap').style.display=any?'':'none';
+  $('#favlabel').style.display=any?'flex':'none';
+}
+// Fold state is per-section and remembered: the two lists grow at very different rates,
+// and people settle on keeping one open and the other shut.
+['favcc','favrec'].forEach(function(id){
+  var d=$('#'+id), k='scc_fold_'+id, v=null;
+  try{v=localStorage.getItem(k);}catch(e){}
+  d.open=(v!=='closed');
+  d.addEventListener('toggle',function(){
+    try{localStorage.setItem(k,d.open?'open':'closed');}catch(e){}
+  });
+});
 function paintSel(){
   document.querySelectorAll('.card').forEach(function(el){var s=el.dataset.id===selectedId;el.classList.toggle('selected',s);var pk=$('.pick',el);if(pk)pk.textContent=s?'\\u2713 Selected \\u2014 copied':'Use this setup';});
   var m=models().filter(function(x){return x.id===selectedId;})[0];
@@ -637,6 +691,75 @@ $('#copybtn').addEventListener('click',function(){copyText($('#cmdtext').textCon
 // One card, two lists, a dropdown between them. Recently-created is the default
 // because a brand-new visitor has no favorites and an empty list is a worse first
 // impression than a short one.
+// One tile, built once. The recipes card and the favorites section show the same
+// object, so they build it with the same function — two copies of this drift the moment
+// one of them gains an action.
+function recipeItem(r,favs){
+  var pl=r.payload||{};
+  var pal=pl.p||{};
+  var term=rec_terminalOf(pl);
+  var on=favs.indexOf(r.id)>=0;
+
+  var item=document.createElement('div');
+  item.className='recitem'+(on?' fav':'');
+
+  // The swatch IS the recipe: the Claude Code palette rendered in its own colours.
+  var sw=document.createElement('div');sw.className='recsw';
+  sw.style.background=rec_hex(pal.bg,'#0b0e14');
+  sw.style.color=rec_hex(pal.text,'#c0caf5');
+  ['accent','green','red','yellow','accent2'].forEach(function(k){
+    var d=document.createElement('span');d.className='rdot';
+    d.style.background=rec_hex(pal[k],'#888');sw.appendChild(d);
+  });
+  if(term){
+    var tb=document.createElement('span');tb.className='rterm';
+    tb.textContent=term.icon+' '+term.label;sw.appendChild(tb);
+  }
+
+  var body=document.createElement('div');body.className='recbody';
+  var nm=document.createElement('div');nm.className='recname';
+  nm.appendChild(document.createTextNode(r.name||'Recipe'));
+  var meta=document.createElement('div');meta.className='recmeta';
+  meta.textContent=(term?term.label:'Claude Code only')+' \\u00b7 saved '+(r.savedAt||'');
+  body.appendChild(nm);body.appendChild(meta);
+
+  var acts=document.createElement('div');acts.className='recacts';
+  var mk=function(label,title,fn,cls){
+    var b=document.createElement('button');b.type='button';
+    b.textContent=label;b.title=title;
+    if(cls)b.className=cls;
+    b.addEventListener('click',fn);return b;
+  };
+  // The headline action: one curl for BOTH halves.
+  acts.appendChild(mk('Copy curl','Install the Claude Code side and the terminal side in one run',function(){
+    copyText(rec_curl(ORIGIN,pl));
+    toast('One-line install for \\u201c'+(r.name||'Recipe')+'\\u201d copied \\u2014 both halves');
+  }));
+  acts.appendChild(mk('Open','Open this recipe on its terminal page',function(){
+    location.href=rec_link(ORIGIN,pl);
+  }));
+  acts.appendChild(mk('Share','Copy a link to this recipe',function(){
+    copyText(rec_link(ORIGIN,pl));toast('Recipe link copied');
+  }));
+  acts.appendChild(mk(on?'\\u2605':'\\u2606',on?'Remove from favorites':'Add to favorites',function(){
+    var f=recfav_get(),i=f.indexOf(r.id);
+    if(i>=0)f.splice(i,1);else f.push(r.id);
+    recfav_set(f);repaintRecipes();
+  },'recstar'+(on?' on':'')));
+  acts.appendChild(mk('Delete','Remove this recipe from this browser',function(){
+    rec_set(rec_get().filter(function(x){return x.id!==r.id;}));
+    recfav_set(recfav_get().filter(function(x){return x!==r.id;}));
+    repaintRecipes();toast('Removed \\u201c'+(r.name||'Recipe')+'\\u201d');
+  }));
+  body.appendChild(acts);
+
+  item.appendChild(sw);item.appendChild(body);
+  return item;
+}
+// Starring or deleting shows up in both places at once, so neither can be left showing
+// a recipe that is no longer there.
+function repaintRecipes(){paintRecipes();paintFavRecipes();paintFavWrap();}
+
 function paintRecipes(){
   var mode=$('#recmode').value;
   var all=rec_get();
@@ -655,74 +778,23 @@ function paintRecipes(){
     e.innerHTML=all.length
       ? 'No favorites yet. Star a recipe and it shows up here.'
       : 'Nothing saved yet. Open <b>cmux</b>, <b>herdr</b>, <b>Zellij</b> or <b>Warp</b>, '
-        +'pick a Claude Code theme to layer on top, and press <b>Save as recipe</b>. '
+        +'pick a Claude Code setup to layer on top \\u2014 one of yours or a starter \\u2014 '
+        +'and press <b>Save as recipe</b>. '
         +'They live in this browser \\u2014 share the link to pass one on.';
     grid.appendChild(e);
     return;
   }
-
-  list.forEach(function(r){
-    var pl=r.payload||{};
-    var pal=pl.p||{};
-    var term=rec_terminalOf(pl);
-    var on=favs.indexOf(r.id)>=0;
-
-    var item=document.createElement('div');
-    item.className='recitem'+(on?' fav':'');
-
-    // The swatch IS the recipe: the Claude Code palette rendered in its own colours.
-    var sw=document.createElement('div');sw.className='recsw';
-    sw.style.background=rec_hex(pal.bg,'#0b0e14');
-    sw.style.color=rec_hex(pal.text,'#c0caf5');
-    ['accent','green','red','yellow','accent2'].forEach(function(k){
-      var d=document.createElement('span');d.className='rdot';
-      d.style.background=rec_hex(pal[k],'#888');sw.appendChild(d);
-    });
-    if(term){
-      var tb=document.createElement('span');tb.className='rterm';
-      tb.textContent=term.icon+' '+term.label;sw.appendChild(tb);
-    }
-
-    var body=document.createElement('div');body.className='recbody';
-    var nm=document.createElement('div');nm.className='recname';
-    nm.appendChild(document.createTextNode(r.name||'Recipe'));
-    var meta=document.createElement('div');meta.className='recmeta';
-    meta.textContent=(term?term.label:'Claude Code only')+' \\u00b7 saved '+(r.savedAt||'');
-    body.appendChild(nm);body.appendChild(meta);
-
-    var acts=document.createElement('div');acts.className='recacts';
-    var mk=function(label,title,fn,cls){
-      var b=document.createElement('button');b.type='button';
-      b.textContent=label;b.title=title;
-      if(cls)b.className=cls;
-      b.addEventListener('click',fn);return b;
-    };
-    // The headline action: one curl for BOTH halves.
-    acts.appendChild(mk('Copy curl','Install the Claude Code side and the terminal side in one run',function(){
-      copyText(rec_curl(ORIGIN,pl));
-      toast('One-line install for \\u201c'+(r.name||'Recipe')+'\\u201d copied \\u2014 both halves');
-    }));
-    acts.appendChild(mk('Open','Open this recipe on its terminal page',function(){
-      location.href=rec_link(ORIGIN,pl);
-    }));
-    acts.appendChild(mk('Share','Copy a link to this recipe',function(){
-      copyText(rec_link(ORIGIN,pl));toast('Recipe link copied');
-    }));
-    acts.appendChild(mk(on?'\\u2605':'\\u2606',on?'Remove from favorites':'Add to favorites',function(){
-      var f=recfav_get(),i=f.indexOf(r.id);
-      if(i>=0)f.splice(i,1);else f.push(r.id);
-      recfav_set(f);paintRecipes();
-    },'recstar'+(on?' on':'')));
-    acts.appendChild(mk('Delete','Remove this recipe from this browser',function(){
-      rec_set(rec_get().filter(function(x){return x.id!==r.id;}));
-      recfav_set(recfav_get().filter(function(x){return x!==r.id;}));
-      paintRecipes();toast('Removed \\u201c'+(r.name||'Recipe')+'\\u201d');
-    }));
-    body.appendChild(acts);
-
-    item.appendChild(sw);item.appendChild(body);
-    grid.appendChild(item);
-  });
+  list.forEach(function(r){grid.appendChild(recipeItem(r,favs));});
+}
+// The favorites section is the starred subset only, and never an empty-state message —
+// paintFavWrap hides the whole section instead, which is quieter than a section that
+// exists only to say it is empty.
+function paintFavRecipes(){
+  var favs=recfav_get();
+  var grid=$('#favrecgrid');grid.innerHTML='';
+  rec_get().slice().reverse()
+    .filter(function(r){return favs.indexOf(r.id)>=0;})
+    .forEach(function(r){grid.appendChild(recipeItem(r,favs));});
 }
 $('#recmode').addEventListener('change',function(){
   try{localStorage.setItem('scc_recmode',this.value);}catch(e){}
@@ -733,6 +805,7 @@ try{
   if(savedMode==='fav'||savedMode==='recent')$('#recmode').value=savedMode;
 }catch(e){}
 paintRecipes();
+paintFavRecipes();
 
 render();
 installNav();
@@ -765,6 +838,12 @@ ${topBar('home', GH_SVG)}
   <div id="recgrid" class="recgrid"></div>
 </div></div>
 <div class="sectlabel" id="favlabel" style="display:none">★ Your favorites</div>
+<div class="favwrap" id="favwrap" style="display:none">
+  <details class="favsec" id="favcc"><summary><span>★ Claude Code</span><span class="favn" id="favccn">0</span><span class="favsub">setups you starred in the gallery</span></summary>
+    <div class="favbody cards" id="favccgrid"></div></details>
+  <details class="favsec" id="favrec"><summary><span>★ Recipes</span><span class="favn" id="favrecn">0</span><span class="favsub">a setup paired with a terminal</span></summary>
+    <div class="favbody"><div class="recgrid" id="favrecgrid"></div></div></details>
+</div>
 <main id="grid"></main>
 <footer>Patching by <a href="https://github.com/Piebald-AI/tweakcc" target="_blank" rel="noreferrer">tweakcc</a> · community themes credited on each card · <a href="${GITHUB_URL}" target="_blank" rel="noreferrer">source on GitHub</a> · re-run the command after Claude Code updates<br>built for Sean by Claude ✦ <span class="mono">shayan-cc-config</span></footer>
 <div id="toast"></div>

@@ -194,7 +194,8 @@ Build a <span class="mono">config.kdl</span> and an agent layout here; one comma
     <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
       <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
-    <label class="ccpick"><span>Claude Code theme</span><select id="ccTheme"></select></label>
+    <label class="ccpick"><span>Claude Code side</span><select id="ccTheme"
+      title="Your own saved setups, or one of the starters. A creation brings its verbs, spinner and status line too."></select></label>
   </div>
   <div class="zpair" data-pane="claude" id="pair">
     <div class="zcol zcol-before">
@@ -387,7 +388,25 @@ var MODE_KEYS={
 
 function pal(name){return ZJ_PREVIEW[name]||ZJ_PREVIEW['catppuccin-mocha'];}
 
-function winHTML(s){
+// The Claude Code palette, as hex, for the recipe pane. Zellij's own colours come from
+// its theme; these are the layer sitting inside it.
+function palHex(t,fb){
+  if(Object.prototype.toString.call(t)!=='[object Array]'||t.length!==3)return fb;
+  return '#'+t.map(function(n){
+    n=Math.max(0,Math.min(255,Math.round(n)));
+    return (n<16?'0':'')+n.toString(16);
+  }).join('');
+}
+function ccColors(){
+  var p=(ccPayload&&ccPayload.p)||{};
+  return {
+    bg:palHex(p.bg,'#1a1b26'), text:palHex(p.text,'#c0caf5'),
+    dim:palHex(p.comment,'#565f89'), accent:palHex(p.accent,'#7aa2f7'),
+    green:palHex(p.green,'#9ece6a')
+  };
+}
+
+function winHTML(s,mode){
   var p=pal(s.theme);
   var bg=p[0],panel=p[1],text=p[2],dim=p[3],accent=p[4],green=p[5],yellow=p[6],red=p[7];
   var vars=['--zj-bg:'+bg,'--zj-panel:'+panel,'--zj-text:'+text,'--zj-dim:'+dim,
@@ -452,8 +471,9 @@ function winHTML(s){
 }
 
 function drawWindows(){
-  $('#winBefore').innerHTML=winHTML(defaultZj());
-  $('#winAfter').innerHTML=winHTML(state);
+  $('#winBefore').innerHTML=winHTML(defaultZj(),'plain');
+  $('#winAfter').innerHTML=winHTML(state,'plain');
+  $('#winClaude').innerHTML=winHTML(state,'claude');
 }
 
 // ── controls ──────────────────────────────────────────────────────────────────
@@ -736,8 +756,8 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();})
   });
 })();
 
-installCcPicker(function(){return ccPayload.p;},
-                function(p){ccPayload.p=p;},
+installCcPicker(function(){return ccPayload;},
+                function(pl){ccPayload=pl;},
                 refresh);
 installRecipeSave(payload,'Zellij + Claude Code');
 

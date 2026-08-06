@@ -57,6 +57,9 @@ const WARP_CSS = `
   .wbdot.bad{background:var(--wp-red);}
   .wbdot.run{background:var(--wp-yellow);}
   .wbout{padding:3px 9px 5px;font-size:var(--wp-font);line-height:1.6;}
+  /* The Claude Code session inside a Warp block: its own background, inset so the
+     block still reads as Warp's chrome around it. */
+  .wccblock{margin:-3px -9px -5px;padding:5px 9px 6px;border-radius:4px;}
   .wbout .l{white-space:pre-wrap;word-break:break-word;}
 
   /* The input editor. terminal.input.input_box_type_setting decides whether it reads as
@@ -156,7 +159,8 @@ and a git pane in one go. Both are new files, so nothing you already have gets o
     <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
       <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
-    <label class="ccpick"><span>Claude Code theme</span><select id="ccTheme"></select></label>
+    <label class="ccpick"><span>Claude Code side</span><select id="ccTheme"
+      title="Your own saved setups, or one of the starters. A creation brings its verbs, spinner and status line too."></select></label>
   </div>
   <div class="wpair" data-pane="claude" id="pair">
     <div class="wcol wcol-before">
@@ -359,9 +363,21 @@ function winHTML(s,stock,mode){
   var L=function(col,t){return '<div class="l"><span style="color:'+col+'">'+esc(t)+'</span></div>';};
 
   var older=blk('npm test','ok',L(palHex(p.green,'#9ece6a'),'12 passing (0.9s)'),' dim');
-  var newer=blk('claude','run',
-      L(c.accent,'\\u2733 Working\\u2026')+L(c.fg,'\\u25cf Edit(src/upload.ts)')
-      +L(palHex(p.green,'#9ece6a'),'  \\u2514 +18 \\u22123'),' on');
+  // The recipe pane: Warp is themed by the controls, the SESSION inside it by the Claude
+  // Code palette layered on top. Everything else shows an ordinary shell, so the two
+  // "after" panes are genuinely different pictures rather than the same one twice.
+  var newer;
+  if(mode==='claude'){
+    var cc=ccColors();
+    newer=blk('claude','run',
+      '<div class="wccblock" style="background:'+cc.bg+'">'
+      +L(cc.accent,'\\u2733 Working\\u2026')+L(cc.text,'\\u25cf Edit(src/upload.ts)')
+      +L(cc.green,'  \\u2514 +18 \\u22123')+L(cc.dim,'  esc to interrupt')
+      +'</div>',' on');
+  }else{
+    newer=blk('git status','ok',
+      L(dim,'On branch main')+L(palHex(p.green,'#9ece6a'),'nothing to commit'),' on');
+  }
   // pinned_to_top puts the newest block first; otherwise newest is last.
   var body=(!stock&&s.inputMode==='pinned_to_top')?(newer+older):(older+newer);
 
@@ -578,8 +594,8 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();})
   });
 })();
 
-installCcPicker(function(){return ccPayload.p;},
-                function(p){ccPayload.p=p;},
+installCcPicker(function(){return ccPayload;},
+                function(pl){ccPayload=pl;},
                 refresh);
 installRecipeSave(payload,'Warp + Claude Code');
 

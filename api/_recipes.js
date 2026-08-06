@@ -125,35 +125,102 @@ function rec_link(origin,pl){
   return origin+(t?t.path:'/customize')+'?c='+encodeURIComponent(b64e(pl));
 }
 
-// The Claude Code theme picker. Choosing one rewrites the palette the page carries,
-// which is what the recipe pane paints with AND what the install command applies — so
-// the preview and the thing you install cannot disagree. Identical on every terminal
-// page, so it lives here rather than being written out four times.
+// A recipe's Claude Code half is never only a palette — it also carries the thinking
+// verbs, the spinner phases, the status line and the your-message styling. So a saved
+// creation dropped into a recipe has to arrive whole. Adopting just its colours would
+// install something the person never built, and they would not find out until the
+// install ran.
 //
-// getCC/setCC are passed in because each page keeps its Claude Code half in its own
-// variable; onChange is the page's own redraw.
-function installCcPicker(getCC, setCC, onChange){
+// The terminal layer is the one thing NOT adopted: a creation might have been shared
+// from a page with a cmux layer on it, and carrying that onto /zellij would quietly
+// install two terminals' worth of config.
+function rec_stripLayers(pl){
+  var out=JSON.parse(JSON.stringify(pl));
+  for(var i=0;i<REC_TERMS.length;i++)delete out[REC_TERMS[i].key];
+  return out;
+}
+
+// Everything offerable as the Claude Code side: your own saved setups first, then the
+// six starters. Creations come from the same scc_customs the home page reads, so
+// anything built in the Studio shows up here without a second place to save it.
+function rec_ccChoices(){
+  var out=[], mine=[];
+  try{mine=customs_get();}catch(e){}
+  // Newest first, matching how recipes are listed.
+  mine.slice().reverse().forEach(function(pl){
+    if(!pl||!pl.p||typeof pl.p!=='object')return;
+    out.push({value:'custom:'+String(pl.id||''),
+              label:String(pl.n||'Untitled'),
+              group:'Your creations', payload:pl});
+  });
+  Object.keys(STARTERS).forEach(function(n){
+    out.push({value:'starter:'+n, label:n, group:'Starters', pal:STARTERS[n]});
+  });
+  return out;
+}
+
+// Choosing here rewrites the payload the page carries, which is what the recipe pane
+// paints with AND what the install command applies — so the preview and the thing you
+// install cannot disagree. Identical on every terminal page, so it lives here rather
+// than being written out four times.
+//
+// getPayload/setPayload work on the WHOLE Claude Code payload, not just its palette,
+// because that is what a creation is. Each page keeps that payload in its own variable
+// and does its own redraw in onChange.
+function installCcPicker(getPayload, setPayload, onChange){
   var sel=document.getElementById('ccTheme'); if(!sel)return;
-  var names=Object.keys(STARTERS);
   // Defensive: this must run AFTER the page's boot has set its Claude Code half. Called
   // too early it would throw and take the rest of the script's tail with it, which is
   // exactly what happened once on /cmux — so it fails quiet and visible instead.
   var cur=null;
-  try{cur=getCC();}catch(e){}
-  if(!cur){sel.disabled=true;return;}
-  var linked=JSON.stringify(cur);
-  var isStarter=names.some(function(n){return JSON.stringify(STARTERS[n])===linked;});
-  // "As linked" only appears when the payload arrived with a palette that is not one of
-  // the starters; otherwise it would duplicate whichever starter matches.
-  if(!isStarter){
-    var o=document.createElement('option');
-    o.value='__linked';o.textContent='As linked';sel.appendChild(o);
+  try{cur=getPayload();}catch(e){}
+  if(!cur||!cur.p){sel.disabled=true;return;}
+  var linked=JSON.parse(JSON.stringify(cur));
+
+  var choices=rec_ccChoices(), groups={};
+  function groupFor(name){
+    if(!groups[name]){
+      var g=document.createElement('optgroup');g.label=name;
+      groups[name]=g;sel.appendChild(g);
+    }
+    return groups[name];
   }
-  names.forEach(function(n){
-    var o=document.createElement('option');o.value=n;o.textContent=n;
-    if(JSON.stringify(STARTERS[n])===linked)o.selected=true;
-    sel.appendChild(o);
+  // The empty case is worth showing rather than hiding: without it the picker just looks
+  // like it has no creations feature at all.
+  if(!choices.some(function(c){return c.group==='Your creations';})){
+    var none=document.createElement('option');
+    none.disabled=true;none.value='';
+    none.textContent='\\u2014 none yet: build one in the Studio \\u2014';
+    groupFor('Your creations').appendChild(none);
+  }
+  choices.forEach(function(c){
+    var o=document.createElement('option');
+    o.value=c.value;o.textContent=c.label;
+    groupFor(c.group).appendChild(o);
   });
+
+  // What is already on the page. A creation is matched by id, which is exact; a starter
+  // has no id to match on, so its palette is compared instead.
+  var pal=JSON.stringify(cur.p), match='';
+  if(cur.id){
+    var want='custom:'+cur.id;
+    if(choices.some(function(c){return c.value===want;}))match=want;
+  }
+  if(!match){
+    choices.forEach(function(c){
+      if(!match&&c.pal&&JSON.stringify(c.pal)===pal)match=c.value;
+    });
+  }
+  if(!match){
+    // Arrived carrying something that is neither. Keep it selectable, so switching away
+    // and back does not silently lose what the link came with.
+    var o2=document.createElement('option');
+    o2.value='__linked';o2.textContent='As linked';
+    sel.insertBefore(o2,sel.firstChild);
+    match='__linked';
+  }
+  sel.value=match;
+
   function label(){
     var t=sel.options[sel.selectedIndex];
     var el=document.getElementById('ccname');
@@ -161,7 +228,19 @@ function installCcPicker(getCC, setCC, onChange){
   }
   label();
   sel.addEventListener('change',function(){
-    if(sel.value!=='__linked')setCC(JSON.parse(JSON.stringify(STARTERS[sel.value])));
+    var c=null;
+    for(var i=0;i<choices.length;i++)if(choices[i].value===sel.value)c=choices[i];
+    if(sel.value==='__linked'){
+      setPayload(JSON.parse(JSON.stringify(linked)));
+    } else if(c&&c.payload){
+      setPayload(rec_stripLayers(c.payload));
+    } else if(c&&c.pal){
+      // A starter is a palette and nothing else, so everything else on the Claude Code
+      // side — verbs, spinner, status line — is kept as it is.
+      var next=JSON.parse(JSON.stringify(getPayload()));
+      next.p=JSON.parse(JSON.stringify(c.pal));
+      setPayload(next);
+    }
     label();onChange();
   });
 }

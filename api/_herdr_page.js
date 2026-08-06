@@ -227,7 +227,8 @@ ${topBar('herdr', ghSvg)}
     <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
       <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
-    <label class="ccpick"><span>Claude Code theme</span><select id="ccTheme"></select></label>
+    <label class="ccpick"><span>Claude Code side</span><select id="ccTheme"
+      title="Your own saved setups, or one of the starters. A creation brings its verbs, spinner and status line too."></select></label>
   </div>
   <div class="hpair" data-pane="claude" id="pair">
     <div class="hcol hcol-before">
@@ -854,8 +855,8 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();})
 })();
 
 // Which Claude Code palette is layered on top. Shared with the other terminal pages.
-installCcPicker(function(){return ccPayload.p;},
-                function(p){ccPayload.p=p;},
+installCcPicker(function(){return ccPayload;},
+                function(pl){ccPayload=pl;},
                 refresh);
 
 installRecipeSave(payload,'herdr + Claude Code');

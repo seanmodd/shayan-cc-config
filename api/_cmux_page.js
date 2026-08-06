@@ -362,7 +362,8 @@ ${topBar('cmux', ghSvg)}
     <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
       <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
-    <label class="ccpick"><span>Claude Code theme</span><select id="ccTheme"></select></label>
+    <label class="ccpick"><span>Claude Code side</span><select id="ccTheme"
+      title="Your own saved setups, or one of the starters. A creation brings its verbs, spinner and status line too."></select></label>
   </div>
   <div class="cmuxpair" data-pane="claude" id="pair">
     <div class="cmuxcol cmuxcol-before">
@@ -854,6 +855,11 @@ function promptColorRow(label,help,modeId,pickId){
  * payload so Claude Code uses its own \u2014 and for the background that means no strip at
  * all, so these two options are genuinely different states rather than two colours.
  */
+var _umSyncs=[];
+// Picking a saved creation replaces the whole Claude Code payload, and these chips read
+// ccPayload.um directly — so they have to be rebuilt from the new one or they keep
+// reporting the colours of the setup you just switched away from.
+function umResync(){for(var i=0;i<_umSyncs.length;i++)_umSyncs[i]();}
 function promptColorMode(hostId,pickId,key,fallbackPalKey){
   var host=$('#'+hostId), pick=$('#'+pickId), hint=$('#'+hostId+'h');
   function cur(){
@@ -882,6 +888,7 @@ function promptColorMode(hostId,pickId,key,fallbackPalKey){
     if(!ccPayload.um)ccPayload.um={};
     ccPayload.um[key]=this.value;sync();edited();
   });
+  _umSyncs.push(sync);
   sync();
 }
 
@@ -1690,8 +1697,8 @@ function commitSave(name){
 // After boot: both of these read ccPayload, which the boot IIFE above is what sets.
 // Called any earlier they see null. The picker writes the same ccPayload.p the preset
 // grid does, so picking a starter and picking a preset both repaint the recipe pane.
-installCcPicker(function(){return ccPayload.p;},
-                function(p){ccPayload.p=p;},
+installCcPicker(function(){return ccPayload;},
+                function(pl){ccPayload=pl;umResync();},
                 function(){drawWindows();drawCmd();});
 installRecipeSave(payload,'cmux + Claude Code');
 installNav();
