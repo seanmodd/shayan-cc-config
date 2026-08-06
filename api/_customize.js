@@ -109,6 +109,9 @@ const STUDIO_CSS = `
      The ordering matters: this block is the last word on layout, so anything above
      it that assumes width gets corrected here. */
   @media(max-width:700px),(max-height:520px){
+    /* Four items do not fit a 390px top bar, and the mobile navigator already lists
+       cmux with a description. Same reason the homepage hides its Studio link here. */
+    .top a.iconbtn.cmuxlink{display:none;}
     .paneswitch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 10px;}
     .terms{gap:0;}
     .terms[data-pane="after"] .tcol-before{display:none;}
@@ -208,9 +211,15 @@ const STUDIO_CSS = `
      page header earns its space back for the terminal. */
   @media(max-height:460px){
     .barbot{flex-wrap:nowrap;}
-    .barbot .cmd{flex:1 1 auto;order:0;}
-    .barbot #c_copy{flex:0 1 auto;}
-    .barbot button{min-height:36px;font-size:11.5px;}
+    /* The single row has one flexible member and it is the command box, which already
+       scrolls internally. Letting the buttons shrink instead crushed Share/Reset to
+       ~19px slivers: they inherit flex:1 1 0 from the portrait block above, and
+       nowrap gives them nothing to wrap to. flex:0 0 auto pins them at label width.
+       The overrides have to be ID-level: the portrait rules are #id selectors, so a
+       plain .barbot-button rule loses to them no matter where it sits. */
+    .barbot .cmd{flex:1 1 0;min-width:0;order:0;}
+    .barbot button{min-height:40px;font-size:11.5px;padding:7px 10px;}
+    .barbot #c_copy,.barbot #c_share,.barbot #c_publish,.barbot #c_reset{flex:0 0 auto;min-width:max-content;}
     .tcol .xterm{height:min(58dvh,230px);}
     header,.sub{display:none;}
   }
@@ -411,6 +420,8 @@ function drawOutputs(){
   $('#lnkCfg').href='/config.json?c='+c;
   var slLive=state.sl.on&&state.sl.seg.length>0;
   $('#lnkSl').href='/statusline.js?c='+c;
+  // Hand the current setup to /cmux so the terminal page opens already layered on it.
+  var toCmux=$('#tocmux'); if(toCmux)toCmux.href='/cmux?c='+c;
   $('#lnkSl').style.display=slLive?'inline':'none';
   var warn=$('#slwarn');
   if(warn)warn.style.display=(state.sl.on&&!state.sl.seg.length)?'block':'none';
@@ -915,6 +926,7 @@ $('#c_reset').addEventListener('click',function(){
   // a bare /customize instead of being re-stamped with the default-state payload.
   clearTimeout(_urlT);
   history.replaceState(null,'','/customize');
+  var tc=$('#tocmux'); if(tc)tc.href='/cmux';
   toast('Reset to defaults');
 });
 installMobileNav();
@@ -928,6 +940,7 @@ function renderCustomize(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
 <title>Customize · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}</style></head><body>
 <div class="top"><a class="brand" href="/" style="text-decoration:none">← shayan-cc-config</a><span class="spacer"></span>
 <a class="iconbtn" href="/">Home</a>
+<a class="iconbtn cmuxlink" id="tocmux" href="/cmux">🪟 cmux</a>
 <a class="iconbtn" href="${ghUrl}" target="_blank" rel="noreferrer">${ghSvg}GitHub</a></div>
 <header style="padding-bottom:2px"><h1 style="font-size:32px">🎛 The Studio</h1>
 <p class="sub" style="margin-top:8px">Your terminal, <b>before</b> and <b>after</b> — both are real, scrollable Claude Code sessions. <b>Type a message into either one</b> (or fire a sample) and watch both respond in their own style. Tweak everything below; the AFTER side updates live.</p></header>
@@ -968,4 +981,7 @@ ${STUDIO_JS}
 </script></body></html>`;
 }
 
-module.exports = { renderCustomize };
+// STUDIO_CSS is exported because /cmux reuses the same control primitives
+// (.panel/.ctl/.stychip/.i/.tip/.paneswitch/.barbot). Two copies of that CSS would
+// drift, and the two pages are meant to look like one product.
+module.exports = { renderCustomize, STUDIO_CSS };

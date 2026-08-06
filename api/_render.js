@@ -238,7 +238,7 @@ function customToModel(pl){
 // current even after a preset rebuilds them.
 function installMobileNav(){
   if(document.getElementById('navfab'))return;
-  var isStudio=!!document.getElementById('controls');
+  var panelHost=document.getElementById('controls')||document.getElementById('cmuxControls');
 
   var fab=document.createElement('button');
   fab.type='button';fab.id='navfab';fab.className='navfab';
@@ -278,11 +278,18 @@ function installMobileNav(){
     var studio=item('a','\u2699','The Studio','build your own, before/after');
     studio.href='/customize';if(here==='/customize')studio.setAttribute('aria-current','page');
     sheet.appendChild(studio);
+    // The cmux link carries ?c= when there is a payload in the URL, so the terminal
+    // page opens already layered on whatever setup you were just looking at.
+    var cm=item('a','\u{1FA9F}','cmux','style the terminal around Claude Code');
+    var cq=new URLSearchParams(location.search).get('c');
+    cm.href='/cmux'+(cq?('?c='+encodeURIComponent(cq)):'');
+    if(here==='/cmux')cm.setAttribute('aria-current','page');
+    sheet.appendChild(cm);
 
-    if(isStudio){
+    if(panelHost){
       // Panels are discovered rather than hardcoded: seeding a preset rebuilds
       // them, and a hardcoded list would drift the moment a panel is renamed.
-      var panels=document.querySelectorAll('#controls .panel');
+      var panels=panelHost.querySelectorAll('.panel');
       if(panels.length){
         sheet.appendChild(head('Jump to'));
         var top=item('button','\u2191','Top \u2014 before / after terminals');
@@ -444,6 +451,7 @@ function renderPage(DATA) {
 <title>shayan-cc-config — Claude Code setup picker</title>${FAVICON}<style>${CSS}</style></head><body>
 <div class="top"><span class="brand">shayan-cc-config</span><span class="spacer"></span>
 <a class="iconbtn studio" href="/customize">🎛 Open the studio</a>
+<a class="iconbtn cmuxlink" href="/cmux">🪟 cmux</a>
 <a class="iconbtn" href="${GITHUB_URL}" target="_blank" rel="noreferrer">${GH_SVG}GitHub</a></div>
 <header><h1>shayan-cc-config</h1>
 <p class="sub">Pick a Claude Code look for your cmux terminals. Click a card — its one-line install command copies itself; run it and <span class="mono">tweakcc</span> applies the theme, thinking verbs, spinner and status-line accent together. Or open <b>the studio</b>: interactive before/after terminals, your-message styling, and a build-your-own status line.</p>

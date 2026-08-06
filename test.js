@@ -469,6 +469,127 @@ function bashCheck(src, label) {
     'unreachable server reports a friendly error', downBoth.trim().split('\n').pop());
   srvProc.kill();
 
+  // ── the cmux layer ────────────────────────────────────────
+  // /cmux writes two files that are not ours: a Ghostty config that may already hold
+  // hand-written settings, and a JSONC cmux.json that may hold keys we know nothing
+  // about. Clobbering either is the failure mode that matters, so the merge, the
+  // backup, the idempotency and the refuse-to-guess path all get asserted here.
+  console.log('— cmux —');
+  const CM = require('./api/_cmux.js');
+  const bash = (file, home) => cp.spawnSync('bash', [file],
+    { encoding: 'utf8', env: Object.assign({}, process.env, { HOME: home }) });
+
+  const cmDef = CM.sanitizeCmux({ on: true });
+  ok(cmDef && Object.keys(cmDef).length > 30,
+    'sanitizeCmux returns the full settings object', cmDef ? Object.keys(cmDef).length + ' keys' : 'null');
+  ok(CM.sanitizeCmux({ on: false }) === null, 'cmux off yields no layer');
+  ok(CM.sanitizeCmux(null) === null && CM.sanitizeCmux([]) === null && CM.sanitizeCmux('x') === null,
+    'garbage payloads yield no layer');
+
+  // Share links are strangers' input and every value below lands in a config file or
+  // a shell script, so each one has to come back neutered.
+  const hostile = CM.sanitizeCmux({
+    on: true,
+    fontFamily: 'x"; rm -rf /',
+    theme: 'One Dark\nfont-size = 99',
+    titleTemplate: 'a\nbc]0;pwned',
+    paneBorder: 'red;"><img src=y>',
+    indicatorStyle: 'constructor', appearance: '__proto__', branchLayout: 'toString',
+    fontSize: 1e9, bgOpacity: -5, tintOpacity: 'abc', scrollSpeed: 99, scrollback: -1,
+  });
+  ok(!/["';]/.test(hostile.fontFamily), 'hostile font-family sanitized', JSON.stringify(hostile.fontFamily));
+  ok(!/[\n]/.test(hostile.theme + hostile.titleTemplate),
+    'newline injection into the config files is blocked',
+    JSON.stringify([hostile.theme, hostile.titleTemplate]));
+  ok(/^#[0-9a-f]{6}$/i.test(hostile.paneBorder), 'a non-colour is rejected', hostile.paneBorder);
+  ok(CM.INDICATOR_STYLES.indexOf(hostile.indicatorStyle) >= 0
+    && CM.APPEARANCES.indexOf(hostile.appearance) >= 0
+    && CM.BRANCH_LAYOUTS.indexOf(hostile.branchLayout) >= 0,
+    'prototype-chain names do not pass the enum check',
+    [hostile.indicatorStyle, hostile.appearance, hostile.branchLayout].join(','));
+  ok(hostile.fontSize <= 32 && hostile.bgOpacity >= 0 && hostile.bgOpacity <= 1
+    && hostile.tintOpacity >= 0 && hostile.scrollSpeed <= 3 && hostile.scrollback > 0,
+    'out-of-range numbers are clamped',
+    JSON.stringify([hostile.fontSize, hostile.bgOpacity, hostile.tintOpacity, hostile.scrollSpeed]));
+
+  // The colours the user did not pin come from the Claude Code palette. That layering
+  // is the whole reason this page exists, so it is asserted rather than eyeballed.
+  const nord = { subtle: [67, 76, 94], accent: [136, 192, 208], bg: [46, 52, 64] };
+  const layered = CM.resolveCmuxColors(cmDef, nord);
+  ok(layered.paneBorder === '#434c5e' && layered.activePaneBorder === '#88c0d0'
+    && layered.tint === '#2e3440' && layered.selection === '#88c0d0',
+    'unpinned cmux colours derive from the Claude Code palette', JSON.stringify(layered));
+
+  const cmFile = path.join(TMP, 'cmux.sh');
+  const cmBlock = CM.cmuxApplyBlock(hostile, nord);
+  fs.writeFileSync(cmFile, '#!/bin/bash\nset -euo pipefail\n' + cmBlock);
+  ok(cp.spawnSync('bash', ['-n', cmFile], { encoding: 'utf8' }).status === 0, 'bash -n: cmux layer');
+  ok(!/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(cmBlock), 'no control characters reach the generated script');
+
+  // A real user's HOME: hand-written Ghostty settings, and a cmux.json carrying
+  // comments, a trailing comma and keys we must not touch.
+  const cmHome = path.join(TMP, 'cmuxhome');
+  fs.mkdirSync(path.join(cmHome, '.config', 'ghostty'), { recursive: true });
+  fs.mkdirSync(path.join(cmHome, '.config', 'cmux'), { recursive: true });
+  const gPath = path.join(cmHome, '.config', 'ghostty', 'config');
+  const jPath = path.join(cmHome, '.config', 'cmux', 'cmux.json');
+  fs.writeFileSync(gPath, 'font-thicken = true\nkeybind = cmd+k=clear_screen\n');
+  fs.writeFileSync(jPath, '{\n  // a comment, which cmux.json allows\n  "schemaVersion": 1,\n'
+    + '  "myUnmanagedKey": "keep me",\n  "sidebar": { "somethingElseOfMine": 42 },\n}\n');
+
+  const cmRun = bash(cmFile, cmHome);
+  ok(cmRun.status === 0, 'cmux layer applies cleanly', (cmRun.stderr || '').trim().slice(0, 120));
+  const gAfter = fs.readFileSync(gPath, 'utf8');
+  ok(/font-thicken = true/.test(gAfter) && /keybind = cmd[+]k/.test(gAfter),
+    'hand-written ghostty settings survive');
+  ok(/>>> shayan-cc-config [(]cmux[)] >>>/.test(gAfter), 'the ghostty block is marked for later replacement');
+  let jAfter = JSON.parse(fs.readFileSync(jPath, 'utf8'));
+  ok(jAfter.myUnmanagedKey === 'keep me' && jAfter.sidebar.somethingElseOfMine === 42,
+    'unmanaged cmux.json keys survive the merge', JSON.stringify(Object.keys(jAfter)));
+  ok(jAfter.schemaVersion === 1, 'schemaVersion is left at 1', String(jAfter.schemaVersion));
+  ok(fs.readdirSync(path.dirname(jPath)).some(f => /cmux[.]json[.]backup-/.test(f))
+    && fs.readdirSync(path.dirname(gPath)).some(f => /config[.]backup-/.test(f)),
+    'both files were backed up before being touched');
+
+  bash(cmFile, cmHome);
+  ok((fs.readFileSync(gPath, 'utf8').match(/>>> shayan-cc-config [(]cmux[)] >>>/g) || []).length === 1,
+    're-running does not stack a second ghostty block');
+  ok(JSON.parse(fs.readFileSync(jPath, 'utf8')).myUnmanagedKey === 'keep me',
+    'unmanaged keys survive a second run too');
+
+  // An unparseable cmux.json is a file we do not understand. Guessing would destroy
+  // someone's config, so the installer stops and says so.
+  const badHome = path.join(TMP, 'cmuxbad');
+  fs.mkdirSync(path.join(badHome, '.config', 'cmux'), { recursive: true });
+  const badPath = path.join(badHome, '.config', 'cmux', 'cmux.json');
+  fs.writeFileSync(badPath, 'not json at all {{{\n');
+  const badRun = bash(cmFile, badHome);
+  ok(badRun.status === 1, 'an unparseable cmux.json aborts rather than guessing', 'exit ' + badRun.status);
+  ok(fs.readFileSync(badPath, 'utf8') === 'not json at all {{{\n',
+    'the file it could not parse is left untouched');
+
+  const newHome = path.join(TMP, 'cmuxnew');
+  fs.mkdirSync(newHome, { recursive: true });
+  ok(bash(cmFile, newHome).status === 0, 'cmux layer works on a machine with no config yet');
+  ok(JSON.parse(fs.readFileSync(path.join(newHome, '.config/cmux/cmux.json'), 'utf8')).schemaVersion === 1,
+    'a freshly created cmux.json is valid JSON');
+
+  // The page and its routes.
+  r = await call('/cmux');
+  ok(r.status === 200 && /id="winBefore"/.test(r.body) && /id="cmuxControls"/.test(r.body),
+    '/cmux renders', 'status ' + r.status);
+  const cmPayload = Buffer.from(JSON.stringify({
+    n: 'T', p: { bg: [46, 52, 64], subtle: [67, 76, 94], accent: [136, 192, 208] },
+    cm: { on: true, fontSize: 16, indicatorStyle: 'border' },
+  })).toString('base64url');
+  r = await call('/cmux-files.txt?c=' + cmPayload);
+  ok(r.status === 200 && /font-size = 16/.test(r.body) && /"indicatorStyle": "border"/.test(r.body)
+    && /#88c0d0/.test(r.body),
+    '/cmux-files.txt shows both files, layered on the palette', 'status ' + r.status);
+  r = await call('/apply.sh?c=' + cmPayload);
+  ok(r.status === 200 && /shayan-cc-config [(]cmux[)]/.test(r.body) && /Claude Code [+] cmux/.test(r.body),
+    'one install command carries both the Claude Code and the cmux halves');
+
   console.log('— misc —');
   r = await call('/nope');
   ok(r.status === 404, '404 fallback');

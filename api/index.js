@@ -5,6 +5,8 @@ const DATA = require('./_data.js');
 const { renderPage } = require('./_render.js');
 const { renderCustomize } = require('./_customize.js');
 const { expandPalette } = require('./_theme.js');
+const { sanitizeCmux, buildGhosttyLines, buildCmuxJson, cmuxApplyBlock } = require('./_cmux.js');
+const { renderCmux } = require('./_cmux_page.js');
 const {
   sanitizeSL, buildUMD, buildInputBox, buildStatuslineScript,
   cleanText, cleanTerm, cleanName, cleanFormat, sanePalette, clampInt,
@@ -123,6 +125,9 @@ function customApplyScript(origin, rawC, pl) {
   const name = nameOf(pl);
   const cfgUrl = `${origin}/config.json?c=${encodeURIComponent(rawC)}`;
   const slSan = sanitizeSL(pl.sl);
+  // The cmux layer rides along in the same payload, so one pasted command sets up
+  // Claude Code AND the terminal it runs in. Absent or off, nothing is emitted.
+  const cmSan = sanitizeCmux(pl.cm);
   return `#!/bin/bash
 set -euo pipefail
 # shayan-cc-config — apply custom setup "${name}"
@@ -131,8 +136,9 @@ ${claudePathBlock()}
 npx -y tweakcc@latest --apply --yes --config-url "${cfgUrl}"
 ${activationBlock('custom', statusColorOf(pl))}
 ${slSan ? statuslineBlock(buildStatuslineScript(slSan, pl.p)) : ''}
+${cmSan ? cmuxApplyBlock(cmSan, pl.p) : ''}
 echo ""
-echo "✓ '${name}' applied. Start a new claude session to see it."
+echo "✓ '${name}' applied.${cmSan ? ' Claude Code + cmux.' : ''} Start a new claude session to see it."
 echo "  Build another at ${origin}/customize"
 `;
 }
@@ -282,6 +288,25 @@ function route(req, res) {
       return sendText(customApplyScript(origin, c, pl), 'text/x-shellscript; charset=utf-8');
     }
     catch (e) { return sendText(`echo "bad payload: ${cleanText(e.message, 120)}"; exit 1`, 'text/x-shellscript; charset=utf-8', 400); }
+  }
+  if (path === '/cmux' || path === '/cmux/') {
+    return sendHTML(renderCmux(DATA, CSS, CLIENT_LIB, FAVICON, GH_SVG, GITHUB_URL));
+  }
+  // The two files the cmux layer writes, verbatim. Linked from the page as "peek
+  // under the hood", and what the parity test compares the preview against.
+  if (path === '/cmux-files.txt') {
+    const c = u.searchParams.get('c');
+    if (!c) return sendText('missing ?c= payload', 'text/plain; charset=utf-8', 400);
+    try {
+      const pl = decodeCustom(c);
+      const cmSan = sanitizeCmux(pl.cm);
+      if (!cmSan) return sendText('this setup has no cmux layer enabled', 'text/plain; charset=utf-8', 404);
+      const lines = buildGhosttyLines(cmSan, pl.p).map(([k, v]) => `${k} = ${v}`).join('\n');
+      const body = `# ~/.config/ghostty/config  (managed block)\n${lines}\n\n`
+        + `# ~/.config/cmux/cmux.json  (deep-merged into your file)\n`
+        + JSON.stringify(buildCmuxJson(cmSan, pl.p), null, 2) + '\n';
+      return sendText(body, 'text/plain; charset=utf-8');
+    } catch (e) { return sendText('bad payload: ' + cleanText(e.message, 120), 'text/plain; charset=utf-8', 400); }
   }
   if (path === '/statusline.js') {
     const c = u.searchParams.get('c');
