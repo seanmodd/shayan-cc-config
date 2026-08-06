@@ -403,20 +403,101 @@ function userRowHTML(m,text){
   if(st.indexOf('strikethrough')>=0)deco.push('line-through');
   if(deco.length)css+='text-decoration:'+deco.join(' ')+';';
   var bs=String(u.borderStyle||'none'),bc=okColor(u.borderColor)||c.promptBorder;
-  if(bs==='single')css+='border:1px solid '+bc+';';
-  else if(bs==='round')css+='border:1px solid '+bc+';border-radius:8px;';
-  else if(bs==='double')css+='border:3px double '+bc+';';
-  else if(bs==='bold')css+='border:2px solid '+bc+';';
-  else if(bs==='singleDouble')css+='border:1px solid '+bc+';border-top:3px double '+bc+';border-bottom:3px double '+bc+';';
-  else if(bs==='doubleSingle')css+='border:3px double '+bc+';border-top:1px solid '+bc+';border-bottom:1px solid '+bc+';';
-  else if(bs==='classic')css+='border:1px dashed '+bc+';';
-  else if(bs==='topBottomSingle')css+='border-top:1px solid '+bc+';border-bottom:1px solid '+bc+';';
-  else if(bs==='topBottomDouble')css+='border-top:3px double '+bc+';border-bottom:3px double '+bc+';';
-  else if(bs==='topBottomBold')css+='border-top:2px solid '+bc+';border-bottom:2px solid '+bc+';';
-  var px=(u.paddingX||0)*8,py=(u.paddingY||0)*15;
-  css+='padding:'+(2+py)+'px '+(6+px)+'px;';
-  css+=(u.fitBoxToContent?'display:inline-block;max-width:100%;':'display:block;');
-  return '<div class="xrow xu"><span style="'+css+'">'+pre+eH(text)+post+'</span></div>';
+  var px=(u.paddingX||0),py=(u.paddingY||0);
+  css+='padding:0 '+(px?px:0)+'ch;';
+  css+='display:inline-block;';
+
+  var box=BOX_CHARS[bs];
+  if(!box){
+    // borderStyle none: just the message, which is the only case with no border rows.
+    css+=(u.fitBoxToContent?'max-width:100%;':'display:block;padding:0 '+(px||0)+'ch;');
+    return '<div class="xrow xu"><span style="'+css+'">'+pre+eH(text)+post+'</span></div>';
+  }
+  return boxedUserRows(box,bc,css,pre+eH(text)+post,px,py,!!u.fitBoxToContent,cellsOf(text)+2*px);
+}
+
+/**
+ * Ink's border characters, lifted verbatim from the cli-boxes table inside the Claude
+ * Code bundle that renders them — not from memory, because getting one corner wrong
+ * would make the preview quietly disagree with the terminal.
+ *
+ * The topBottom* three are not cli-boxes entries at all: tweakcc synthesises them as
+ * a custom style object with spaces for the sides and corners, so they draw two
+ * full-width rules and nothing else.
+ */
+var BOX_CHARS={
+  single:       {tl:'\u250c',t:'\u2500',tr:'\u2510',l:'\u2502',r:'\u2502',bl:'\u2514',b:'\u2500',br:'\u2518'},
+  double:       {tl:'\u2554',t:'\u2550',tr:'\u2557',l:'\u2551',r:'\u2551',bl:'\u255a',b:'\u2550',br:'\u255d'},
+  round:        {tl:'\u256d',t:'\u2500',tr:'\u256e',l:'\u2502',r:'\u2502',bl:'\u2570',b:'\u2500',br:'\u256f'},
+  bold:         {tl:'\u250f',t:'\u2501',tr:'\u2513',l:'\u2503',r:'\u2503',bl:'\u2517',b:'\u2501',br:'\u251b'},
+  singleDouble: {tl:'\u2553',t:'\u2500',tr:'\u2556',l:'\u2551',r:'\u2551',bl:'\u2559',b:'\u2500',br:'\u255c'},
+  doubleSingle: {tl:'\u2552',t:'\u2550',tr:'\u2555',l:'\u2502',r:'\u2502',bl:'\u2558',b:'\u2550',br:'\u255b'},
+  classic:      {tl:'+',t:'-',tr:'+',l:'|',r:'|',bl:'+',b:'-',br:'+'},
+  topBottomSingle:{tl:' ',t:'\u2500',tr:' ',l:' ',r:' ',bl:' ',b:'\u2500',br:' '},
+  topBottomDouble:{tl:' ',t:'\u2550',tr:' ',l:' ',r:' ',bl:' ',b:'\u2550',br:' '},
+  topBottomBold:  {tl:' ',t:'\u2501',tr:' ',l:' ',r:' ',bl:' ',b:'\u2501',br:' '}
+};
+
+/** Terminal cells a string occupies. Astral characters count as one cell here. */
+function cellsOf(s){
+  var n=0;
+  for(var i=0;i<String(s).length;i++){
+    var cp=String(s).codePointAt(i);
+    if(cp>0xffff)i++;
+    n++;
+  }
+  return n;
+}
+
+/**
+ * A user message inside an Ink bordered Box, drawn the way the terminal actually
+ * draws it: the border is TEXT, so it costs a whole row above and a whole row below,
+ * and it is not part of the message's background strip.
+ *
+ * The previous version drew a 1px CSS hairline on the strip itself, which made a
+ * three-row full-width rule look like a thin outline hugging the text — a real
+ * surprise once installed, and the reason this got rewritten.
+ *
+ * Width: without fitBoxToContent an Ink Box fills its parent, so the middle of each
+ * border row is a flex cell that repeats the character and clips, which puts the
+ * corners exactly on the edges at any pane width without measuring anything. With
+ * fitBoxToContent (alignSelf:flex-start in the patch) the box shrinks to the content,
+ * so the repeat count is known and used literally.
+ */
+function boxedUserRows(box,bc,innerCss,inner,px,py,fit,contentCells){
+  var bstyle='color:'+bc+';';
+  function edge(cl,mid,cr){
+    if(fit){
+      return '<div class="xrow xu xbord" style="'+bstyle+'">'
+        +eH(cl)+eH(repeatCh(mid,contentCells))+eH(cr)+'</div>';
+    }
+    // flex so the middle fills and clips; the corners stay pinned to the two edges.
+    return '<div class="xrow xu xbord" style="'+bstyle+'display:flex;">'
+      +'<span>'+eH(cl)+'</span>'
+      +'<span class="xbfill">'+eH(repeatCh(mid,400))+'</span>'
+      +'<span>'+eH(cr)+'</span></div>';
+  }
+  function blank(){
+    return '<div class="xrow xu xbord" style="'+bstyle+(fit?'':'display:flex;')+'">'
+      +'<span>'+eH(box.l)+'</span>'
+      +(fit?'<span>'+eH(repeatCh(' ',contentCells))+'</span>'
+          :'<span class="xbfill">'+eH(repeatCh(' ',400))+'</span>')
+      +'<span>'+eH(box.r)+'</span></div>';
+  }
+  var out=edge(box.tl,box.t,box.tr);
+  for(var i=0;i<py;i++)out+=blank();
+  out+='<div class="xrow xu" style="'+(fit?'':'display:flex;')+'">'
+    +'<span style="'+bstyle+'">'+eH(box.l)+'</span>'
+    +'<span style="'+innerCss+(fit?'':'flex:1;min-width:0;')+'">'+inner+'</span>'
+    +'<span style="'+bstyle+'">'+eH(box.r)+'</span></div>';
+  for(var i2=0;i2<py;i2++)out+=blank();
+  out+=edge(box.bl,box.b,box.br);
+  return out;
+}
+function repeatCh(ch,n){
+  var s='';
+  for(var i=0;i<n;i++)s+=ch;
+  return s;
 }
 
 // transcript event -> row HTML
@@ -642,6 +723,10 @@ const TERM_CSS = `
   .xslot{margin-left:auto;display:flex;align-items:center;gap:6px;}
   .xbody{flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 14px 8px;font-size:12.5px;line-height:1.8;scrollbar-width:thin;}
   .xrow{white-space:pre-wrap;word-break:break-word;}
+  /* A border row is one terminal row: it must never wrap, and the repeating middle
+     has to clip at the pane edge rather than widen the transcript. */
+  .xrow.xbord{white-space:pre;overflow:hidden;}
+  .xrow.xbord .xbfill{overflow:hidden;flex:1;min-width:0;white-space:pre;}
   .xu{margin:7px 0;}
   .xcode{background:rgba(255,255,255,.09);border-radius:4px;padding:0 5px;}
   .xspin{padding-top:4px;}

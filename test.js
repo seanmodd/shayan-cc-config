@@ -645,6 +645,110 @@ function bashCheck(src, label) {
     && CM.sanitizeCmux({ on: true, indicatorStyle: 'none' }).indicatorStyle === 'leftRail',
     'a share link with a retired indicator style falls back to the default');
 
+  // ── the theme presets ─────────────────────────────────────────────────────
+  // A preset makes two claims that can rot silently: that a named Ghostty theme
+  // exists on the machine, and that its palette matches what that theme actually
+  // renders. Both are checked against the installed bundle when it is present.
+  const PRE = require('./api/_cmux_presets.js');
+  const clientPresets = PRE.presetsForClient();
+  ok(clientPresets.length >= 12, 'presets are defined', clientPresets.length + ' presets');
+
+  const PAL_KEYS = ['bg', 'raised', 'text', 'comment', 'subtle', 'accent', 'accent2',
+    'cyan', 'green', 'red', 'orange', 'yellow', 'pink', 'blue'];
+  const presetProblems = [];
+  const seenIds = new Set();
+  for (const pr of clientPresets) {
+    if (seenIds.has(pr.id)) presetProblems.push(pr.id + ': duplicate id');
+    seenIds.add(pr.id);
+    if (!/^[a-z0-9-]+$/.test(pr.id)) presetProblems.push(pr.id + ': id is not kebab-case');
+    if (pr.kind !== 'community' && pr.kind !== 'example') presetProblems.push(pr.id + ': unknown kind ' + pr.kind);
+    // The whole point of the labelling is that one claim is checkable and the other
+    // is authored here, so a community preset without evidence is not shippable.
+    if (pr.kind === 'community' && !pr.evidence) presetProblems.push(pr.id + ': community preset with no evidence');
+    if (pr.kind === 'community' && !pr.credit) presetProblems.push(pr.id + ': community preset with no credit');
+    if (pr.kind === 'community' && !pr.theme) presetProblems.push(pr.id + ': community preset names no Ghostty theme');
+    if (!pr.blurb) presetProblems.push(pr.id + ': no blurb');
+    if (!pr.pal) { presetProblems.push(pr.id + ': no palette'); continue; }
+    for (const k of PAL_KEYS) {
+      const v = pr.pal[k];
+      if (!Array.isArray(v) || v.length !== 3
+        || v.some(n => !Number.isInteger(n) || n < 0 || n > 255)) {
+        presetProblems.push(pr.id + ': palette key ' + k + ' is not an rgb triple');
+      }
+    }
+  }
+  ok(presetProblems.length === 0, 'every preset is well-formed and labelled',
+    presetProblems.slice(0, 4).join('; '));
+
+  // A preset's cm overrides must be real settings at legal values, or picking one
+  // would silently write a setting cmux ignores.
+  const overProblems = [];
+  for (const pr of clientPresets) {
+    for (const k of Object.keys(pr.cm || {})) {
+      if (!Object.prototype.hasOwnProperty.call(CM.CMUX_DEFAULTS, k)) {
+        overProblems.push(pr.id + ': overrides unknown setting ' + k);
+        continue;
+      }
+      const applied = CM.sanitizeCmux(Object.assign({ on: true }, pr.cm));
+      if (JSON.stringify(applied[k]) !== JSON.stringify(pr.cm[k])) {
+        overProblems.push(pr.id + ': ' + k + '=' + JSON.stringify(pr.cm[k])
+          + ' does not survive the sanitizer (got ' + JSON.stringify(applied[k]) + ')');
+      }
+    }
+  }
+  ok(overProblems.length === 0, 'preset setting overrides are all real and legal',
+    overProblems.slice(0, 4).join('; '));
+
+  // Selecting a preset must change the two files, and the chrome must follow the
+  // preset's palette rather than the Claude Code one.
+  const ccPal = { bg: [26, 27, 38], subtle: [48, 52, 70], accent: [122, 162, 247] };
+  const layerProblems = [];
+  for (const pr of clientPresets) {
+    const san = CM.sanitizeCmux({ on: true, preset: pr.id });
+    if (san.preset !== pr.id) { layerProblems.push(pr.id + ': id did not survive the sanitizer'); continue; }
+    const lines = CM.buildGhosttyLines(san, ccPal);
+    const kv = Object.fromEntries(lines);
+    if (pr.theme && kv.theme !== pr.theme) layerProblems.push(pr.id + ': theme line is ' + kv.theme);
+    if (!pr.theme && !kv.background) layerProblems.push(pr.id + ': example preset wrote no background');
+    const json = CM.buildCmuxJson(san, ccPal);
+    const expect = '#' + pr.pal.subtle.map(n => n.toString(16).padStart(2, '0')).join('');
+    if (json.paneBorderColor !== expect) {
+      layerProblems.push(pr.id + ': pane border ' + json.paneBorderColor + ' should be ' + expect);
+    }
+  }
+  ok(layerProblems.length === 0,
+    'each preset drives the ghostty colour lines and the cmux chrome from its own palette',
+    layerProblems.slice(0, 4).join('; '));
+
+  // Against the real installed bundle, when there is one: the named theme file must
+  // exist, and the stored palette must equal what the extraction tool derives from it.
+  const THEMES_DIR = '/Applications/cmux.app/Contents/Resources/ghostty/themes';
+  let bundle = false;
+  try { bundle = fs.statSync(THEMES_DIR).isDirectory(); } catch (e) { bundle = false; }
+  if (!bundle) {
+    console.log('  – skipped: no installed cmux bundle to check theme files against');
+  } else {
+    const tool = require('./tools/extract-ghostty-themes.js');
+    const have = new Set(fs.readdirSync(THEMES_DIR));
+    const named = clientPresets.filter(pr => pr.theme);
+    const gone = named.filter(pr => !have.has(pr.theme)).map(pr => pr.theme);
+    ok(gone.length === 0, 'every named theme exists in the installed cmux bundle', gone.join(', '));
+
+    const drifted = [];
+    for (const pr of named) {
+      if (!have.has(pr.theme)) continue;
+      const derived = tool.toSitePalette(tool.parseTheme(path.join(THEMES_DIR, pr.theme)), pr.theme);
+      for (const k of PAL_KEYS) {
+        const a = pr.pal[k].join(',');
+        const b = derived[k].map(n => Math.max(0, Math.min(255, Math.round(n)))).join(',');
+        if (a !== b) { drifted.push(pr.theme + '.' + k + ': stored ' + a + ' vs file ' + b); break; }
+      }
+    }
+    ok(drifted.length === 0,
+      'stored palettes still match the theme files they were generated from',
+      drifted.slice(0, 3).join('; ') + (drifted.length ? '  — rerun tools/extract-ghostty-themes.js' : ''));
+  }
+
   // The page and its routes.
   r = await call('/cmux');
   ok(r.status === 200 && /id="winBefore"/.test(r.body) && /id="cmuxControls"/.test(r.body),

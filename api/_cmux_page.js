@@ -16,6 +16,7 @@
 const { TERM_CSS } = require('./_term.js');
 const { STARTERS } = require('./_theme.js');
 const { STUDIO_CSS } = require('./_customize.js');
+const { presetsForClient } = require('./_cmux_presets.js');
 const {
   CMUX_DEFAULTS, GHOSTTY_FONTS, APPEARANCES, PLACEMENTS,
   ALIGNMENTS, BRANCH_LAYOUTS, INDICATOR_STYLES,
@@ -51,7 +52,7 @@ const CMUX_CSS = `
   .cws.on{color:var(--cm-text);}
   /* indicatorStyle — the eight ways cmux can mark the selected workspace */
   .cws.on[data-ind="leftRail"]{box-shadow:inset 3px 0 0 var(--cm-sel);background:var(--cm-selwash);}
-  .cws.on[data-ind="solidFill"]{background:var(--cm-sel);color:#0b0e14;}
+  .cws.on[data-ind="solidFill"]{background:var(--cm-sel);color:var(--cm-onsel);}
   .cws.on[data-ind="rail"]{box-shadow:inset 0 -2px 0 var(--cm-sel);}
   .cws.on[data-ind="border"]{border-color:var(--cm-sel);}
   .cws.on[data-ind="wash"]{background:var(--cm-selwash);}
@@ -84,6 +85,43 @@ const CMUX_CSS = `
   .cbadge .pill{border:1px solid var(--border);border-radius:20px;padding:2px 9px;
     font-size:10.5px;letter-spacing:.04em;}
   .cbadge .pill.aft{border-color:var(--accent);color:var(--accent);}
+  .presetpanel{grid-column:1/-1;margin-bottom:14px;}
+  .phint{margin:0 0 11px;font-size:12.5px;line-height:1.55;color:var(--dim);max-width:78ch;}
+  #presetGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:9px;}
+  .pgroup{grid-column:1/-1;display:flex;align-items:baseline;gap:8px;font-size:10.5px;
+    letter-spacing:.11em;text-transform:uppercase;color:var(--gold);margin:4px 0 -2px;}
+  .pgroup span{letter-spacing:0;text-transform:none;font-size:11.5px;color:var(--faint);}
+  /* Each chip previews the theme in the theme's own colours, so the picker is the
+     comparison rather than a list of names you have to click through. */
+  .pchip{display:block;width:100%;text-align:left;cursor:pointer;font-family:inherit;
+    border:1px solid var(--border);border-radius:10px;padding:0;overflow:hidden;
+    background:#0b0e14;transition:border-color .14s,transform .14s;min-height:44px;}
+  .pchip:hover{transform:translateY(-1px);}
+  .pchip.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+  .pchip .pcbody{padding:8px 10px 9px;}
+  .pchip .pcname{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;
+    color:var(--text);margin-bottom:3px;}
+  .pchip .pctag{flex:none;font-size:8.5px;letter-spacing:.09em;text-transform:uppercase;
+    border:1px solid var(--border);border-radius:20px;padding:1px 6px;color:var(--faint);}
+  .pchip .pctag.mine{border-color:var(--gold);color:var(--gold);}
+  .pchip .pcblurb{font-size:11px;line-height:1.45;color:var(--dim);}
+  .pchip .pccredit{font-size:10px;color:var(--faint);margin-top:4px;}
+  /* The swatch strip is the theme rendering itself: real bg, real fg, real accents. */
+  .pcswatch{display:flex;height:30px;align-items:center;gap:5px;padding:0 10px;
+    font-family:ui-monospace,Menlo,monospace;font-size:10px;}
+  .pcswatch .dot{width:9px;height:9px;border-radius:50%;flex:none;}
+  .pcswatch .sample{margin-left:auto;opacity:.9;}
+  .pnote{margin-top:11px;font-size:12px;line-height:1.55;color:var(--dim);
+    border-left:2px solid var(--border);padding-left:10px;min-height:1px;}
+  .pnote b{color:var(--text);}
+  .pnote .cr{color:var(--faint);}
+  @media(max-width:700px),(max-height:520px){
+    #presetGrid{grid-template-columns:1fr 1fr;gap:7px;}
+    .pchip .pcblurb,.pchip .pccredit{display:none;}
+    .pchip .pcname{font-size:12px;}
+    .phint{font-size:11.5px;}
+  }
+  @media(max-width:380px){#presetGrid{grid-template-columns:1fr;}}
   .chead{padding-bottom:2px;}
   .chead h1{font-size:32px;}
 
@@ -190,6 +228,15 @@ function renderCmux(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
     </div>
   </div>
 
+  <div class="panel presetpanel"><h3>\u{1F3AC} Start from a theme</h3>
+    <p class="phint">Pick a starting point, then change anything below. A community
+    theme is a real, widely-used scheme applied by name from the 463 that ship inside
+    cmux; an example theme was made for this site and writes its colours out in full.
+    Either way the cmux chrome \u2014 borders, sidebar tint, workspace marker \u2014 follows the
+    colours you land on.</p>
+    <div id="presetGrid"></div>
+    <div id="presetNote" class="pnote"></div>
+  </div>
   <div class="panels" id="cmuxControls"></div>
 
   <div class="cpanels" style="margin-top:16px">
@@ -210,6 +257,7 @@ function renderCmux(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
 <script>
 var STARTERS=${starters};
 var CMUX_DEFAULTS=${defaults};
+var CMUX_PRESETS=${JSON.stringify(presetsForClient())};
 var CMUX_OPTS=${opts};
 var CC_LINES=${lines};
 ${clientLib}
@@ -252,7 +300,16 @@ function cmColors(s,pal){
     selection: s.selectionFromPalette?palHex(pal.accent,s.selectionColor):s.selectionColor
   };
 }
+// mapPreview returns rgb() strings while the palette side produces #rrggbb. Anything
+// that has to do arithmetic on a colour goes through here first.
+function hexOf(c){
+  var m=/^rgb\\((\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\)$/.exec(String(c).replace(/\\s/g,''));
+  if(m)return hx([+m[1],+m[2],+m[3]]);
+  m=/^#([0-9a-fA-F]{6})$/.exec(String(c).trim());
+  return m?('#'+m[1].toLowerCase()):'#12141a';
+}
 function mix(hex,over,alpha){
+  hex=hexOf(hex);over=hexOf(over);
   var a=toRGBarr(hex),b=toRGBarr(over);
   return 'rgb('+a.map(function(v,i){return Math.round(v*(1-alpha)+b[i]*alpha);}).join(',')+')';
 }
@@ -261,17 +318,34 @@ function mix(hex,over,alpha){
 function winHTML(s,pal,label){
   var c=cmColors(s,pal);
   var pv=mapPreview(expandPalette(sanePal(pal)));
-  var isLight=s.appearance==='light';
-  var bg=pv.bg, text=pv.text, dim=pv.inactive, faint=pv.inactive;
-  var titlebar=mix(bg,isLight?'#ffffff':'#ffffff',isLight?0.55:0.06);
+
+  // The window background is the TERMINAL's background, so where it comes from
+  // depends on whether we actually know it.
+  //   with a preset: we do, exactly -- the install writes that background itself.
+  //   without one:   we do not. The user's Ghostty keeps whatever theme it had, so
+  //                  fall back to the Studio's own approximation via termBg() and
+  //                  stay consistent with what /customize shows.
+  var hasPreset=!!presetById(s.preset);
+  var bg=hasPreset?palHex(pal.bg,pv.bg):pv.bg;
+  var text=hasPreset?palHex(pal.text,pv.text):pv.text;
+  var dim=hasPreset?palHex(pal.comment,pv.inactive):pv.inactive;
+  var faint=dim;
+
+  // Light schemes need the chrome darkened, not lightened. Deriving this from the
+  // background's own luminance rather than from the appearance setting means a light
+  // preset renders correctly even before appearance is switched over.
+  var lightBg=relLum(toRGBarr(hexOf(bg)))>0.4;
+  var lift=lightBg?'#000000':'#ffffff';
+  var titlebar=mix(bg,lift,lightBg?0.05:0.06);
   var sidebar=s.matchTerminalBg?bg:mix(bg,c.tint,Math.max(s.tintOpacity,0.02));
-  var chrome=mix(bg,'#ffffff',0.12);
+  var chrome=mix(bg,lift,lightBg?0.16:0.12);
   var vars=[
     '--cm-bg:'+bg,'--cm-text:'+text,'--cm-dim:'+dim,'--cm-faint:'+faint,
     '--cm-titlebar:'+titlebar,'--cm-sidebar:'+sidebar,'--cm-chrome:'+chrome,
     '--cm-pane:'+c.paneBorder,'--cm-panehot:'+c.activePaneBorder,
     '--cm-divider:'+c.divider,'--cm-divider-w:'+(s.minimalMode?'1px':'2px'),
-    '--cm-sel:'+c.selection,'--cm-selwash:'+mix(bg,c.selection,0.16),
+    '--cm-sel:'+c.selection,'--cm-selwash:'+mix(bg,c.selection,lightBg?0.22:0.16),
+    '--cm-onsel:'+(relLum(toRGBarr(hexOf(c.selection)))>0.45?'#0b0e14':'#f4f7fb'),
     '--cm-font:'+s.fontSize+'px','--cm-sidefont:'+s.sidebarFontSize+'px',
     '--cm-tabfont:'+s.tabBarFontSize+'px'
   ].join(';');
@@ -325,22 +399,54 @@ function winHTML(s,pal,label){
     +'</div></div>';
 }
 
+// Mirrors resolveCmuxColors() on the server: with a preset active the terminal's own
+// background and foreground come from the preset, so the chrome has to as well.
+function presetById(id){
+  if(!id)return null;
+  for(var i=0;i<CMUX_PRESETS.length;i++)if(CMUX_PRESETS[i].id===id)return CMUX_PRESETS[i];
+  return null;
+}
+function activePal(){
+  var pre=presetById(state.preset);
+  return (pre&&pre.pal)?pre.pal:ccPayload.p;
+}
+
 function drawWindows(){
-  var pal=ccPayload.p;
-  $('#winBefore').innerHTML=winHTML(defaultCmux(),pal,'senpex-frontend — cmux');
-  $('#winAfter').innerHTML=winHTML(state,pal,state.titleTemplate||'senpex-frontend — cmux');
+  // BEFORE is the machine as it is right now, so it keeps the colours the user already
+  // has -- passing it the preset's palette would paint Dracula on both sides and hide
+  // the single biggest thing a preset changes.
+  $('#winBefore').innerHTML=winHTML(defaultCmux(),ccPayload.p,'senpex-frontend — cmux');
+  $('#winAfter').innerHTML=winHTML(state,activePal(),state.titleTemplate||'senpex-frontend — cmux');
   drawFiles();
   drawCmd();
 }
 
 // ── the two files, shown verbatim ──────────────────────────────────────────────
+// Exact mirror of schemeLines() in _cmux.js. A community preset installs by name; one
+// of ours has no theme file to point at, so its colours are written out in full.
+function schemeLinesC(s){
+  var pre=presetById(s.preset), out=[];
+  var themeName=(pre&&pre.theme)||s.theme;
+  if(themeName)out.push(['theme',themeName]);
+  if(pre&&pre.scheme){
+    if(pre.scheme.bg)out.push(['background',pre.scheme.bg]);
+    if(pre.scheme.fg)out.push(['foreground',pre.scheme.fg]);
+    var a=pre.scheme.ansi;
+    if(Object.prototype.toString.call(a)==='[object Array]'){
+      for(var i=0;i<a.length&&i<16;i++){
+        if(/^#[0-9a-fA-F]{6}$/.test(a[i]))out.push(['palette',i+'='+String(a[i]).toLowerCase()]);
+      }
+    }
+  }
+  return out;
+}
 function ghosttyLines(s,pal){
   var c=cmColors(s,pal), out=[];
   if(s.fontFamily)out.push(['font-family',s.fontFamily]);
   out.push(['font-size',String(s.fontSize)]);
   out.push(['sidebar-font-size',String(s.sidebarFontSize)]);
   out.push(['surface-tab-bar-font-size',String(s.tabBarFontSize)]);
-  if(s.theme)out.push(['theme',s.theme]);
+  schemeLinesC(s).forEach(function(kv){out.push(kv);});
   out.push(['scrollback-limit',String(s.scrollback)]);
   out.push(['split-divider-color',c.divider]);
   if(s.bgOpacity<1)out.push(['background-opacity',String(s.bgOpacity)]);
@@ -359,7 +465,7 @@ function cmuxJsonObj(s,pal){
   return o;
 }
 function drawFiles(){
-  var pal=ccPayload.p;
+  var pal=activePal();
   var g=ghosttyLines(state,pal).map(function(kv){
     return '<span class="fk">'+esc(kv[0])+'</span> = '+esc(kv[1]);
   }).join('\\n');
@@ -382,7 +488,7 @@ function drawCmd(){
     if(allowDraft){try{localStorage.setItem('scc_cmux',JSON.stringify(state));}catch(e){}}
   },400);
 }
-function edited(){allowDraft=true;drawWindows();}
+function edited(){allowDraft=true;drawWindows();paintPresetNote();}
 
 // ── controls ───────────────────────────────────────────────────────────────────
 var HELP={
@@ -436,6 +542,152 @@ function colorRow(label,key,modeId,pickId,fromPal,hexVal){
    +'<div class="modrow"><span class="stychips" id="'+modeId+'"></span>'
    +'<input type="color" id="'+pickId+'" value="'+esc(hexVal)+'">'
    +'<span class="hint" id="'+modeId+'h"></span></div></div>';
+}
+
+// ── the preset picker ─────────────────────────────────────────────────────────
+// Community and example are separated rather than mixed with a badge alone, because
+// the distinction is a claim about provenance and the user asked to be able to tell
+// which is which at a glance.
+function paintPresets(){
+  var host=$('#presetGrid');
+  host.innerHTML='';
+
+  function headRow(title,sub){
+    var h=document.createElement('div');h.className='pgroup';
+    h.appendChild(document.createTextNode(title));
+    var sp=document.createElement('span');sp.textContent=sub;h.appendChild(sp);
+    return h;
+  }
+
+  function chip(pre){
+    var b=document.createElement('button');
+    b.type='button';b.className='pchip'+(state.preset===pre.id?' on':'');
+    b.setAttribute('data-preset',pre.id);
+    b.setAttribute('aria-pressed',state.preset===pre.id?'true':'false');
+
+    // The strip below the name IS the theme: its own background, its own foreground,
+    // its own accents. Nothing here is a stand-in colour.
+    var pal=pre.pal||ccPayload.p;
+    var sw=document.createElement('div');
+    sw.className='pcswatch';
+    sw.style.background=palHex(pal.bg,'#0b0e14');
+    ['accent','green','red','yellow','accent2'].forEach(function(k){
+      var d=document.createElement('span');d.className='dot';
+      d.style.background=palHex(pal[k],'#888');sw.appendChild(d);
+    });
+    var samp=document.createElement('span');
+    samp.className='sample';samp.textContent='\u276F claude';
+    samp.style.color=palHex(pal.text,'#ccc');
+    sw.appendChild(samp);
+
+    var body=document.createElement('div');body.className='pcbody';
+    var nm=document.createElement('div');nm.className='pcname';
+    nm.appendChild(document.createTextNode(pre.name));
+    var tag=document.createElement('span');
+    tag.className='pctag'+(pre.kind==='example'?' mine':'');
+    tag.textContent=pre.kind==='example'?'example':'community';
+    nm.appendChild(tag);
+    body.appendChild(nm);
+    if(pre.blurb){var bl=document.createElement('div');bl.className='pcblurb';bl.textContent=pre.blurb;body.appendChild(bl);}
+    if(pre.credit){var cr=document.createElement('div');cr.className='pccredit';cr.textContent=pre.credit;body.appendChild(cr);}
+
+    b.appendChild(sw);b.appendChild(body);
+    b.addEventListener('click',function(){applyPreset(pre.id);});
+    return b;
+  }
+
+  var community=CMUX_PRESETS.filter(function(p){return p.kind==='community';});
+  var mine=CMUX_PRESETS.filter(function(p){return p.kind==='example';});
+
+  // "None" first: it is the BEFORE state and the way back out of a preset.
+  host.appendChild(headRow('No theme','leave the terminal colours you already have'));
+  var none=document.createElement('button');
+  none.type='button';none.className='pchip'+(state.preset?'':' on');
+  none.setAttribute('aria-pressed',state.preset?'false':'true');
+  var nb=document.createElement('div');nb.className='pcbody';
+  var nn=document.createElement('div');nn.className='pcname';
+  nn.textContent='Keep my colours';nb.appendChild(nn);
+  var nbl=document.createElement('div');nbl.className='pcblurb';
+  nbl.textContent='cmux chrome follows your Claude Code theme; the terminal keeps whatever Ghostty theme you already set.';
+  nb.appendChild(nbl);
+  none.appendChild(nb);
+  none.addEventListener('click',function(){applyPreset('');});
+  host.appendChild(none);
+
+  if(community.length){
+    host.appendChild(headRow('Popular in the community',community.length+' schemes cmux already ships'));
+    community.forEach(function(p){host.appendChild(chip(p));});
+  }
+  if(mine.length){
+    host.appendChild(headRow('Example themes',
+      mine.length+' made for this site, written out in full'));
+    mine.forEach(function(p){host.appendChild(chip(p));});
+  }
+  paintPresetNote();
+}
+
+function paintPresetNote(){
+  var el=$('#presetNote'),pre=presetById(state.preset);
+  if(!pre){
+    el.innerHTML='<b>No theme selected.</b> The install leaves your Ghostty colours alone '
+      +'and derives the cmux chrome from your Claude Code palette.';
+    return;
+  }
+  var pal=pre.pal||ccPayload.p;
+  var ratio=contrastRatio(pal.text,pal.bg),cmt=contrastRatio(pal.comment,pal.bg);
+  var how=pre.theme
+    ? 'installs as <span class="mono">theme = '+esc(pre.theme)+'</span>, a scheme cmux already ships'
+    : 'writes its background, foreground and all sixteen ANSI colours into your Ghostty config';
+  el.innerHTML='<b>'+esc(pre.name)+'</b> \u2014 '+how+'.'
+    +(pre.credit?' <span class="cr">'+esc(pre.credit)+'</span>':'')
+    +(pre.evidence?'<br><span class="cr">'
+       +(pre.kind==='community'?'Why it is here: ':'')+esc(pre.evidence)+'</span>':'')
+    +'<br>Body text '+ratio.toFixed(1)+':1 on its background, dimmed text '+cmt.toFixed(1)+':1. '
+    +(ratio<4.5?'Below the 4.5:1 readability guideline \u2014 that is how its author made it.'
+              :(cmt<3?'Comments sit under 3:1, which is the author\u2019s choice, not a mistake here.'
+                    :'Both clear the usual readability guidelines.'));
+}
+
+// WCAG relative luminance and contrast, so the page can state a real number rather
+// than an adjective. Same formula the extraction tool uses.
+function relLum(t){
+  var c=(t||[0,0,0]).map(function(v){
+    var x=Math.max(0,Math.min(255,v))/255;
+    return x<=0.03928?x/12.92:Math.pow((x+0.055)/1.055,2.4);
+  });
+  return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2];
+}
+function contrastRatio(a,b){
+  var l1=relLum(a),l2=relLum(b);
+  if(l2>l1){var t=l1;l1=l2;l2=t;}
+  return (l1+0.05)/(l2+0.05);
+}
+
+/**
+ * Apply a preset: its colours, plus the settings it deliberately changes.
+ *
+ * Only the keys the preset names are touched. Anything the user already changed and
+ * the preset does not mention survives, because a preset is a starting point and
+ * silently resetting the rest of someone's work would be the wrong trade.
+ */
+function applyPreset(id){
+  state.preset=id||'';
+  var pre=presetById(state.preset);
+  if(pre){
+    // The preset's own theme takes over from anything typed in the Ghostty theme box,
+    // otherwise two theme directives would race and the typed one would win silently.
+    state.theme='';
+    var over=pre.cm||{};
+    for(var k in over){
+      if(Object.prototype.hasOwnProperty.call(over,k)
+        && Object.prototype.hasOwnProperty.call(CMUX_DEFAULTS,k)) state[k]=over[k];
+    }
+  }
+  allowDraft=true;
+  buildControls();      // rebuild so the changed controls show their new values
+  paintPresets();
+  drawWindows();
+  toast(pre?(pre.name+' applied \u2014 tweak anything below'):'Back to your own colours');
 }
 
 function buildControls(){
@@ -501,7 +753,13 @@ function buildControls(){
     e.addEventListener('input',function(){state[key]=parseFloat(this.value);show();edited();});
   }
   onSel('m_font','fontFamily');onSel('m_theme','theme');
-  $('#m_theme').addEventListener('input',function(){state.theme=this.value;edited();});
+  $('#m_theme').addEventListener('input',function(){
+    state.theme=this.value;
+    // A typed theme name and a preset both emit a theme= directive. Rather than let
+    // one win invisibly, typing takes over and the preset is released.
+    if(this.value&&state.preset){state.preset='';paintPresets();}
+    edited();
+  });
   onRange('m_fs','fontSize','m_fsl',function(v){return v+'pt';});
   onRange('m_sf','sidebarFontSize','m_sfl',function(v){return v+'pt';});
   onRange('m_tf','tabBarFontSize','m_tfl',function(v){return v+'pt';});
@@ -531,7 +789,7 @@ function buildControls(){
 // shows the colour actually in force, so switching to Custom never jumps.
 function colorMode(hostId,pickId,flagKey,valKey,palKey){
   var host=$('#'+hostId), pick=$('#'+pickId), hint=$('#'+hostId+'h');
-  function themeHex(){return palHex(ccPayload.p[palKey],state[valKey]);}
+  function themeHex(){return palHex(activePal()[palKey],state[valKey]);}
   function chip(label,on,cb){
     var el=document.createElement('span');
     el.className='stychip'+(on?' on':'');el.textContent=label;
@@ -632,6 +890,7 @@ window.addEventListener('scroll',function(){if(_tipBtn)hideTip();},true);
   }catch(e){ccPayload=defaultCC();state=defaultCmux();}
 })();
 buildControls();
+paintPresets();
 drawWindows();
 
 $('#c_copy').addEventListener('click',function(){
@@ -645,7 +904,7 @@ $('#c_share').addEventListener('click',function(){
 $('#c_reset').addEventListener('click',function(){
   state=defaultCmux();allowDraft=false;
   try{localStorage.removeItem('scc_cmux');}catch(e){}
-  buildControls();drawWindows();
+  buildControls();paintPresets();drawWindows();
   clearTimeout(_urlT);history.replaceState(null,'','/cmux');
   toast('Back to stock cmux');
 });

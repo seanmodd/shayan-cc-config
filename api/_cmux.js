@@ -41,6 +41,9 @@ const INDICATOR_STYLES = ['leftRail', 'solidFill', 'rail', 'border', 'wash', 'li
   'typography', 'washRail', 'blueWashColorRail'];
 
 const CMUX_DEFAULTS = {
+  // A starting-point preset: a community Ghostty theme or one of this site's own.
+  // Empty means no preset, which is the stock-cmux BEFORE state.
+  preset: '',
   // Ghostty side
   fontFamily: '',
   fontSize: 13,
@@ -79,6 +82,11 @@ const CMUX_DEFAULTS = {
   branchLayout: 'vertical',
 };
 
+// Presets live in their own module so this one stays a pure sanitizer/builder pair.
+// Required lazily inside the functions that need it, because _cmux_presets.js does not
+// depend on anything here and a top-level cycle would be easy to introduce later.
+function presets() { return require('./_cmux_presets.js'); }
+
 const pick = (v, list, dflt) => (list.includes(v) ? v : dflt);
 const bool = (v, dflt) => (typeof v === 'boolean' ? v : dflt);
 const hex6 = (v, dflt) => (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v.toLowerCase() : dflt);
@@ -111,6 +119,11 @@ function sanitizeCmux(cm) {
     // a newline into the config file and forge another directive.
     theme: (typeof cm.theme === 'string' && /^[A-Za-z0-9 ._+-]{0,40}$/.test(cm.theme))
       ? cm.theme.trim() : d.theme,
+    // A preset id, never the preset's contents. Colours therefore come from this
+    // server's own table rather than from the link, so a share link can name a look
+    // but cannot invent one — it has no way to push arbitrary hex into a config file
+    // through this field. An unknown id falls back to no preset.
+    preset: presets().isPresetId(cm.preset) ? String(cm.preset) : '',
     scrollback: num(cm.scrollback, 1000, 100000000, d.scrollback),
     bgOpacity: num(cm.bgOpacity, 0.3, 1, d.bgOpacity, 2),
     bgBlur: num(cm.bgBlur, 0, 64, d.bgBlur),
@@ -164,7 +177,13 @@ function palHex(triple, fallback) {
  * two unrelated colour schemes sharing a window.
  */
 function resolveCmuxColors(s, palette) {
-  const p = palette && typeof palette === 'object' ? palette : {};
+  // When a preset is active it also sets the terminal's own background and
+  // foreground, so the chrome has to be derived from THAT palette — deriving it from
+  // the Claude Code theme instead would draw Tokyo Night borders around a Gruvbox
+  // terminal. With no preset, the Claude Code palette is the only thing we know about
+  // the window and stays the source.
+  const pre = s.preset ? presets().presetPalette(s.preset) : null;
+  const p = pre || (palette && typeof palette === 'object' ? palette : {});
   return {
     divider: s.dividerFromPalette ? palHex(p.subtle, s.dividerColor) : s.dividerColor,
     paneBorder: s.paneBorderFromPalette ? palHex(p.subtle, s.paneBorder) : s.paneBorder,
@@ -172,6 +191,41 @@ function resolveCmuxColors(s, palette) {
     tint: s.tintFromPalette ? palHex(p.bg, s.tintColor) : s.tintColor,
     selection: s.selectionFromPalette ? palHex(p.accent, s.selectionColor) : s.selectionColor,
   };
+}
+
+/**
+ * The colour directives a preset contributes to the Ghostty config, if any.
+ *
+ * Two kinds of preset, and the difference is the honest one:
+ *   - a community preset names a theme Ghostty already ships, so one `theme =` line
+ *     does the whole job and the user's own installed theme file is the source;
+ *   - an original preset has no theme file to point at, so it writes its colours out
+ *     literally — background, foreground and all sixteen ANSI slots. That is a real
+ *     colour scheme rather than a reskin of somebody else's.
+ *
+ * `theme` is deliberately emitted BEFORE the literal colours: in Ghostty a later
+ * directive wins, so a preset that sets both would have its own colours survive. Only
+ * one is ever set today, but the ordering makes the intent unambiguous if that changes.
+ */
+function schemeLines(s) {
+  const pre = s.preset ? presets().presetById(s.preset) : null;
+  const out = [];
+  // A named Ghostty theme: the preset's, else whatever the user typed.
+  const themeName = (pre && pre.theme) || s.theme;
+  if (themeName) out.push(['theme', themeName]);
+  if (pre && pre.scheme) {
+    const sc = pre.scheme;
+    if (sc.bg) out.push(['background', sc.bg]);
+    if (sc.fg) out.push(['foreground', sc.fg]);
+    if (Array.isArray(sc.ansi)) {
+      sc.ansi.slice(0, 16).forEach((hex, i) => {
+        // The table is ours, but it is still data feeding a config file — a bad entry
+        // should drop out rather than emit a malformed directive.
+        if (/^#[0-9a-f]{6}$/i.test(hex)) out.push(['palette', i + '=' + hex.toLowerCase()]);
+      });
+    }
+  }
+  return out;
 }
 
 /** The managed block for ~/.config/ghostty/config, as `key = value` lines. */
@@ -182,7 +236,7 @@ function buildGhosttyLines(s, palette) {
   out.push(['font-size', String(s.fontSize)]);
   out.push(['sidebar-font-size', String(s.sidebarFontSize)]);
   out.push(['surface-tab-bar-font-size', String(s.tabBarFontSize)]);
-  if (s.theme) out.push(['theme', s.theme]);
+  out.push(...schemeLines(s));
   out.push(['scrollback-limit', String(s.scrollback)]);
   out.push(['split-divider-color', c.divider]);
   // Only emit transparency when it is actually asked for: background-opacity 1 and
@@ -385,6 +439,7 @@ fi
 }
 
 module.exports = {
+  schemeLines,
   sanitizeCmux,
   buildGhosttyLines,
   buildCmuxJson,
