@@ -49,6 +49,10 @@ const STUDIO_CSS = `
   .cap{display:flex;align-items:center;gap:4px;flex-wrap:wrap;}
   .i{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;flex:none;border:1px solid var(--border);background:#10141b;color:var(--faint);border-radius:50%;font:italic 700 10px/1 Georgia,serif;cursor:help;padding:0;margin-left:2px;}
   .i:hover,.i.on{border-color:var(--accent);color:var(--accent);background:rgba(122,162,247,.12);}
+  /* A 15px circle is a 15px tap target. Expand the hit area without growing
+     the mark, so the label line does not gain height. */
+  .i{position:relative;}
+  .i::after{content:'';position:absolute;left:50%;top:50%;width:40px;height:40px;transform:translate(-50%,-50%);}
   .i:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
   .tip{position:absolute;z-index:200;width:330px;max-width:calc(100vw - 24px);background:#0b0e14;border:1px solid var(--accent);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.55;color:var(--text);box-shadow:0 16px 38px rgba(0,0,0,.65);}
   .tip b{display:block;color:var(--accent);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;}
@@ -70,6 +74,15 @@ const STUDIO_CSS = `
   .segrow .nm{flex:1;}
   .segrow button{cursor:pointer;background:none;border:1px solid var(--border);border-radius:6px;color:var(--dim);font-size:11px;padding:2px 7px;}
   .segrow button:hover{border-color:var(--accent);color:var(--accent);}
+  /* touch-action:none only here, so dragging the handle reorders while a swipe
+     anywhere else on the row still scrolls the page. */
+  .seghandle{touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;
+    color:var(--faint);font-size:14px;line-height:1;flex:none;min-width:26px;min-height:26px;
+    display:inline-flex;align-items:center;justify-content:center;}
+  .seghandle:active{cursor:grabbing;color:var(--accent);}
+  .ghosthandle{visibility:hidden;}
+  .segrow.dragging{border-color:var(--accent);background:#141a24;opacity:.92;
+    box-shadow:0 8px 20px rgba(0,0,0,.55);}
   .barbot{position:fixed;left:0;right:0;bottom:0;z-index:60;background:rgba(13,16,22,.96);backdrop-filter:blur(10px);border-top:1px solid var(--border);padding:11px 22px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
   .barbot .cmd{flex:1 1 340px;display:flex;align-items:center;gap:8px;background:#0b0e14;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;color:#b7c3d6;overflow-x:auto;white-space:nowrap;font-family:ui-monospace,Menlo,monospace;scrollbar-width:thin;}
   .barbot .cmd .dollar{color:var(--ok);}
@@ -80,15 +93,126 @@ const STUDIO_CSS = `
   .minilinks{font-size:11px;color:var(--faint);width:100%;}
   .minilinks a{color:var(--dim);}
   select.tsel{background:#0b0e14;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;padding:3px 6px;max-width:170px;}
+  /* The BEFORE/AFTER switch. Hidden on desktop, where both panes fit side by
+     side; on a phone two 366px terminals cannot, and stacking them costs ~950px
+     of scrolling before the first control. One pane at a time, one tap to
+     compare. */
+  .paneswitch{display:none;}
+  .pswbtn{appearance:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;
+    letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--border);
+    background:#10141b;color:var(--dim);border-radius:10px;min-height:44px;padding:0 10px;}
+  .pswbtn.on{border-color:var(--accent);color:var(--accent);background:rgba(122,162,247,.12);}
+
+  /* Phones — by width OR by height. A phone in landscape is 844x390: a width-only
+     breakpoint left it on the desktop layout, stacking two 698px terminals into
+     390px of viewport. The comma is an OR in CSS media queries.
+     The ordering matters: this block is the last word on layout, so anything above
+     it that assumes width gets corrected here. */
+  @media(max-width:700px),(max-height:520px){
+    .paneswitch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 10px;}
+    .terms{gap:0;}
+    .terms[data-pane="after"] .tcol-before{display:none;}
+    .terms[data-pane="before"] .tcol-after{display:none;}
+    /* dvh after vh: on iOS Safari, vh is the LARGEST viewport height, so a vh-sized
+       terminal is taller than what you can actually see while the toolbars are up.
+       Browsers that do not know dvh ignore the second declaration. */
+    .tcol .xterm{height:min(46vh,360px);height:min(46dvh,360px);}
+    /* 12.5px monospace fits ~45 characters across a 390px phone, which mangles
+       almost every line of a real transcript. 10px fits ~58. */
+    .terms .xbody,.terms .xfoot{font-size:10px;line-height:1.7;}
+    .terms .xbody{padding:9px 10px 9px;}
+    .terms .xstatus,.terms .xmode{font-size:9.5px;}
+    /* 16px, not 10px: iOS Safari zooms the whole page when you focus an input
+       smaller than 16px and does not zoom back out afterwards, which leaves the
+       page scaled and horizontally scrollable. Typing into either terminal is a
+       headline feature here, so the prompt line runs a little larger than the
+       transcript above it rather than booby-trapping the first tap. */
+    .terms .xinput{font-size:16px;}
+    .terms .xinbox .xchev{font-size:14px;}
+    .terms .xtag{display:none;}
+    /* Selects zoom the page on focus below 16px too, same as text inputs. */
+    select.tsel{font-size:16px;max-width:150px;padding:6px 8px;}
+
+    /* Panels and rows go single-column; two number inputs side by side on a
+       phone are two unusable number inputs. */
+    .inline2,.inline3{grid-template-columns:1fr!important;}
+    .swatches{grid-template-columns:1fr 1fr;}
+    .panel{padding:14px 13px 12px;}
+    .ctl2{margin:6px 0 12px;}
+
+    /* Touch targets. Apple's floor is 44px and nearly every control here was
+       31-37px. */
+    .ctl input[type=text],.ctl input[type=number],.ctl select,.ctl textarea{
+      min-height:44px;font-size:16px;}
+    .ctl textarea{min-height:120px;}
+    .ctl2 input[type=checkbox]{width:22px;height:22px;}
+    .stychip{padding:10px 13px;min-height:40px;display:inline-flex;align-items:center;}
+    .chipbtn{min-height:44px;padding:0 14px;}
+    .sw input[type=color]{width:42px;height:34px;}
+    .modrow input[type=color]{width:46px;height:38px;}
+    .segrow{padding:8px 10px;min-height:48px;}
+    .segrow button{min-width:40px;min-height:40px;font-size:13px;}
+    .seghandle{min-width:40px;min-height:40px;font-size:19px;}
+    .segrow input[type=checkbox]{width:22px;height:22px;}
+
+    /* Header and intro: on a phone the intro paragraph alone was a full screen. */
+    header h1{font-size:24px!important;}
+    /* The brand wrapped onto two lines and pushed the header taller than the
+       buttons beside it. */
+    .top .brand{font-size:13px;white-space:nowrap;}
+    .top{gap:8px;}
+    .iconbtn{min-height:40px;display:inline-flex;align-items:center;}
+    /* The intro was six lines — most of a phone screen before any content. */
+    .sub{font-size:12px;line-height:1.6;}
+    header{padding-bottom:0!important;}
+    .tbadge{font-size:10px;gap:6px;}
+    .tbadge span:last-child{display:none;}
+    .toolrow{margin:2px 0 12px;}
+  }
+
+  /* 320px (iPhone SE) could not fit brand + Home + GitHub across the header, and
+     the overflow put the whole page into horizontal scroll. The navigator carries
+     a Gallery entry, so the Home link is the redundant one to drop. */
+  @media(max-width:380px){
+    .top{gap:6px;padding-left:12px;padding-right:12px;}
+    .brand{min-width:0;overflow:hidden;text-overflow:ellipsis;}
+    .top a.iconbtn[href="/"]{display:none;}
+    .pswbtn{font-size:12px;}
+  }
+
   /* The fixed action bar is generous on desktop; on phones it has to earn its
      height back so the terminals stay readable. */
-  @media(max-width:640px){
+  @media(max-width:640px),(max-height:520px){
     .swrap{padding:0 12px 40px;}
-    .barbot{padding:8px 12px;gap:7px;}
+    /* Without the safe-area inset the bottom row of buttons sits under the home
+       indicator on a notched iPhone. */
+    .barbot{padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));gap:7px;}
     .barbot .cmd{flex:1 1 100%;order:-1;font-size:11px;padding:6px 9px;}
-    .barbot button{padding:9px 12px;font-size:12.5px;flex:1 1 auto;}
+    /* Three buttons plus a command do not fit across 390px: Publish was clipped
+       at the right edge. The primary action takes its own full-width row and the
+       secondary ones share the next. */
+    .barbot button{padding:9px 10px;font-size:12.5px;min-height:44px;}
+    .barbot #c_copy{flex:1 1 100%;}
+    .barbot #c_share,.barbot #c_publish,.barbot #c_reset{flex:1 1 0;min-width:0;}
     .barbot .minilinks{display:none;}
-    .tcol .xterm{height:min(58vh,420px);}
+  }
+  /* Short screens: an SE is 568px tall and the bar was taking 26% of it. Trim the
+     chrome without hiding anything. */
+  @media(max-height:620px){
+    .barbot{padding:6px 10px calc(6px + env(safe-area-inset-bottom,0px));gap:6px;}
+    .barbot button{min-height:40px;padding:7px 9px;font-size:12px;}
+    .barbot .cmd{font-size:10.5px;padding:5px 8px;}
+  }
+  /* True landscape: 390px of height in total. There is width to spare here, so the
+     bar collapses to a single row instead of the three it uses in portrait, and the
+     page header earns its space back for the terminal. */
+  @media(max-height:460px){
+    .barbot{flex-wrap:nowrap;}
+    .barbot .cmd{flex:1 1 auto;order:0;}
+    .barbot #c_copy{flex:0 1 auto;}
+    .barbot button{min-height:36px;font-size:11.5px;}
+    .tcol .xterm{height:min(58dvh,230px);}
+    header,.sub{display:none;}
   }
 `;
 
@@ -621,6 +745,67 @@ function paintSwatches(){
     lab.appendChild(inp);lab.appendChild(sp);host.appendChild(lab);
   });
 }
+// Status-line segments: reorder by dragging, or with the arrow buttons.
+//
+// Pointer Events rather than HTML5 drag-and-drop, because dragstart/dragover never
+// fire for touch on iOS Safari and the user asked for this on a phone specifically.
+// touch-action:none lives on the HANDLE only, so a swipe anywhere else on the row
+// still scrolls the page.
+//
+// The drag reorders DOM siblings and commits to state.sl.seg once on release.
+// Re-rendering on every pointermove would destroy the element the pointer has
+// captured and the drag would die on the first move.
+var _segDrag=null;
+function segRowsEnabled(host){
+  return Array.prototype.filter.call(host.children,function(el){
+    return el.getAttribute('data-on')==='1';
+  });
+}
+function startSegDrag(e,row,host){
+  if(e.button!==undefined&&e.button>0)return;
+  e.preventDefault();
+  var handle=e.currentTarget;
+  try{handle.setPointerCapture(e.pointerId);}catch(_){}
+  _segDrag={row:row,host:host,handle:handle,pointerId:e.pointerId};
+  row.classList.add('dragging');
+}
+function moveSegDrag(e){
+  if(!_segDrag||e.pointerId!==_segDrag.pointerId)return;
+  e.preventDefault();
+  var host=_segDrag.host,row=_segDrag.row,y=e.clientY;
+  var others=segRowsEnabled(host).filter(function(r){return r!==row;});
+  for(var i=0;i<others.length;i++){
+    var r=others[i].getBoundingClientRect();
+    if(y<r.top+r.height/2){host.insertBefore(row,others[i]);return;}
+  }
+  // Past the last enabled row: park it at the end of the ENABLED block, never
+  // inside the disabled rows below — those are not part of the order.
+  if(others.length)host.insertBefore(row,others[others.length-1].nextSibling);
+}
+function endSegDrag(e){
+  if(!_segDrag||(e&&e.pointerId!==undefined&&e.pointerId!==_segDrag.pointerId))return;
+  var d=_segDrag;_segDrag=null;
+  try{d.handle.releasePointerCapture(d.pointerId);}catch(_){}
+  d.row.classList.remove('dragging');
+  var order=segRowsEnabled(d.host).map(function(r){return r.getAttribute('data-id');});
+  var changed=order.join(',')!==state.sl.seg.join(',');
+  state.sl.seg=order;
+  paintSegs();
+  if(changed)edited();
+}
+document.addEventListener('pointermove',moveSegDrag,{passive:false});
+document.addEventListener('pointerup',endSegDrag);
+document.addEventListener('pointercancel',endSegDrag);
+
+function moveSeg(id,delta){
+  var ix=state.sl.seg.indexOf(id);
+  var to=ix+delta;
+  if(ix<0||to<0||to>=state.sl.seg.length)return;
+  state.sl.seg.splice(ix,1);
+  state.sl.seg.splice(to,0,id);
+  paintSegs();edited();
+}
+
 function paintSegs(){
   var host=$('#c_segs');host.innerHTML='';
   var enabled=state.sl.seg;
@@ -630,8 +815,27 @@ function paintSegs(){
     var meta=null;SL_SEG_META.forEach(function(sm){if(sm.id===id)meta=sm;});
     if(!meta)return;
     var on=enabled.indexOf(id)>=0;
-    var row=document.createElement('div');row.className='segrow'+(on?' on':'');
+    var row=document.createElement('div');
+    row.className='segrow'+(on?' on':'');
+    row.setAttribute('data-id',id);
+    row.setAttribute('data-on',on?'1':'0');
+
+    if(on){
+      var h=document.createElement('span');
+      h.className='seghandle';h.setAttribute('data-drag','');
+      h.setAttribute('role','button');h.setAttribute('tabindex','-1');
+      h.setAttribute('aria-label','Drag to reorder '+meta.name);
+      h.textContent='\u283F';
+      h.addEventListener('pointerdown',function(ev){startSegDrag(ev,row,host);});
+      row.appendChild(h);
+    }else{
+      // Keeps the checkboxes of disabled rows aligned with the enabled ones.
+      var sp=document.createElement('span');sp.className='seghandle ghosthandle';
+      sp.setAttribute('aria-hidden','true');row.appendChild(sp);
+    }
+
     var cb=document.createElement('input');cb.type='checkbox';cb.checked=on;
+    cb.setAttribute('aria-label',meta.name);
     cb.addEventListener('change',function(){
       var ix=state.sl.seg.indexOf(id);
       if(this.checked&&ix<0)state.sl.seg.push(id);
@@ -643,10 +847,14 @@ function paintSegs(){
     // Each segment explains itself; "Lines +/-" and "Output style" are not self-evident.
     var ib=document.createElement('span');ib.innerHTML=ihtml('seg_'+id);row.appendChild(ib.firstChild);
     if(on){
-      var up=document.createElement('button');up.textContent='▲';
-      var dn=document.createElement('button');dn.textContent='▼';
-      up.addEventListener('click',function(){var ix=state.sl.seg.indexOf(id);if(ix>0){state.sl.seg.splice(ix,1);state.sl.seg.splice(ix-1,0,id);paintSegs();edited();}});
-      dn.addEventListener('click',function(){var ix=state.sl.seg.indexOf(id);if(ix>=0&&ix<state.sl.seg.length-1){state.sl.seg.splice(ix,1);state.sl.seg.splice(ix+1,0,id);paintSegs();edited();}});
+      // Kept alongside the drag handle: this is the keyboard path, and dragging is
+      // not reachable from a keyboard.
+      var up=document.createElement('button');up.type='button';up.textContent='\u25B2';
+      up.setAttribute('aria-label','Move '+meta.name+' earlier');
+      var dn=document.createElement('button');dn.type='button';dn.textContent='\u25BC';
+      dn.setAttribute('aria-label','Move '+meta.name+' later');
+      up.addEventListener('click',function(){moveSeg(id,-1);});
+      dn.addEventListener('click',function(){moveSeg(id,1);});
       row.appendChild(up);row.appendChild(dn);
     }
     host.appendChild(row);
@@ -667,6 +875,26 @@ function paintSegs(){
 buildTerms();
 buildControls();
 refreshAfter();
+// BEFORE/AFTER switch (phones only; on desktop both panes are visible and the
+// switch is display:none, so this listener simply never fires).
+//
+// The hidden pane is only hidden with CSS — both terminals stay live and keep
+// receiving model updates, so switching is instant and never shows a stale pane.
+(function(){
+  var sw=$('[data-pane-toggle]'); if(!sw)return;
+  var terms=$('.terms');
+  sw.addEventListener('click',function(e){
+    var b=e.target&&e.target.closest?e.target.closest('.pswbtn'):null;
+    if(!b)return;
+    var want=b.getAttribute('data-pane');
+    terms.setAttribute('data-pane',want);
+    Array.prototype.forEach.call(sw.querySelectorAll('.pswbtn'),function(x){
+      var on=x.getAttribute('data-pane')===want;
+      x.classList.toggle('on',on);
+      x.setAttribute('aria-selected',on?'true':'false');
+    });
+  });
+})();
 Array.prototype.forEach.call(document.querySelectorAll('[data-msg]'),function(b){
   b.addEventListener('click',function(){sendBoth(this.getAttribute('data-msg'),+this.getAttribute('data-ri'));});
 });
@@ -689,6 +917,7 @@ $('#c_reset').addEventListener('click',function(){
   history.replaceState(null,'','/customize');
   toast('Reset to defaults');
 });
+installMobileNav();
 `;
 
 function renderCustomize(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
@@ -703,9 +932,13 @@ function renderCustomize(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
 <header style="padding-bottom:2px"><h1 style="font-size:32px">🎛 The Studio</h1>
 <p class="sub" style="margin-top:8px">Your terminal, <b>before</b> and <b>after</b> — both are real, scrollable Claude Code sessions. <b>Type a message into either one</b> (or fire a sample) and watch both respond in their own style. Tweak everything below; the AFTER side updates live.</p></header>
 <div class="swrap">
-  <div class="terms">
-    <div class="tcol"><div class="tbadge"><span class="pill">before</span><b>Your current setup</b><span>— pick what you run today</span></div><div id="termB"></div></div>
-    <div class="tcol"><div class="tbadge"><span class="pill aft">after</span><b>Your custom setup</b><span>— live preview</span></div><div id="termA"></div></div>
+  <div class="paneswitch" data-pane-toggle role="tablist" aria-label="Which terminal to show">
+    <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
+    <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
+  </div>
+  <div class="terms" data-pane="after">
+    <div class="tcol tcol-before"><div class="tbadge"><span class="pill">before</span><b>Your current setup</b><span>— pick what you run today</span></div><div id="termB"></div></div>
+    <div class="tcol tcol-after"><div class="tbadge"><span class="pill aft">after</span><b>Your custom setup</b><span>— live preview</span></div><div id="termA"></div></div>
   </div>
   <div class="toolrow" id="chipbar">
     <span class="lbl">Try it:</span>

@@ -75,6 +75,72 @@ const CSS = `
   footer a{color:var(--dim);text-decoration:underline;}
   #toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(80px);background:#161c26;border:1px solid var(--accent);color:var(--text);padding:12px 20px;border-radius:10px;font-size:13.5px;opacity:0;transition:all .3s;z-index:100;max-width:92vw;text-align:center;}
   #toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+
+  /* ── Phones ─────────────────────────────────────────────────────────────────
+     The homepage had no media queries at all, so a 44px display title wrapped
+     onto two lines, the intro ran to nine, and reaching the first setup card
+     took most of a screen. Nothing here changes the desktop layout. */
+  @media(max-width:700px){
+    .top{padding:14px 14px 0;gap:9px;flex-wrap:nowrap;}
+    .brand{font-size:14px;white-space:nowrap;}
+    .iconbtn{padding:9px 11px;font-size:12.5px;min-height:42px;white-space:nowrap;}
+    /* Three header links do not fit across 390px and wrapped to a second row.
+       The studio already has a full-width call to action below and an entry in
+       the navigator, so the duplicate header link is the one to drop. */
+    .top a.iconbtn.studio{display:none;}
+    header{padding:16px 14px 4px;}
+    h1{font-size:30px;letter-spacing:-.5px;}
+    .sub{font-size:12px;line-height:1.55;margin-top:9px;}
+    /* The favourite star is absolutely positioned in the corner; without this the
+       author name slides underneath it. */
+    .tauthor{padding-right:20px;}
+    .grid{grid-template-columns:1fr!important;gap:12px;}
+    .card{padding:12px;}
+    footer{padding:8px 16px 40px;font-size:12px;}
+    /* Wide, unbreakable install commands must scroll in their own box, never the page. */
+    .cmdbox,.cmd{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  }
+
+  /* ── Mobile navigator ───────────────────────────────────────────────────────
+     A phone cannot show this site's structure the way a wide screen can: the
+     Studio's five panels are thousands of pixels apart and the gallery is a
+     separate page. One button, one sheet, everything reachable. Hidden above
+     700px, where the normal header and layout already do this job. */
+  .navfab{display:none;}
+  .navsheet{display:none;}
+  .navback{display:none;}
+  @media(max-width:700px),(max-height:520px){
+    .navfab{display:flex;position:fixed;right:14px;z-index:120;
+      bottom:calc(var(--navbottom,18px) + env(safe-area-inset-bottom,0px));
+      width:52px;height:52px;border-radius:50%;align-items:center;justify-content:center;
+      border:1px solid rgba(255,255,255,.14);background:linear-gradient(135deg,#7aa2f7,#bb9af7);
+      color:#0b0e14;font-size:21px;line-height:1;cursor:pointer;
+      box-shadow:0 10px 26px rgba(0,0,0,.55);padding:0;}
+    .navfab:active{transform:scale(.95);}
+    .navback{display:block;position:fixed;inset:0;z-index:125;background:rgba(0,0,0,.55);
+      opacity:0;pointer-events:none;transition:opacity .2s ease;}
+    .navback.open{opacity:1;pointer-events:auto;}
+    .navsheet{display:block;position:fixed;left:0;right:0;bottom:0;z-index:130;
+      background:#0b0e14;border-top:1px solid var(--border);border-radius:16px 16px 0 0;
+      padding:6px 10px calc(14px + env(safe-area-inset-bottom,0px));
+      max-height:76vh;max-height:76dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+      transform:translateY(102%);transition:transform .24s ease;
+      box-shadow:0 -14px 34px rgba(0,0,0,.6);}
+    .navsheet.open{transform:none;}
+    .navsheet .grip{width:38px;height:4px;border-radius:3px;background:#2a3446;margin:8px auto 4px;}
+    .navsheet .navhead{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;
+      color:var(--faint);padding:12px 12px 4px;}
+    .navsheet a,.navsheet button.navitem{display:flex;align-items:center;gap:11px;width:100%;
+      min-height:50px;padding:0 12px;margin:1px 0;border-radius:11px;border:1px solid transparent;
+      background:none;color:var(--text);font-family:inherit;font-size:14.5px;text-align:left;
+      text-decoration:none;cursor:pointer;}
+    .navsheet a[aria-current="page"]{border-color:var(--accent);color:var(--accent);
+      background:rgba(122,162,247,.1);}
+    .navsheet a:active,.navsheet button.navitem:active{background:#141a24;border-color:var(--border);}
+    .navsheet .ico{flex:none;width:22px;text-align:center;font-size:15px;}
+    .navsheet .sub2{color:var(--faint);font-size:11.5px;}
+    .navsheet .closerow{padding:6px 0 2px;}
+  }
 `;
 
 const GH_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>';
@@ -156,6 +222,123 @@ function customToModel(pl){
   var full=expandPalette(sanePal(pl.p));
   var arr=function(v,fb){return (Object.prototype.toString.call(v)==='[object Array]'&&v.length)?v.map(function(x){return String(x).slice(0,32);}):fb;};
   return {id:'custom:'+String(pl.id||'').slice(0,24),name:String(pl.n||'Custom').slice(0,60),author:String(pl.author||'you').slice(0,40),tagline:String(pl.tagline||'Your custom setup.').slice(0,80),statuslineColor:String(pl.s||'blue').slice(0,12),verbs:arr(pl.vv,['Working']).slice(0,12),verbFormat:String(pl.vf||'{}\\u2026 ').slice(0,24),phases:arr(pl.ph,['\\u00b7','\\u2736','\\u2733','\\u2736','\\u273b','\\u273d']).slice(0,24),reverseMirror:pl.rm!==false,interval:110,umd:{borderStyle:String(pl.ub||'none'),borderColor:okColor(pl.uc)||'rgb(122,162,247)'},colors:mapPreview(full),custom:true,payload:pl};
+}
+
+// ── Mobile navigator ────────────────────────────────────────────────────────
+// One component, injected from here so both the gallery and the Studio get the
+// same thing without either HTML template knowing about it. Sections are read
+// from the live DOM when the sheet opens, so the Studio's panels are always
+// current even after a preset rebuilds them.
+function installMobileNav(){
+  if(document.getElementById('navfab'))return;
+  var isStudio=!!document.getElementById('controls');
+
+  var fab=document.createElement('button');
+  fab.type='button';fab.id='navfab';fab.className='navfab';
+  fab.setAttribute('aria-label','Open navigation');
+  fab.setAttribute('aria-expanded','false');
+  fab.setAttribute('aria-controls','nav');
+  fab.textContent='\u2630';
+
+  var back=document.createElement('div');back.className='navback';
+  var sheet=document.createElement('nav');sheet.id='nav';sheet.className='navsheet';
+  sheet.setAttribute('aria-label','Site navigation');
+
+  function item(tag,icon,label,sub){
+    var el=document.createElement(tag);
+    if(tag==='button'){el.type='button';el.className='navitem';}
+    var i=document.createElement('span');i.className='ico';i.textContent=icon;
+    var t=document.createElement('span');t.textContent=label;
+    el.appendChild(i);el.appendChild(t);
+    if(sub){var s2=document.createElement('span');s2.className='sub2';s2.textContent=sub;el.appendChild(s2);}
+    return el;
+  }
+  function head(text){var h=document.createElement('div');h.className='navhead';h.textContent=text;return h;}
+
+  function close(){
+    sheet.classList.remove('open');back.classList.remove('open');
+    fab.setAttribute('aria-expanded','false');
+  }
+  function build(){
+    sheet.innerHTML='';
+    var grip=document.createElement('div');grip.className='grip';sheet.appendChild(grip);
+
+    sheet.appendChild(head('Pages'));
+    var here=location.pathname.replace(/\\/$/,'')||'/';
+    var gallery=item('a','\u25A6','Gallery','pick a ready-made setup');
+    gallery.href='/';if(here==='/')gallery.setAttribute('aria-current','page');
+    sheet.appendChild(gallery);
+    var studio=item('a','\u2699','The Studio','build your own, before/after');
+    studio.href='/customize';if(here==='/customize')studio.setAttribute('aria-current','page');
+    sheet.appendChild(studio);
+
+    if(isStudio){
+      // Panels are discovered rather than hardcoded: seeding a preset rebuilds
+      // them, and a hardcoded list would drift the moment a panel is renamed.
+      var panels=document.querySelectorAll('#controls .panel');
+      if(panels.length){
+        sheet.appendChild(head('Jump to'));
+        var top=item('button','\u2191','Top \u2014 before / after terminals');
+        top.addEventListener('click',function(){
+          close();window.scrollTo({top:0,behavior:'smooth'});
+        });
+        sheet.appendChild(top);
+        Array.prototype.forEach.call(panels,function(pan){
+          var h3=pan.querySelector('h3');
+          if(!h3)return;
+          var label=h3.textContent.replace(/^[^A-Za-z]+/,'').trim()||'Section';
+          var b=item('button','\u2022',label);
+          b.addEventListener('click',function(){
+            close();
+            // The sheet animates out; scrolling after it starts avoids a jump.
+            setTimeout(function(){
+              var y=pan.getBoundingClientRect().top+window.pageYOffset-8;
+              window.scrollTo({top:y,behavior:'smooth'});
+            },60);
+          });
+          sheet.appendChild(b);
+        });
+      }
+    }
+
+    sheet.appendChild(head('Elsewhere'));
+    var gh=item('a','\u2691','GitHub','source and issues');
+    gh.href='https://github.com/seanmodd/shayan-cc-config';
+    gh.target='_blank';gh.rel='noreferrer';
+    sheet.appendChild(gh);
+
+    var row=document.createElement('div');row.className='closerow';
+    var c=item('button','\u2715','Close');
+    c.addEventListener('click',close);
+    row.appendChild(c);sheet.appendChild(row);
+  }
+
+  fab.addEventListener('click',function(){
+    if(sheet.classList.contains('open')){close();return;}
+    build();
+    sheet.classList.add('open');back.classList.add('open');
+    fab.setAttribute('aria-expanded','true');
+  });
+  back.addEventListener('click',close);
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});
+
+  // Sit above the Studio's fixed install bar rather than under it.
+  function lift(){
+    var bar=document.querySelector('.barbot');
+    var h=bar?bar.getBoundingClientRect().height:0;
+    document.documentElement.style.setProperty('--navbottom',(h?h+12:18)+'px');
+  }
+  document.body.appendChild(back);
+  document.body.appendChild(sheet);
+  document.body.appendChild(fab);
+  lift();
+  window.addEventListener('resize',lift);
+  window.addEventListener('orientationchange',lift);
+  // The bar reflows as the install command changes length.
+  if(window.ResizeObserver){
+    var bar=document.querySelector('.barbot');
+    if(bar)new ResizeObserver(lift).observe(bar);
+  }
 }
 `;
 
@@ -244,6 +427,7 @@ function paintSel(){
 })();
 $('#copybtn').addEventListener('click',function(){copyText($('#cmdtext').textContent);this.textContent='Copied \\u2713';var b=this;setTimeout(function(){b.textContent='Copy';},1600);});
 render();
+installMobileNav();
 `;
 
 function renderPage(DATA) {
@@ -252,7 +436,7 @@ function renderPage(DATA) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>shayan-cc-config — Claude Code setup picker</title>${FAVICON}<style>${CSS}</style></head><body>
 <div class="top"><span class="brand">shayan-cc-config</span><span class="spacer"></span>
-<a class="iconbtn" href="/customize">🎛 Open the studio</a>
+<a class="iconbtn studio" href="/customize">🎛 Open the studio</a>
 <a class="iconbtn" href="${GITHUB_URL}" target="_blank" rel="noreferrer">${GH_SVG}GitHub</a></div>
 <header><h1>shayan-cc-config</h1>
 <p class="sub">Pick a Claude Code look for your cmux terminals. Click a card — its one-line install command copies itself; run it and <span class="mono">tweakcc</span> applies the theme, thinking verbs, spinner and status-line accent together. Or open <b>the studio</b>: interactive before/after terminals, your-message styling, and a build-your-own status line.</p>
