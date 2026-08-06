@@ -1,5 +1,6 @@
 // The customizer studio: interactive BEFORE / AFTER terminals + deep controls.
 const { EXPAND_SRC } = require('./_theme.js');
+const { topBar, navPayload } = require('./_nav.js');
 const { TERM_SRC, TERM_CSS, previewColors, paletteSeedHex } = require('./_term.js');
 
 // Client entry for each preset: exact preview colors + full config for the
@@ -155,9 +156,6 @@ const STUDIO_CSS = `
      The ordering matters: this block is the last word on layout, so anything above
      it that assumes width gets corrected here. */
   @media(max-width:700px),(max-height:520px){
-    /* Four items do not fit a 390px top bar, and the mobile navigator already lists
-       cmux with a description. Same reason the homepage hides its Studio link here. */
-    .top a.iconbtn.cmuxlink{display:none;}
     .paneswitch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 10px;}
     /* Stacked, both full width: a 390px row cannot hold a two-button switch and a
        "Preview pinned" chip side by side. The switch's own bottom margin would
@@ -476,8 +474,11 @@ function drawOutputs(){
   $('#lnkCfg').href='/config.json?c='+c;
   var slLive=state.sl.on&&state.sl.seg.length>0;
   $('#lnkSl').href='/statusline.js?c='+c;
-  // Hand the current setup to /cmux so the terminal page opens already layered on it.
-  var toCmux=$('#tocmux'); if(toCmux)toCmux.href='/cmux?c='+c;
+  // Hand the current setup to the other builder pages, so whichever one you open next
+  // starts layered on it. The menu reads this when it opens; it is set here rather than
+  // read from the address bar because the URL write below is debounced by 400ms and a
+  // fresh page has not written anything yet.
+  window.__sccPayloadC=c;
   $('#lnkSl').style.display=slLive?'inline':'none';
   var warn=$('#slwarn');
   if(warn)warn.style.display=(state.sl.on&&!state.sl.seg.length)?'block':'none';
@@ -994,7 +995,7 @@ $('#c_reset').addEventListener('click',function(){
 // states it again for the case where localStorage overrides it.
 installPreviewDock({dock:'.terms',grip:'#dockgrip',pin:'#pinbtn',
   term:'.tcol .xterm',key:'studio',pinDefault:true});
-installMobileNav();
+installNav();
 `;
 
 function renderCustomize(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
@@ -1003,10 +1004,7 @@ function renderCustomize(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   const { STARTERS } = require('./_theme.js');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Customize · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}</style></head><body class="pinned">
-<div class="top"><a class="brand" href="/" style="text-decoration:none">← shayan-cc-config</a><span class="spacer"></span>
-<a class="iconbtn" href="/">Home</a>
-<a class="iconbtn cmuxlink" id="tocmux" href="/cmux">🪟 cmux</a>
-<a class="iconbtn" href="${ghUrl}" target="_blank" rel="noreferrer">${ghSvg}GitHub</a></div>
+${topBar('studio', ghSvg)}
 <header style="padding-bottom:2px"><h1 style="font-size:32px">🎛 The Studio</h1>
 <p class="sub" style="margin-top:8px">Your terminal, <b>before</b> and <b>after</b> — both are real, scrollable Claude Code sessions. <b>Type a message into either one</b> (or fire a sample) and watch both respond in their own style. Tweak everything below; the AFTER side updates live.</p></header>
 <div class="swrap">
@@ -1049,6 +1047,7 @@ function renderCustomize(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
 <style>@media(max-width:980px){body{padding-bottom:110px;}}</style>
 <div id="toast"></div>
 <script>var PRESETS=${payload};
+var NAV=${navPayload('studio')};
 var STARTERS=${JSON.stringify(STARTERS)};
 ${clientLib}
 ${TERM_SRC}

@@ -3,7 +3,9 @@
 const { EXPAND_SRC } = require('./_theme.js');
 const { previewColors } = require('./_term.js');
 
-const GITHUB_URL = 'https://github.com/seanmodd/shayan-cc-config';
+// _nav.js owns the page list and the repo URL; re-exported here so the existing
+// importers (index.js and the two page modules) keep one place to get chrome from.
+const { GITHUB_URL, topBar, navPayload } = require('./_nav.js');
 
 const FAVICON = `<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230a0c10'/><rect x='4' y='4' width='24' height='24' rx='5' fill='none' stroke='%237aa2f7' stroke-width='1.4'/><text x='7' y='22' font-family='monospace' font-size='15' fill='%23bb9af7'>&gt;_</text></svg>">`;
 
@@ -84,10 +86,6 @@ const CSS = `
     .top{padding:14px 14px 0;gap:9px;flex-wrap:nowrap;}
     .brand{font-size:14px;white-space:nowrap;}
     .iconbtn{padding:9px 11px;font-size:12.5px;min-height:42px;white-space:nowrap;}
-    /* Three header links do not fit across 390px and wrapped to a second row.
-       The studio already has a full-width call to action below and an entry in
-       the navigator, so the duplicate header link is the one to drop. */
-    .top a.iconbtn.studio{display:none;}
     header{padding:16px 14px 4px;}
     h1{font-size:30px;letter-spacing:-.5px;}
     .sub{font-size:12px;line-height:1.55;margin-top:9px;}
@@ -108,15 +106,44 @@ const CSS = `
     .cmd{overflow-x:auto;-webkit-overflow-scrolling:touch;}
   }
 
-  /* ── Mobile navigator ───────────────────────────────────────────────────────
-     A phone cannot show this site's structure the way a wide screen can: the
-     Studio's five panels are thousands of pixels apart and the gallery is a
-     separate page. One button, one sheet, everything reachable. Hidden above
-     700px, where the normal header and layout already do this job. */
+  /* ── The navigator ──────────────────────────────────────────────────────────
+     One panel with two presentations: a dropdown under the top bar on a wide
+     screen, a bottom sheet on a phone. Both are built by installNav() from the
+     same PAGES list, so they cannot disagree about what the site contains.
+
+     It is no longer phone-only. The bar used to carry a named link per page,
+     which stopped fitting once there was more than a gallery and a studio —
+     and choosing which two to keep would just move the problem. The bar now
+     holds the constant things and the menu holds the pages. */
+  .navbtn{cursor:pointer;font-family:inherit;background:#10141b;}
+  .navbtn .navbars{font-size:15px;line-height:1;}
+  .navbtn[aria-expanded="true"]{border-color:var(--accent);color:var(--accent);}
   .navfab{display:none;}
-  .navsheet{display:none;}
-  .navback{display:none;}
+  .navback{display:none;position:fixed;inset:0;z-index:125;}
+  .navback.open{display:block;}
+  .navsheet{display:none;position:fixed;z-index:130;top:62px;right:24px;width:330px;
+    max-width:calc(100vw - 32px);max-height:calc(100vh - 86px);overflow-y:auto;
+    background:#0b0e14;border:1px solid var(--border);border-radius:14px;
+    padding:4px 8px 10px;box-shadow:0 22px 50px rgba(0,0,0,.6);}
+  .navsheet.open{display:block;}
+  /* The sheet's drag grip and explicit Close row are phone affordances; on a
+     dropdown, clicking away or pressing Escape is how you close it. */
+  .navsheet .grip,.navsheet .closerow{display:none;}
+  .navsheet .navhead{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;
+    color:var(--faint);padding:11px 10px 4px;}
+  .navsheet a,.navsheet button.navitem{display:flex;align-items:center;gap:10px;width:100%;
+    min-height:42px;padding:6px 10px;margin:1px 0;border-radius:10px;
+    border:1px solid transparent;background:none;color:var(--text);font-family:inherit;
+    font-size:13.5px;text-align:left;text-decoration:none;cursor:pointer;}
+  .navsheet a:hover,.navsheet button.navitem:hover{background:#141a24;}
+  .navsheet a[aria-current="page"]{border-color:var(--accent);color:var(--accent);
+    background:rgba(122,162,247,.1);}
+  .navsheet .ico{flex:none;width:20px;text-align:center;font-size:14px;}
+  .navsheet .navtxt{display:flex;flex-direction:column;gap:1px;min-width:0;}
+  .navsheet .sub2{color:var(--faint);font-size:11px;line-height:1.35;}
   @media(max-width:700px),(max-height:520px){
+    /* The bar is tight enough on a phone that the word goes and the bars stay. */
+    .navbtn .navword{display:none;}
     .navfab{display:flex;position:fixed;right:14px;z-index:120;
       bottom:calc(var(--navbottom,18px) + env(safe-area-inset-bottom,0px));
       width:52px;height:52px;border-radius:50%;align-items:center;justify-content:center;
@@ -127,20 +154,27 @@ const CSS = `
     .navback{display:block;position:fixed;inset:0;z-index:125;background:rgba(0,0,0,.55);
       opacity:0;pointer-events:none;transition:opacity .2s ease;}
     .navback.open{opacity:1;pointer-events:auto;}
-    .navsheet{display:block;position:fixed;left:0;right:0;bottom:0;z-index:130;
+    /* Back to a bottom sheet: every dropdown-specific value above has to be undone
+       explicitly, or top/width/border-radius leak in and the sheet floats. */
+    .navsheet{display:block;position:fixed;left:0;right:0;bottom:0;top:auto;z-index:130;
+      width:auto;max-width:none;border:none;
       background:#0b0e14;border-top:1px solid var(--border);border-radius:16px 16px 0 0;
       padding:6px 10px calc(14px + env(safe-area-inset-bottom,0px));
       max-height:76vh;max-height:76dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;
       transform:translateY(102%);transition:transform .24s ease;
       box-shadow:0 -14px 34px rgba(0,0,0,.6);}
     .navsheet.open{transform:none;}
-    .navsheet .grip{width:38px;height:4px;border-radius:3px;background:#2a3446;margin:8px auto 4px;}
+    .navsheet .grip{display:block;width:38px;height:4px;border-radius:3px;background:#2a3446;margin:8px auto 4px;}
+    .navsheet .closerow{display:block;}
     .navsheet .navhead{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;
       color:var(--faint);padding:12px 12px 4px;}
+    /* Vertical padding, not a bare min-height: an item now stacks a label over a
+       description, and 0 padding clipped the second line. */
     .navsheet a,.navsheet button.navitem{display:flex;align-items:center;gap:11px;width:100%;
-      min-height:50px;padding:0 12px;margin:1px 0;border-radius:11px;border:1px solid transparent;
+      min-height:50px;padding:7px 12px;margin:1px 0;border-radius:11px;border:1px solid transparent;
       background:none;color:var(--text);font-family:inherit;font-size:14.5px;text-align:left;
       text-decoration:none;cursor:pointer;}
+    .navsheet .sub2{font-size:11.5px;}
     .navsheet a[aria-current="page"]{border-color:var(--accent);color:var(--accent);
       background:rgba(122,162,247,.1);}
     .navsheet a:active,.navsheet button.navitem:active{background:#141a24;border-color:var(--border);}
@@ -231,14 +265,19 @@ function customToModel(pl){
   return {id:'custom:'+String(pl.id||'').slice(0,24),name:String(pl.n||'Custom').slice(0,60),author:String(pl.author||'you').slice(0,40),tagline:String(pl.tagline||'Your custom setup.').slice(0,80),statuslineColor:String(pl.s||'blue').slice(0,12),verbs:arr(pl.vv,['Working']).slice(0,12),verbFormat:String(pl.vf||'{}\\u2026 ').slice(0,24),phases:arr(pl.ph,['\\u00b7','\\u2736','\\u2733','\\u2736','\\u273b','\\u273d']).slice(0,24),reverseMirror:pl.rm!==false,interval:110,umd:{borderStyle:String(pl.ub||'none'),borderColor:okColor(pl.uc)||'rgb(122,162,247)'},colors:mapPreview(full),custom:true,payload:pl};
 }
 
-// ── Mobile navigator ────────────────────────────────────────────────────────
-// One component, injected from here so both the gallery and the Studio get the
-// same thing without either HTML template knowing about it. Sections are read
-// from the live DOM when the sheet opens, so the Studio's panels are always
-// current even after a preset rebuilds them.
-function installMobileNav(){
+// ── Navigator ───────────────────────────────────────────────────────────────
+// One component, injected from here so every page gets the same thing without any
+// HTML template knowing about it. Two triggers open the same panel: the Menu button
+// in the top bar, and the floating button on a phone. Sections are read from the live
+// DOM when it opens, so the Studio's panels are always current even after a preset
+// rebuilds them.
+//
+// The page list comes from NAV, which the server stamps in from _nav.js. It used to be
+// hardcoded here AND in each page's top bar, which is two places to forget.
+function installNav(){
   if(document.getElementById('navfab'))return;
   var panelHost=document.getElementById('controls')||document.getElementById('cmuxControls');
+  var NAVDATA=(typeof NAV!=='undefined'&&NAV)?NAV:{pages:[],current:'',gh:''};
 
   var fab=document.createElement('button');
   fab.type='button';fab.id='navfab';fab.className='navfab';
@@ -255,9 +294,13 @@ function installMobileNav(){
     var el=document.createElement(tag);
     if(tag==='button'){el.type='button';el.className='navitem';}
     var i=document.createElement('span');i.className='ico';i.textContent=icon;
-    var t=document.createElement('span');t.textContent=label;
-    el.appendChild(i);el.appendChild(t);
-    if(sub){var s2=document.createElement('span');s2.className='sub2';s2.textContent=sub;el.appendChild(s2);}
+    // Label over description in a column, so a 330px dropdown does not have to fit
+    // both on one line.
+    var col=document.createElement('span');col.className='navtxt';
+    var t=document.createElement('span');t.className='navlbl';t.textContent=label;
+    col.appendChild(t);
+    if(sub){var s2=document.createElement('span');s2.className='sub2';s2.textContent=sub;col.appendChild(s2);}
+    el.appendChild(i);el.appendChild(col);
     return el;
   }
   function head(text){var h=document.createElement('div');h.className='navhead';h.textContent=text;return h;}
@@ -265,6 +308,8 @@ function installMobileNav(){
   function close(){
     sheet.classList.remove('open');back.classList.remove('open');
     fab.setAttribute('aria-expanded','false');
+    var tb=document.getElementById('navbtn');
+    if(tb)tb.setAttribute('aria-expanded','false');
   }
   function build(){
     sheet.innerHTML='';
@@ -272,19 +317,17 @@ function installMobileNav(){
 
     sheet.appendChild(head('Pages'));
     var here=location.pathname.replace(/\\/$/,'')||'/';
-    var gallery=item('a','\u25A6','Gallery','pick a ready-made setup');
-    gallery.href='/';if(here==='/')gallery.setAttribute('aria-current','page');
-    sheet.appendChild(gallery);
-    var studio=item('a','\u2699','The Studio','build your own, before/after');
-    studio.href='/customize';if(here==='/customize')studio.setAttribute('aria-current','page');
-    sheet.appendChild(studio);
-    // The cmux link carries ?c= when there is a payload in the URL, so the terminal
-    // page opens already layered on whatever setup you were just looking at.
-    var cm=item('a','\u{1FA9F}','cmux','style the terminal around Claude Code');
-    var cq=new URLSearchParams(location.search).get('c');
-    cm.href='/cmux'+(cq?('?c='+encodeURIComponent(cq)):'');
-    if(here==='/cmux')cm.setAttribute('aria-current','page');
-    sheet.appendChild(cm);
+    // Every builder page carries the current setup forward, so whichever one you open
+    // next starts layered on what you were just looking at. A page that holds a live
+    // payload publishes it on __sccPayloadC; otherwise the address bar is the source.
+    // The gallery is excluded: it takes ?shared=, not ?c=.
+    var cq=window.__sccPayloadC||new URLSearchParams(location.search).get('c');
+    NAVDATA.pages.forEach(function(p){
+      var a=item('a',p.icon,p.label,p.sub);
+      a.href=p.path+((cq&&p.path!=='/')?('?c='+encodeURIComponent(cq)):'');
+      if(here===p.path.replace(/\\/$/,'')||NAVDATA.current===p.id)a.setAttribute('aria-current','page');
+      sheet.appendChild(a);
+    });
 
     if(panelHost){
       // Panels are discovered rather than hardcoded: seeding a preset rebuilds
@@ -317,7 +360,7 @@ function installMobileNav(){
 
     sheet.appendChild(head('Elsewhere'));
     var gh=item('a','\u2691','GitHub','source and issues');
-    gh.href='https://github.com/seanmodd/shayan-cc-config';
+    gh.href=NAVDATA.gh||'https://github.com/seanmodd/shayan-cc-config';
     gh.target='_blank';gh.rel='noreferrer';
     sheet.appendChild(gh);
 
@@ -327,14 +370,28 @@ function installMobileNav(){
     row.appendChild(c);sheet.appendChild(row);
   }
 
-  fab.addEventListener('click',function(){
+  var topBtn=document.getElementById('navbtn');
+  function toggle(){
     if(sheet.classList.contains('open')){close();return;}
     build();
     sheet.classList.add('open');back.classList.add('open');
     fab.setAttribute('aria-expanded','true');
-  });
+    if(topBtn)topBtn.setAttribute('aria-expanded','true');
+  }
+  fab.addEventListener('click',toggle);
+  if(topBtn)topBtn.addEventListener('click',toggle);
   back.addEventListener('click',close);
   document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});
+  // A dropdown closes when you click off it. The backdrop covers the page but sits
+  // under the top bar, so the Menu button itself is excluded here rather than
+  // toggling twice.
+  document.addEventListener('click',function(e){
+    if(!sheet.classList.contains('open'))return;
+    if(sheet.contains(e.target))return;
+    if(topBtn&&topBtn.contains(e.target))return;
+    if(fab.contains(e.target))return;
+    close();
+  },true);
 
   // Sit above the Studio's fixed install bar rather than under it.
   function lift(){
@@ -556,7 +613,7 @@ function paintSel(){
 })();
 $('#copybtn').addEventListener('click',function(){copyText($('#cmdtext').textContent);this.textContent='Copied \\u2713';var b=this;setTimeout(function(){b.textContent='Copy';},1600);});
 render();
-installMobileNav();
+installNav();
 `;
 
 function renderPage(DATA) {
@@ -564,10 +621,7 @@ function renderPage(DATA) {
   const payload = JSON.stringify(presets).replace(/</g, '\\u003c');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>shayan-cc-config — Claude Code setup picker</title>${FAVICON}<style>${CSS}</style></head><body>
-<div class="top"><span class="brand">shayan-cc-config</span><span class="spacer"></span>
-<a class="iconbtn studio" href="/customize">🎛 Open the studio</a>
-<a class="iconbtn cmuxlink" href="/cmux">🪟 cmux</a>
-<a class="iconbtn" href="${GITHUB_URL}" target="_blank" rel="noreferrer">${GH_SVG}GitHub</a></div>
+${topBar('home', GH_SVG)}
 <header><h1>shayan-cc-config</h1>
 <p class="sub">Pick a Claude Code look for your cmux terminals. Click a card — its one-line install command copies itself; run it and <span class="mono">tweakcc</span> applies the theme, thinking verbs, spinner and status-line accent together. Or open <b>the studio</b>: interactive before/after terminals, your-message styling, and a build-your-own status line.</p>
 <div><a class="cta" href="/customize">🎛 Customize everything — before / after studio →</a></div>
@@ -579,6 +633,7 @@ function renderPage(DATA) {
 <footer>Patching by <a href="https://github.com/Piebald-AI/tweakcc" target="_blank" rel="noreferrer">tweakcc</a> · community themes credited on each card · <a href="${GITHUB_URL}" target="_blank" rel="noreferrer">source on GitHub</a> · re-run the command after Claude Code updates<br>built for Sean by Claude ✦ <span class="mono">shayan-cc-config</span></footer>
 <div id="toast"></div>
 <script>var PRESETS=${payload};
+var NAV=${navPayload('home')};
 ${CLIENT_LIB}
 ${HOME_JS}
 </script></body></html>`;

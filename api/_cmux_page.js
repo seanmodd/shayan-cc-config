@@ -14,6 +14,7 @@
 // no backticks, no ${...}, and every backslash doubled.
 
 const { TERM_CSS } = require('./_term.js');
+const { topBar, navPayload } = require('./_nav.js');
 const { STARTERS } = require('./_theme.js');
 const { STUDIO_CSS } = require('./_customize.js');
 const { presetsForClient } = require('./_cmux_presets.js');
@@ -334,9 +335,7 @@ function renderCmux(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>cmux · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${CMUX_CSS}</style></head><body>
-<div class="top"><a class="brand" href="/" style="text-decoration:none">← shayan-cc-config</a><span class="spacer"></span>
-<a class="iconbtn" href="/customize">🎛 Studio</a>
-<a class="iconbtn" href="${ghUrl}" target="_blank" rel="noreferrer">${ghSvg}GitHub</a></div>
+${topBar('cmux', ghSvg)}
 <header class="chead"><h1>🪟 cmux</h1>
 <p class="sub" style="margin-top:8px">The terminal <b>around</b> Claude Code. cmux is a native macOS terminal built on Ghostty — sidebar workspaces, split panes, surface tabs. Style it here and it layers <b>on top of</b> the Claude Code theme you picked, so the whole window is one setup. One command applies both.</p></header>
 
@@ -401,6 +400,7 @@ function renderCmux(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
 <div style="height:120px"></div>
 <div id="toast"></div>
 <script>
+var NAV=${navPayload('cmux')};
 var STARTERS=${starters};
 var CMUX_DEFAULTS=${defaults};
 var CMUX_PRESETS=${JSON.stringify(presetsForClient())};
@@ -1652,7 +1652,7 @@ function commitSave(name){
   toast('Saved \u201c'+pl.n+'\u201d to Our Community');
 }
 
-installMobileNav();
+installNav();
 `;
 
 module.exports = { renderCmux, CMUX_CSS };

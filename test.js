@@ -82,11 +82,26 @@ function bashCheck(src, label) {
 
 (async () => {
   console.log('— pages —');
-  for (const p of ['/', '/customize']) {
+  // Every page, not just two: the nav is stamped into all of them from one registry,
+  // so a page missing from this loop is a page whose chrome nobody checks.
+  const { PAGES } = require(path.join(ROOT, 'api/_nav.js'));
+  for (const p of ['/', '/customize', '/cmux']) {
     const r = await call(p);
     ok(r.status === 200, 'GET ' + p + ' → 200');
     ok(!r.body.includes('${'), p + ' has no unresolved ${} leftovers');
     extractScripts(r.body).forEach((s, i) => nodeCheck(s, p + '_script' + i));
+    // One menu button per page, and the registry travels with it. Without the second
+    // check the menu would render but have nothing in it.
+    ok(r.body.split('id="navbtn"').length === 2, p + ': exactly one menu button');
+    ok(/var NAV=\{/.test(r.body), p + ': ships the page registry');
+    for (const pg of PAGES) {
+      ok(r.body.includes(JSON.stringify(pg.path)), p + ': menu knows about ' + pg.path);
+    }
+  }
+  // Every registered page must actually resolve, or the menu advertises a 404.
+  for (const pg of PAGES) {
+    const r = await call(pg.path);
+    ok(r.status === 200, 'registered page ' + pg.path + ' → 200');
   }
 
   console.log('— json/config —');
