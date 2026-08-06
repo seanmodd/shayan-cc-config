@@ -16,6 +16,8 @@ const { TERM_CSS } = require('./_term.js');
 const { STUDIO_CSS } = require('./_customize.js');
 const { topBar, navPayload } = require('./_nav.js');
 const { compareBlock, COMPARE_CSS } = require('./_compare.js');
+const { STARTERS } = require('./_theme.js');
+const { RECIPE_CSS, RECIPE_JS, recipeSaveBlock } = require('./_recipes.js');
 const {
   WARP_DEFAULTS, DETAILS, PANE_COLORS, CURSOR_TYPES, INPUT_MODES,
   SPACINGS, SPLITS, AGENT_COMMANDS, INPUT_BOX_TYPES,
@@ -23,7 +25,7 @@ const {
 
 const WARP_CSS = `
   .wwrap{max-width:1440px;margin:0 auto;padding:0 24px 40px;}
-  .wpair{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;}
+  .wpair{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;}
   .wcol{min-width:0;}
 
   /* The Warp window mock. Colours are custom properties so the preview updates by
@@ -76,12 +78,22 @@ const WARP_CSS = `
   .wbadge .pill{border:1px solid var(--border);border-radius:20px;padding:2px 9px;
     font-size:10.5px;letter-spacing:.04em;}
   .wbadge .pill.aft{border-color:var(--accent);color:var(--accent);}
+  .ccpick{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);
+    white-space:nowrap;}
+  .ccpick select{background:#0b0e14;border:1px solid var(--border);border-radius:8px;
+    color:var(--text);font-family:inherit;font-size:12.5px;padding:7px 9px;min-height:38px;}
+  @media(max-width:700px),(max-height:520px){
+    .ccpick{flex:1 1 100%;}
+    .ccpick select{flex:1;min-height:44px;font-size:16px;}
+  }
 
   body.pinned .wpair{position:sticky;top:var(--switch-h,46px);z-index:45;background:var(--bg);
     padding-bottom:12px;box-shadow:0 16px 20px -14px rgba(0,0,0,.75);}
   body.pinned .wblocks{height:var(--dock-h,min(26dvh,210px));flex:none;overflow:hidden;}
   body.docked .wblocks{height:var(--dock-h);flex:none;overflow:hidden;}
 
+  @media(max-width:1100px){.wpair{grid-template-columns:1fr 1fr;}
+    .wpair .wcol-claude{grid-column:1/-1;}}
   .wpanels{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;
     align-items:start;}
   @media(min-width:760px){#warpControls{grid-template-columns:repeat(auto-fit,minmax(370px,1fr));}}
@@ -107,8 +119,9 @@ const WARP_CSS = `
   @media(max-width:700px),(max-height:520px){
     .wwrap{padding:0 12px 40px;}
     .wpair{grid-template-columns:1fr;gap:0;}
-    .wpair[data-pane="after"] .wcol-before{display:none;}
-    .wpair[data-pane="before"] .wcol-after{display:none;}
+    .wpair[data-pane="before"] .wcol-after,.wpair[data-pane="before"] .wcol-claude{display:none;}
+    .wpair[data-pane="after"] .wcol-before,.wpair[data-pane="after"] .wcol-claude{display:none;}
+    .wpair[data-pane="claude"] .wcol-before,.wpair[data-pane="claude"] .wcol-after{display:none;}
     .whead h1{font-size:25px;margin-bottom:2px;}
     .wpanels{grid-template-columns:1fr;}
     .wbadge span:last-child{display:none;}
@@ -126,7 +139,7 @@ function renderWarp(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   });
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Warp · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${WARP_CSS}</style></head><body class="pinned">
+<title>Warp · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${RECIPE_CSS}${WARP_CSS}</style></head><body class="pinned">
 ${topBar('warp', ghSvg)}
 <header class="whead"><h1>\u{1F300} Warp</h1>
 <p class="sub" style="margin-top:8px">The terminal that puts every command in its own <b>block</b> — with its own exit status, its own output,
@@ -137,20 +150,26 @@ and a git pane in one go. Both are new files, so nothing you already have gets o
   <div class="switchrow">
     <div class="paneswitch" data-pane-toggle role="tablist" aria-label="Which window to show">
       <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
-      <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
+      <button type="button" class="pswbtn" data-pane="after" role="tab" aria-selected="false">After</button>
+      <button type="button" class="pswbtn on" data-pane="claude" role="tab" aria-selected="true">+ Claude</button>
     </div>
     <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
       <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
+    <label class="ccpick"><span>Claude Code theme</span><select id="ccTheme"></select></label>
   </div>
-  <div class="wpair" data-pane="after" id="pair">
+  <div class="wpair" data-pane="claude" id="pair">
     <div class="wcol wcol-before">
       <div class="wbadge"><span class="pill">before</span><b>Stock Warp</b><span>— the built-in dark theme</span></div>
       <div id="winBefore"></div>
     </div>
     <div class="wcol wcol-after">
-      <div class="wbadge"><span class="pill aft">after</span><b>Your Warp</b><span>— live preview</span></div>
+      <div class="wbadge"><span class="pill aft">after</span><b>Your Warp</b><span>— an ordinary shell</span></div>
       <div id="winAfter"></div>
+    </div>
+    <div class="wcol wcol-claude">
+      <div class="wbadge"><span class="pill aft">recipe</span><b>+ Claude Code</b><span id="ccname">— tokyo-night</span></div>
+      <div id="winClaude"></div>
     </div>
     <div class="dockgrip" id="dockgrip" role="separator" aria-orientation="horizontal" tabindex="0"
       aria-label="Resize the preview. Arrow keys adjust the height, Home resets it."
@@ -197,6 +216,8 @@ and a git pane in one go. Both are new files, so nothing you already have gets o
     <div class="wfiles wmanual" id="settingsOut"></div>
   </div>
 
+${recipeSaveBlock()}
+
 ${compareBlock('warp')}
 </div>
 
@@ -213,9 +234,11 @@ ${compareBlock('warp')}
 <div id="toast"></div>
 <script>
 var NAV=${navPayload('warp')};
+var STARTERS=${JSON.stringify(STARTERS)};
 var WP_DEFAULTS=${defaults};
 var WP_OPTS=${opts};
 ${clientLib}
+${RECIPE_JS}
 ${WARP_JS}
 </script></body></html>`;
 }
@@ -305,7 +328,7 @@ function mixHex(hex,to,amt){
   return out;
 }
 
-function winHTML(s,stock){
+function winHTML(s,stock,mode){
   var p=ccPayload.p||{};
   var c=stock?{bg:'#1e2126',fg:'#d8dee9',accent:'#5aa2f7'}:liveColors(s);
   var dim=mixHex(c.fg,c.bg,0.45);
@@ -356,9 +379,16 @@ function winHTML(s,stock){
     +input+'</div>';
 }
 
+function ccColors(){
+  var p=ccPayload.p||{};
+  return {bg:palHex(p.bg,'#1a1b26'),text:palHex(p.text,'#c0caf5'),
+    dim:palHex(p.comment,'#565f89'),accent:palHex(p.accent,'#7aa2f7'),
+    green:palHex(p.green,'#9ece6a')};
+}
 function drawWindows(){
-  $('#winBefore').innerHTML=winHTML(defaultWarp(),true);
-  $('#winAfter').innerHTML=winHTML(state,false);
+  $('#winBefore').innerHTML=winHTML(defaultWarp(),true,'plain');
+  $('#winAfter').innerHTML=winHTML(state,false,'plain');
+  $('#winClaude').innerHTML=winHTML(state,false,'claude');
 }
 
 // ── controls ──────────────────────────────────────────────────────────────────
@@ -547,6 +577,11 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();})
     });
   });
 })();
+
+installCcPicker(function(){return ccPayload.p;},
+                function(p){ccPayload.p=p;},
+                refresh);
+installRecipeSave(payload,'Warp + Claude Code');
 
 installPreviewDock({dock:'#pair',grip:'#dockgrip',pin:'#pinbtn',
   term:'.wblocks',key:'warp',pinDefault:true});

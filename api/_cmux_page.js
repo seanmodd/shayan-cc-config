@@ -16,6 +16,7 @@
 const { TERM_CSS } = require('./_term.js');
 const { topBar, navPayload } = require('./_nav.js');
 const { compareBlock, COMPARE_CSS } = require('./_compare.js');
+const { RECIPE_CSS, RECIPE_JS, recipeSaveBlock } = require('./_recipes.js');
 const { STARTERS } = require('./_theme.js');
 const { STUDIO_CSS } = require('./_customize.js');
 const { presetsForClient } = require('./_cmux_presets.js');
@@ -26,7 +27,7 @@ const {
 
 const CMUX_CSS = `
   .cwrap{max-width:1440px;margin:0 auto;padding:0 24px 40px;}
-  .cmuxpair{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;}
+  .cmuxpair{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;}
   .cmuxcol{min-width:0;}
 
   /* The cmux window mock. Every colour here is a CSS custom property so the live
@@ -92,6 +93,14 @@ const CMUX_CSS = `
   .cbadge .pill{border:1px solid var(--border);border-radius:20px;padding:2px 9px;
     font-size:10.5px;letter-spacing:.04em;}
   .cbadge .pill.aft{border-color:var(--accent);color:var(--accent);}
+  .ccpick{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);
+    white-space:nowrap;}
+  .ccpick select{background:#0b0e14;border:1px solid var(--border);border-radius:8px;
+    color:var(--text);font-family:inherit;font-size:12.5px;padding:7px 9px;min-height:38px;}
+  @media(max-width:700px),(max-height:520px){
+    .ccpick{flex:1 1 100%;}
+    .ccpick select{flex:1;min-height:44px;font-size:16px;}
+  }
   .presetpanel{grid-column:1/-1;margin-bottom:14px;}
   .phint{margin:0 0 11px;font-size:12.5px;line-height:1.55;color:var(--dim);max-width:78ch;}
   #presetGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:9px;}
@@ -256,6 +265,8 @@ const CMUX_CSS = `
   @media(min-width:760px){
     #cmuxControls{grid-template-columns:repeat(auto-fit,minmax(380px,1fr));}
   }
+  @media(max-width:1100px){.cmuxpair{grid-template-columns:1fr 1fr;}
+    .cmuxpair .cmuxcol-claude{grid-column:1/-1;}}
   .cpanels{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;}
   .filebox{background:#0b0e14;border:1px solid var(--border);border-radius:10px;
     padding:10px 12px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;
@@ -275,8 +286,9 @@ const CMUX_CSS = `
   @media(max-width:700px),(max-height:520px){
     .cwrap{padding:0 12px 40px;}
     .cmuxpair{grid-template-columns:1fr;gap:0;}
-    .cmuxpair[data-pane="after"] .cmuxcol-before{display:none;}
-    .cmuxpair[data-pane="before"] .cmuxcol-after{display:none;}
+    .cmuxpair[data-pane="before"] .cmuxcol-after,.cmuxpair[data-pane="before"] .cmuxcol-claude{display:none;}
+    .cmuxpair[data-pane="after"] .cmuxcol-before,.cmuxpair[data-pane="after"] .cmuxcol-claude{display:none;}
+    .cmuxpair[data-pane="claude"] .cmuxcol-before,.cmuxpair[data-pane="claude"] .cmuxcol-after{display:none;}
     .chead h1{font-size:25px;margin-bottom:2px;}
     .chead .sub{font-size:12.5px;line-height:1.5;}
     .cside{width:96px;padding:6px 4px;}
@@ -335,7 +347,7 @@ function renderCmux(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   const lines = JSON.stringify(LINES);
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>cmux · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${CMUX_CSS}</style></head><body class="pinned">
+<title>cmux · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${RECIPE_CSS}${CMUX_CSS}</style></head><body class="pinned">
 ${topBar('cmux', ghSvg)}
 <header class="chead"><h1>🪟 cmux</h1>
 <p class="sub" style="margin-top:8px">The terminal <b>around</b> Claude Code. cmux is a native macOS terminal built on Ghostty — sidebar workspaces, split panes, surface tabs. Style it here and it layers <b>on top of</b> the Claude Code theme you picked, so the whole window is one setup. One command applies both.</p></header>
@@ -344,20 +356,26 @@ ${topBar('cmux', ghSvg)}
   <div class="switchrow">
     <div class="paneswitch" data-pane-toggle role="tablist" aria-label="Which window to show">
       <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
-      <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
+      <button type="button" class="pswbtn" data-pane="after" role="tab" aria-selected="false">After</button>
+      <button type="button" class="pswbtn on" data-pane="claude" role="tab" aria-selected="true">+ Claude</button>
     </div>
     <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
       <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
+    <label class="ccpick"><span>Claude Code theme</span><select id="ccTheme"></select></label>
   </div>
-  <div class="cmuxpair" data-pane="after" id="pair">
+  <div class="cmuxpair" data-pane="claude" id="pair">
     <div class="cmuxcol cmuxcol-before">
       <div class="cbadge"><span class="pill">before</span><b>Stock cmux</b><span>— every default, straight from the schema</span></div>
       <div id="winBefore"></div>
     </div>
     <div class="cmuxcol cmuxcol-after">
-      <div class="cbadge"><span class="pill aft">after</span><b>Your cmux</b><span>— live preview</span></div>
+      <div class="cbadge"><span class="pill aft">after</span><b>Your cmux</b><span>— an ordinary shell</span></div>
       <div id="winAfter"></div>
+    </div>
+    <div class="cmuxcol cmuxcol-claude">
+      <div class="cbadge"><span class="pill aft">recipe</span><b>+ Claude Code</b><span id="ccname">— tokyo-night</span></div>
+      <div id="winClaude"></div>
     </div>
     <div class="dockgrip" id="dockgrip" role="separator" aria-orientation="horizontal" tabindex="0"
       aria-label="Resize the preview. Arrow keys adjust the height, Home resets it."
@@ -390,6 +408,8 @@ ${topBar('cmux', ghSvg)}
     </div>
   </div>
 
+${recipeSaveBlock()}
+
 ${compareBlock('cmux')}
 </div>
 
@@ -410,6 +430,7 @@ var CMUX_PRESETS=${JSON.stringify(presetsForClient())};
 var CMUX_OPTS=${opts};
 var CC_LINES=${lines};
 ${clientLib}
+${RECIPE_JS}
 ${CMUX_JS}
 </script></body></html>`;
 }
@@ -464,7 +485,7 @@ function mix(hex,over,alpha){
 }
 
 // ── the window mock ────────────────────────────────────────────────────────────
-function winHTML(s,pal,label){
+function winHTML(s,pal,label,mode){
   var c=cmColors(s,pal);
   var pv=mapPreview(expandPalette(sanePal(pal)));
 
@@ -557,9 +578,16 @@ function winHTML(s,pal,label){
   if((um.st||[]).indexOf('italic')>=0)promptCss+='font-style:italic;';
   var pb=String(ccPayload.ub||'none'), pbc=ccPayload.uc?hexOf(ccPayload.uc):dim;
   var promptBox=BOX_FOR(pb);
+  var plainBody='<span style="color:'+dim+'">$ npm test</span></div><div class="l">'
+    +'<span style="color:'+pv.success+'">12 passing</span>'
+    +'<span style="color:'+dim+'"> (0.9s)</span></div><div class="l">'
+    +'<span style="color:'+dim+'">$ </span><span style="color:'+text+'">\u2588</span>';
 
+  // 'plain' shows the terminal running an ordinary shell, so the third pane can show
+  // the same terminal running the AGENT and the difference reads side by side. Only the
+  // pane CONTENT differs — the window chrome is identical, which is the point.
   var body='';
-  CC_LINES.forEach(function(pair){
+  (mode==='plain'?[]:CC_LINES).forEach(function(pair){
     var kind=pair[0], t=pair[1];
     if(kind==='nl'){body+='</div><div class="l">';return;}
     if(kind==='prompt'){
@@ -586,6 +614,8 @@ function winHTML(s,pal,label){
   function pane(active,tabs){
     var t='';
     tabs.forEach(function(nm,i){t+='<div class="ctab'+(i===0?' on':'')+'">'+esc(nm)+'</div>';});
+  if(mode==='plain')body=plainBody;
+
     return '<div class="cpane'+(active?' active':'')+'">'
       +(s.minimalMode?'':'<div class="ctabs">'+t+'</div>')
       +'<div class="cterm" data-align="'+esc(s.contentAlignment)+'" style="'+fam+'">'
@@ -859,8 +889,10 @@ function drawWindows(){
   // BEFORE is the machine as it is right now, so it keeps the colours the user already
   // has -- passing it the preset's palette would paint Dracula on both sides and hide
   // the single biggest thing a preset changes.
-  $('#winBefore').innerHTML=winHTML(defaultCmux(),ccPayload.p,'senpex-frontend — cmux');
-  $('#winAfter').innerHTML=winHTML(state,activePal(),state.titleTemplate||'senpex-frontend — cmux');
+  var title=state.titleTemplate||'senpex-frontend \u2014 cmux';
+  $('#winBefore').innerHTML=winHTML(defaultCmux(),ccPayload.p,'senpex-frontend \u2014 cmux','plain');
+  $('#winAfter').innerHTML=winHTML(state,activePal(),title,'plain');
+  $('#winClaude').innerHTML=winHTML(state,activePal(),title,'claude');
   drawFiles();
   drawCmd();
 }
@@ -1655,6 +1687,13 @@ function commitSave(name){
   toast('Saved \u201c'+pl.n+'\u201d to Our Community');
 }
 
+// After boot: both of these read ccPayload, which the boot IIFE above is what sets.
+// Called any earlier they see null. The picker writes the same ccPayload.p the preset
+// grid does, so picking a starter and picking a preset both repaint the recipe pane.
+installCcPicker(function(){return ccPayload.p;},
+                function(p){ccPayload.p=p;},
+                function(){drawWindows();drawCmd();});
+installRecipeSave(payload,'cmux + Claude Code');
 installNav();
 `;
 

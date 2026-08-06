@@ -12,6 +12,8 @@ const { TERM_CSS } = require('./_term.js');
 const { STUDIO_CSS } = require('./_customize.js');
 const { topBar, navPayload } = require('./_nav.js');
 const { compareBlock, COMPARE_CSS } = require('./_compare.js');
+const { STARTERS } = require('./_theme.js');
+const { RECIPE_CSS, RECIPE_JS, recipeSaveBlock } = require('./_recipes.js');
 const {
   HERDR_DEFAULTS, HERDR_THEMES, HERDR_PLUGINS, SHELL_MODES, NEW_CWD,
   COLLAPSED_MODES, HOST_CURSORS, TAB_POSITIONS, AGENT_SORTS, TOAST_DELIVERY,
@@ -44,7 +46,7 @@ const THEME_PREVIEW = {
 
 const HERDR_CSS = `
   .hwrap{max-width:1440px;margin:0 auto;padding:0 24px 40px;}
-  .hpair{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;}
+  .hpair{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;}
   .hcol{min-width:0;}
 
   /* The herdr window mock. Every colour is a custom property so the preview updates by
@@ -103,6 +105,16 @@ const HERDR_CSS = `
   .hbadge .pill{border:1px solid var(--border);border-radius:20px;padding:2px 9px;
     font-size:10.5px;letter-spacing:.04em;}
   .hbadge .pill.aft{border-color:var(--accent);color:var(--accent);}
+  /* The Claude Code theme picker rides in the switch row, because it changes the
+     preview rather than the config file. */
+  .ccpick{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);
+    white-space:nowrap;}
+  .ccpick select{background:#0b0e14;border:1px solid var(--border);border-radius:8px;
+    color:var(--text);font-family:inherit;font-size:12.5px;padding:7px 9px;min-height:38px;}
+  @media(max-width:700px),(max-height:520px){
+    .ccpick{flex:1 1 100%;}
+    .ccpick select{flex:1;min-height:44px;font-size:16px;}
+  }
 
   /* Pinned: the mock rides the top with the controls sliding under it, offset by the
      sticky switch row above. The terminal takes a fixed height while pinned so the
@@ -113,6 +125,8 @@ const HERDR_CSS = `
   body.pinned .hterm{height:var(--dock-h,min(26dvh,200px));flex:none;overflow:hidden;}
   body.docked .hterm{height:var(--dock-h);flex:none;overflow:hidden;}
 
+  @media(max-width:1100px){.hpair{grid-template-columns:1fr 1fr;}
+    .hpair .hcol-claude{grid-column:1/-1;}}
   .hpanels{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;
     align-items:start;}
   @media(min-width:760px){#herdrControls{grid-template-columns:repeat(auto-fit,minmax(370px,1fr));}}
@@ -157,8 +171,9 @@ const HERDR_CSS = `
   @media(max-width:700px),(max-height:520px){
     .hwrap{padding:0 12px 40px;}
     .hpair{grid-template-columns:1fr;gap:0;}
-    .hpair[data-pane="after"] .hcol-before{display:none;}
-    .hpair[data-pane="before"] .hcol-after{display:none;}
+    .hpair[data-pane="before"] .hcol-after,.hpair[data-pane="before"] .hcol-claude{display:none;}
+    .hpair[data-pane="after"] .hcol-before,.hpair[data-pane="after"] .hcol-claude{display:none;}
+    .hpair[data-pane="claude"] .hcol-before,.hpair[data-pane="claude"] .hcol-after{display:none;}
     .hhead h1{font-size:25px;margin-bottom:2px;}
     .hhead .sub{font-size:12.5px;line-height:1.5;}
     .hterm{height:min(30dvh,200px);flex:none;font-size:calc(var(--hd-font) * .9);}
@@ -195,7 +210,7 @@ function renderHerdr(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   const lines = JSON.stringify(LINES);
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>herdr · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${HERDR_CSS}</style></head><body class="pinned">
+<title>herdr · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${RECIPE_CSS}${HERDR_CSS}</style></head><body class="pinned">
 ${topBar('herdr', ghSvg)}
 <header class="hhead"><h1>\u{1F9AC} herdr</h1>
 <p class="sub" style="margin-top:8px">The multiplexer that knows what your agents are <b>doing</b>. herdr classifies every agent pane as
@@ -206,20 +221,26 @@ ${topBar('herdr', ghSvg)}
   <div class="switchrow">
     <div class="paneswitch" data-pane-toggle role="tablist" aria-label="Which window to show">
       <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
-      <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
+      <button type="button" class="pswbtn" data-pane="after" role="tab" aria-selected="false">After</button>
+      <button type="button" class="pswbtn on" data-pane="claude" role="tab" aria-selected="true">+ Claude</button>
     </div>
     <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
       <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
+    <label class="ccpick"><span>Claude Code theme</span><select id="ccTheme"></select></label>
   </div>
-  <div class="hpair" data-pane="after" id="pair">
+  <div class="hpair" data-pane="claude" id="pair">
     <div class="hcol hcol-before">
       <div class="hbadge"><span class="pill">before</span><b>Stock herdr</b><span>— every default, straight from 0.8.0</span></div>
       <div id="winBefore"></div>
     </div>
     <div class="hcol hcol-after">
-      <div class="hbadge"><span class="pill aft">after</span><b>Your herdr</b><span>— live preview</span></div>
+      <div class="hbadge"><span class="pill aft">after</span><b>Your herdr</b><span>— an ordinary shell</span></div>
       <div id="winAfter"></div>
+    </div>
+    <div class="hcol hcol-claude">
+      <div class="hbadge"><span class="pill aft">recipe</span><b>+ Claude Code</b><span id="ccname">— tokyo-night</span></div>
+      <div id="winClaude"></div>
     </div>
     <div class="dockgrip" id="dockgrip" role="separator" aria-orientation="horizontal" tabindex="0"
       aria-label="Resize the preview. Arrow keys adjust the height, Home resets it."
@@ -271,6 +292,8 @@ brew install herdr</div>
     </div>
   </div>
 
+${recipeSaveBlock()}
+
 ${compareBlock('herdr')}
 </div>
 
@@ -287,12 +310,14 @@ ${compareBlock('herdr')}
 <div id="toast"></div>
 <script>
 var NAV=${navPayload('herdr')};
+var STARTERS=${JSON.stringify(STARTERS)};
 var HD_DEFAULTS=${defaults};
 var HD_OPTS=${opts};
 var HD_THEMES=${themePreview};
 var HD_PLUGINS=${plugins};
 var LINES=${lines};
 ${clientLib}
+${RECIPE_JS}
 ${HERDR_JS}
 </script></body></html>`;
 }
@@ -395,7 +420,7 @@ var AGENTS=[
 
 function themeOf(name){return HD_THEMES[name]||HD_THEMES['tokyo-night'];}
 
-function winHTML(s){
+function winHTML(s,mode){
   var t=themeOf(s.theme);
   var accent=s.customAccent?s.accentColor:t.accent;
   var vars=[
@@ -441,18 +466,31 @@ function winHTML(s){
       '<div class="htab on">claude</div><div class="htab">tests</div><div class="htab">shell</div>')
     +'</div>';
 
+  // The recipe pane is the point of the third column: the terminal is themed by the
+  // controls below, and the SESSION inside it is themed by the Claude Code palette
+  // carried in the payload. Everywhere else shows an ordinary shell, so the difference
+  // between "my terminal" and "my terminal running the agent" is visible side by side.
+  var cc=(mode==='claude')?ccColors():null;
   var body='';
-  for(var j=0;j<LINES.length;j++){
-    var kind=LINES[j][0],txt=LINES[j][1];
-    if(kind==='nl'){body+='</div><div class="l">';continue;}
-    var col=kind==='accent'?accent:kind==='green'?t.green:kind==='dim'?t.dim:
-      kind==='prompt'?t.text:t.text;
-    var st='color:'+col;
-    if(kind==='prompt')st+=';background:'+hexA(accent,0.16);
-    body+='<span style="'+st+'">'+esc(txt)+'</span>';
+  if(mode==='claude'){
+    for(var j=0;j<LINES.length;j++){
+      var kind=LINES[j][0],txt=LINES[j][1];
+      if(kind==='nl'){body+='</div><div class="l">';continue;}
+      var col=kind==='accent'?cc.accent:kind==='green'?cc.green:kind==='dim'?cc.dim:cc.text;
+      var st='color:'+col;
+      if(kind==='prompt')st+=';background:'+hexA(cc.accent,0.16);
+      body+='<span style="'+st+'">'+esc(txt)+'</span>';
+    }
+  }else{
+    body='<span style="color:'+t.dim+'">$ npm test</span></div><div class="l">'
+      +'<span style="color:'+t.green+'">12 passing</span>'
+      +'<span style="color:'+t.dim+'"> (0.9s)</span></div><div class="l">'
+      +'<span style="color:'+t.dim+'">$ </span>'
+      +'<span style="color:'+t.text+'">\u2588</span>';
   }
 
-  var pane1='<div class="hpane active">'
+  var paneBg=(mode==='claude')?(' style="background:'+cc.bg+'"'):'';
+  var pane1='<div class="hpane active"'+paneBg+'>'
     +(s.agentLabelsOnBorders?'<div class="hlabel">claude · blocked</div>':'')
     +'<div class="hterm"><div class="l">'+body+'</div></div>'
     +(s.paneScrollbars?'<div class="hscroll"></div>':'')+'</div>';
@@ -486,10 +524,26 @@ function hexA(hex,a){
   return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';
 }
 
+// The Claude Code half, as colours the mock can use.
+function ccColors(){
+  var p=ccPayload.p||{};
+  return {
+    bg:palHex(p.bg,'#1a1b26'), text:palHex(p.text,'#c0caf5'),
+    dim:palHex(p.comment,'#565f89'), accent:palHex(p.accent,'#7aa2f7'),
+    green:palHex(p.green,'#9ece6a')
+  };
+}
+function palHex(t,fb){
+  if(Object.prototype.toString.call(t)!=='[object Array]'||t.length!==3)return fb;
+  return '#'+t.map(function(n){
+    n=Math.max(0,Math.min(255,Math.round(n)));
+    return (n<16?'0':'')+n.toString(16);
+  }).join('');
+}
 function drawWindows(){
-  var before=defaultHerdr();
-  $('#winBefore').innerHTML=winHTML(before);
-  $('#winAfter').innerHTML=winHTML(state);
+  $('#winBefore').innerHTML=winHTML(defaultHerdr(),'plain');
+  $('#winAfter').innerHTML=winHTML(state,'plain');
+  $('#winClaude').innerHTML=winHTML(state,'claude');
 }
 
 // ── controls ──────────────────────────────────────────────────────────────────
@@ -798,6 +852,13 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();})
     });
   });
 })();
+
+// Which Claude Code palette is layered on top. Shared with the other terminal pages.
+installCcPicker(function(){return ccPayload.p;},
+                function(p){ccPayload.p=p;},
+                refresh);
+
+installRecipeSave(payload,'herdr + Claude Code');
 
 installPreviewDock({dock:'#pair',grip:'#dockgrip',pin:'#pinbtn',
   term:'.hterm',key:'herdr',pinDefault:true});

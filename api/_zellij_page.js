@@ -13,6 +13,8 @@ const { TERM_CSS } = require('./_term.js');
 const { STUDIO_CSS } = require('./_customize.js');
 const { topBar, navPayload } = require('./_nav.js');
 const { compareBlock, COMPARE_CSS } = require('./_compare.js');
+const { STARTERS } = require('./_theme.js');
+const { RECIPE_CSS, RECIPE_JS, recipeSaveBlock } = require('./_recipes.js');
 const {
   ZELLIJ_DEFAULTS, ZJ_THEMES, ZJ_MODES, ZJ_LAYOUTS, ON_FORCE_CLOSE,
   COPY_CLIPBOARD, WEB_SHARING, COPY_COMMANDS, ZJ_PLUGINS,
@@ -66,7 +68,7 @@ const ZJ_PREVIEW = {
 
 const ZJ_CSS = `
   .zwrap{max-width:1440px;margin:0 auto;padding:0 24px 40px;}
-  .zpair{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;}
+  .zpair{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;}
   .zcol{min-width:0;}
 
   .zwin{border:1px solid var(--zj-frame);border-radius:10px;overflow:hidden;
@@ -107,6 +109,14 @@ const ZJ_CSS = `
   .zbadge .pill{border:1px solid var(--border);border-radius:20px;padding:2px 9px;
     font-size:10.5px;letter-spacing:.04em;}
   .zbadge .pill.aft{border-color:var(--accent);color:var(--accent);}
+  .ccpick{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);
+    white-space:nowrap;}
+  .ccpick select{background:#0b0e14;border:1px solid var(--border);border-radius:8px;
+    color:var(--text);font-family:inherit;font-size:12.5px;padding:7px 9px;min-height:38px;}
+  @media(max-width:700px),(max-height:520px){
+    .ccpick{flex:1 1 100%;}
+    .ccpick select{flex:1;min-height:44px;font-size:16px;}
+  }
 
   /* Pinned: same arrangement as the other terminal pages — the mock sticks below the
      switch row, and the pane height stops tracking its content so the window cannot
@@ -116,6 +126,8 @@ const ZJ_CSS = `
   body.pinned .zterm{height:var(--dock-h,min(24dvh,180px));flex:none;overflow:hidden;}
   body.docked .zterm{height:var(--dock-h);flex:none;overflow:hidden;}
 
+  @media(max-width:1100px){.zpair{grid-template-columns:1fr 1fr;}
+    .zpair .zcol-claude{grid-column:1/-1;}}
   .zpanels{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;
     align-items:start;}
   @media(min-width:760px){#zjControls{grid-template-columns:repeat(auto-fit,minmax(370px,1fr));}}
@@ -144,8 +156,9 @@ const ZJ_CSS = `
   @media(max-width:700px),(max-height:520px){
     .zwrap{padding:0 12px 40px;}
     .zpair{grid-template-columns:1fr;gap:0;}
-    .zpair[data-pane="after"] .zcol-before{display:none;}
-    .zpair[data-pane="before"] .zcol-after{display:none;}
+    .zpair[data-pane="before"] .zcol-after,.zpair[data-pane="before"] .zcol-claude{display:none;}
+    .zpair[data-pane="after"] .zcol-before,.zpair[data-pane="after"] .zcol-claude{display:none;}
+    .zpair[data-pane="claude"] .zcol-before,.zpair[data-pane="claude"] .zcol-after{display:none;}
     .zhead h1{font-size:25px;margin-bottom:2px;}
     .zterm{height:min(28dvh,190px);flex:none;}
     .zpanels{grid-template-columns:1fr;}
@@ -164,7 +177,7 @@ function renderZellij(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   const plugins = JSON.stringify(ZJ_PLUGINS);
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Zellij · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${ZJ_CSS}</style></head><body class="pinned">
+<title>Zellij · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${RECIPE_CSS}${ZJ_CSS}</style></head><body class="pinned">
 ${topBar('zellij', ghSvg)}
 <header class="zhead"><h1>\u{1F9E9} Zellij</h1>
 <p class="sub" style="margin-top:8px">A terminal workspace with <b>layouts you can check into the repo</b> and sessions that come back after a crash,
@@ -175,20 +188,26 @@ Build a <span class="mono">config.kdl</span> and an agent layout here; one comma
   <div class="switchrow">
     <div class="paneswitch" data-pane-toggle role="tablist" aria-label="Which window to show">
       <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
-      <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
+      <button type="button" class="pswbtn" data-pane="after" role="tab" aria-selected="false">After</button>
+      <button type="button" class="pswbtn on" data-pane="claude" role="tab" aria-selected="true">+ Claude</button>
     </div>
     <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
       <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
+    <label class="ccpick"><span>Claude Code theme</span><select id="ccTheme"></select></label>
   </div>
-  <div class="zpair" data-pane="after" id="pair">
+  <div class="zpair" data-pane="claude" id="pair">
     <div class="zcol zcol-before">
       <div class="zbadge"><span class="pill">before</span><b>Stock Zellij</b><span>— defaults from 0.44.3</span></div>
       <div id="winBefore"></div>
     </div>
     <div class="zcol zcol-after">
-      <div class="zbadge"><span class="pill aft">after</span><b>Your Zellij</b><span>— live preview, plugins included</span></div>
+      <div class="zbadge"><span class="pill aft">after</span><b>Your Zellij</b><span>— an ordinary shell</span></div>
       <div id="winAfter"></div>
+    </div>
+    <div class="zcol zcol-claude">
+      <div class="zbadge"><span class="pill aft">recipe</span><b>+ Claude Code</b><span id="ccname">— tokyo-night</span></div>
+      <div id="winClaude"></div>
     </div>
     <div class="dockgrip" id="dockgrip" role="separator" aria-orientation="horizontal" tabindex="0"
       aria-label="Resize the preview. Arrow keys adjust the height, Home resets it."
@@ -241,6 +260,8 @@ Build a <span class="mono">config.kdl</span> and an agent layout here; one comma
     </div>
   </div>
 
+${recipeSaveBlock()}
+
 ${compareBlock('zellij')}
 </div>
 
@@ -257,11 +278,13 @@ ${compareBlock('zellij')}
 <div id="toast"></div>
 <script>
 var NAV=${navPayload('zellij')};
+var STARTERS=${JSON.stringify(STARTERS)};
 var ZJ_DEFAULTS=${defaults};
 var ZJ_OPTS=${opts};
 var ZJ_PREVIEW=${preview};
 var ZJ_PLUGINS=${plugins};
 ${clientLib}
+${RECIPE_JS}
 ${ZJ_JS}
 </script></body></html>`;
 }
@@ -378,13 +401,24 @@ function winHTML(s){
     +'</div>';
 
   var frameCls=s.paneFrames?'':' noframe';
-  var body='<div class="l"><span style="color:'+text+'">&gt; add a retry to the upload path</span></div>'
-    +'<div class="l"><span style="color:'+accent+'">\\u2733 Working\\u2026</span> <span style="color:'+dim+'">(esc to interrupt)</span></div>'
-    +'<div class="l"><span style="color:'+green+'">\\u25cf</span> <span style="color:'+text+'">Edit</span><span style="color:'+dim+'">(src/upload.ts)</span></div>'
-    +'<div class="l"><span style="color:'+dim+'">  \\u2514 </span><span style="color:'+green+'">+18 \\u22123</span></div>';
+  // The recipe pane: the terminal is themed by the controls, the SESSION inside it by
+  // the Claude Code palette layered on top. Everything else shows an ordinary shell.
+  var body,paneStyle='';
+  if(mode==='claude'){
+    var cc=ccColors();
+    paneStyle=' style="background:'+cc.bg+'"';
+    body='<div class="l"><span style="color:'+cc.text+'">&gt; add a retry to the upload path</span></div>'
+      +'<div class="l"><span style="color:'+cc.accent+'">\\u2733 Working\\u2026</span> <span style="color:'+cc.dim+'">(esc to interrupt)</span></div>'
+      +'<div class="l"><span style="color:'+cc.green+'">\\u25cf</span> <span style="color:'+cc.text+'">Edit</span><span style="color:'+cc.dim+'">(src/upload.ts)</span></div>'
+      +'<div class="l"><span style="color:'+cc.dim+'">  \\u2514 </span><span style="color:'+cc.green+'">+18 \\u22123</span></div>';
+  }else{
+    body='<div class="l"><span style="color:'+dim+'">$ npm test</span></div>'
+      +'<div class="l"><span style="color:'+green+'">12 passing</span><span style="color:'+dim+'"> (0.9s)</span></div>'
+      +'<div class="l"><span style="color:'+dim+'">$ </span><span style="color:'+text+'">\\u2588</span></div>';
+  }
 
-  var pane1='<div class="zpane active'+frameCls+'">'
-    +(s.paneFrames?'<div class="zptitle">claude</div>':'')
+  var pane1='<div class="zpane active'+frameCls+'"'+paneStyle+'>'
+    +(s.paneFrames?('<div class="zptitle">'+(mode==='claude'?'claude':'zsh')+'</div>'):'')
     +'<div class="zterm">'+body+'</div></div>';
   var pane2='<div class="zpane'+frameCls+'">'
     +(s.paneFrames?'<div class="zptitle">shell</div>':'')
@@ -701,6 +735,11 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();})
     });
   });
 })();
+
+installCcPicker(function(){return ccPayload.p;},
+                function(p){ccPayload.p=p;},
+                refresh);
+installRecipeSave(payload,'Zellij + Claude Code');
 
 installPreviewDock({dock:'#pair',grip:'#dockgrip',pin:'#pinbtn',
   term:'.zterm',key:'zellij',pinDefault:true});

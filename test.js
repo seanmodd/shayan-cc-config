@@ -110,6 +110,45 @@ function bashCheck(src, label) {
       ok(r.body.includes(JSON.stringify(pg.path)), p + ': menu knows about ' + pg.path);
     }
   }
+  // ── recipes ───────────────────────────────────────────────────────────────
+  // A recipe is a Claude Code config plus a terminal theme under one name, and the
+  // reason it is worth having is that ONE curl applies both halves.
+  const homeBody = (await call('/')).body;
+  ok(homeBody.includes('id="recgrid"') && homeBody.includes('id="recmode"'),
+    'home: the recipes card is there, with its Favorites / Recent switch');
+  // The closed tag, not the opening one: a CSS comment further up mentions
+  // <main id="grid"> and would match first.
+  ok(homeBody.indexOf('id="recgrid"') < homeBody.indexOf('<main id="grid"></main>'),
+    'home: recipes sit above the gallery');
+  ok(homeBody.includes('function rec_curl('), 'home: recipes can produce a one-line install');
+
+  // Every terminal page must be able to build one: a theme picker for the Claude Code
+  // half, a save control, and a third preview pane showing the two combined.
+  for (const t of require(path.join(ROOT, 'api/_recipes.js')).TERMINALS) {
+    const body = (await call(t.path)).body;
+    ok(body.includes('id="ccTheme"'), t.path + ': can pick the Claude Code theme to layer');
+    ok(body.includes('id="recsave"') && body.includes('installRecipeSave('),
+      t.path + ': can save the pair as a recipe');
+    ok(body.includes('id="winClaude"'), t.path + ': has the "+ Claude Code" preview pane');
+    ok(body.includes('data-pane="claude"'), t.path + ': the pane switch offers all three');
+    // installCcPicker reads the page's Claude Code half, which the boot code sets. Called
+    // before boot it throws and takes the rest of the script with it — which is exactly
+    // what happened on /cmux — so the ordering is pinned here.
+    ok(body.indexOf('ccPayload=defaultCC()') < body.indexOf('installCcPicker(function('),
+      t.path + ': the theme picker runs after boot, not before');
+  }
+
+  // The payoff, end to end: a payload carrying both halves produces one script that
+  // applies both. This is the claim the whole feature rests on.
+  const recipePayload = {
+    ...LEGACY,
+    cm: { on: true, preset: '', fontFamily: '', fontSize: 13 },
+  };
+  const recipeSh = (await call('/apply.sh?c=' + encodeURIComponent(b64e(recipePayload)))).body;
+  ok(/tweakcc@latest --apply/.test(recipeSh), 'one recipe curl applies the Claude Code half');
+  ok(/Applying the cmux layer/.test(recipeSh), 'one recipe curl applies the terminal half');
+  bashCheck(recipeSh, 'recipe_both_halves');
+
   // Every registered page must actually resolve, or the menu advertises a 404.
   for (const pg of PAGES) {
     const r = await call(pg.path);
@@ -228,14 +267,14 @@ function bashCheck(src, label) {
   const sp = sanePalette(XSSPAL);
   ok(Array.isArray(sp.text) && sp.text.every(n => typeof n === 'number'), 'sanePalette coerces hostile triple', JSON.stringify(sp.text));
   ok(Array.isArray(sp.accent) && sp.accent.length === 3, 'sanePalette replaces non-array entry', JSON.stringify(sp.accent));
-  ok(home.includes('function sanePal('), 'homepage ships client palette sanitizer');
-  ok(home.includes('expandPalette(sanePal(pl.p))'), 'customToModel sanitizes palette before expanding');
+  ok(homeBody.includes('function sanePal('), 'homepage ships client palette sanitizer');
+  ok(homeBody.includes('expandPalette(sanePal(pl.p))'), 'customToModel sanitizes palette before expanding');
   ok(/mapPreview[\s\S]{0,400}okColor/.test(home), 'mapPreview coerces colors through okColor');
   // Exercise the real client library (the exact source the browser receives) against
   // the hostile payload. CLIENT_LIB is pure function declarations, so evaluating it
   // standalone is safe; the page's boot code (HOME_JS) is deliberately excluded.
   const { CLIENT_LIB } = require(path.join(ROOT, 'api/_render.js'));
-  ok(home.includes(CLIENT_LIB), 'rendered homepage embeds CLIENT_LIB verbatim');
+  ok(homeBody.includes(CLIENT_LIB), 'rendered homepage embeds CLIENT_LIB verbatim');
   const sandbox = { location: { origin: 'http://x' }, localStorage: { getItem: () => null, setItem() {} }, document: { querySelector: () => null } };
   const lib = new Function('window', 'location', 'localStorage', 'document',
     CLIENT_LIB + '\n;return {customToModel:customToModel, mapPreview:mapPreview, sanePal:sanePal};')(
