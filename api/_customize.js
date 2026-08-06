@@ -117,6 +117,43 @@ const STUDIO_CSS = `
     background:#10141b;color:var(--dim);border-radius:10px;min-height:44px;padding:0 10px;}
   .pswbtn.on{border-color:var(--accent);color:var(--accent);background:rgba(122,162,247,.12);}
 
+  /* ── what ticking a plugin actually does ──────────────────────────────────
+     Shared by /herdr and /zellij. Ticking a box quietly rewrote the install command
+     at the bottom of the page and nothing said so, which made the whole section look
+     decorative. This block spells out the exact lines that will run, live, and can be
+     copied on its own for anyone who would rather not run the whole installer. */
+  .plucmds{margin-top:13px;border:1px solid var(--border);border-radius:11px;
+    background:#0b0e14;overflow:hidden;}
+  .plucmds .pchead{display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+    padding:9px 12px;border-bottom:1px solid var(--border);background:#10141b;}
+  .plucmds .pctitle{font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--gold);}
+  .plucmds .pccount{font-size:11px;color:var(--dim);}
+  .plucmds .pcnote{flex:1 1 100%;font-size:11.5px;line-height:1.5;color:var(--faint);}
+  .plucmds .pcnote b{color:var(--dim);}
+  .plucmds .pccopy{margin-left:auto;cursor:pointer;font-family:inherit;font-size:10.5px;
+    font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+    border:1px solid var(--border);background:#161c26;color:var(--dim);border-radius:6px;
+    padding:5px 10px;min-height:30px;}
+  .plucmds .pccopy:hover{border-color:var(--accent);color:var(--text);}
+  .plucmds pre{margin:0;padding:11px 12px;font-family:ui-monospace,Menlo,monospace;
+    font-size:11.5px;line-height:1.7;color:#b7c3d6;overflow-x:auto;white-space:pre;}
+  .plucmds pre .pcdim{color:var(--faint);}
+  .plucmds.empty pre{color:var(--faint);white-space:normal;}
+  /* The one-liner on each card, so a single plugin can be grabbed without the rest. */
+  .plucard .plurun{display:flex;align-items:center;gap:6px;margin-top:2px;}
+  .plucard .plurun code{flex:1;min-width:0;font-family:ui-monospace,Menlo,monospace;
+    font-size:10px;color:var(--dim);background:#080b10;border:1px solid var(--border);
+    border-radius:5px;padding:3px 6px;overflow-x:auto;white-space:nowrap;}
+  .plucard .plurun button{cursor:pointer;font-family:inherit;font-size:9.5px;
+    font-weight:600;letter-spacing:.04em;text-transform:uppercase;flex:none;
+    border:1px solid var(--border);background:#161c26;color:var(--dim);
+    border-radius:5px;padding:3px 7px;min-height:26px;}
+  .plucard .plurun button:hover{border-color:var(--accent);color:var(--text);}
+  @media(max-width:700px),(max-height:520px){
+    .plucmds .pccopy,.plucard .plurun button{min-height:40px;}
+  }
+
   /* ── the preview dock's own two controls ──────────────────────────────────
      Shared with /cmux, which renders the same row above its window mock. The
      behaviour behind both lives in installPreviewDock(). */

@@ -214,6 +214,7 @@ Build a <span class="mono">config.kdl</span> and an agent layout here; one comma
     checked against the GitHub API for a real release asset. <b>Tick zjstatus and watch the status
     bar in the preview change</b> \u2014 it replaces Zellij's own.</p>
     <div class="plugrid" id="pluginGrid"></div>
+    <div class="plucmds" id="pluCmds"></div>
     <p class="zwarn"><b>Two things the docs get wrong here.</b> Zellij <i>silently accepts and
     ignores</i> unknown option keys \u2014 <span class="mono">zellij setup --check</span> returns
     success on a misspelled one \u2014 so a hand-edited config can look fine and do nothing. And
@@ -548,7 +549,16 @@ function paintPlugins(){
       var kb=document.createElement('span');kb.style.marginLeft='7px';kb.style.color='#5b6470';
       kb.textContent='binds '+p.bind;rp.appendChild(kb);
     }
-    card.appendChild(head);card.appendChild(bl);card.appendChild(rp);
+    var run=document.createElement('div');run.className='plurun';
+    var code=document.createElement('code');code.textContent=pluCmd(p);
+    var cpy=document.createElement('button');cpy.type='button';cpy.textContent='copy';
+    cpy.setAttribute('aria-label','Copy the download command for '+p.name);
+    cpy.addEventListener('click',function(e){
+      e.preventDefault();copyText(pluCmd(p));
+      cpy.textContent='copied';setTimeout(function(){cpy.textContent='copy';},1400);
+    });
+    run.appendChild(code);run.appendChild(cpy);
+    card.appendChild(head);card.appendChild(bl);card.appendChild(rp);card.appendChild(run);
     cb.addEventListener('change',function(){
       var i=state.plugins.indexOf(p.id);
       if(cb.checked&&i<0)state.plugins.push(p.id);
@@ -560,9 +570,53 @@ function paintPlugins(){
   });
 }
 
+// A Zellij plugin is a .wasm file on disk, so "installing" one is a download plus the
+// alias and keybind that the generated config.kdl already carries.
+function pluCmd(p){
+  return 'curl -fsSL -o ~/.config/zellij/plugins/'+p.asset
+    +' https://github.com/'+p.repo+'/releases/download/'+p.tag+'/'+p.asset;
+}
+
+function paintPluCmds(){
+  var host=$('#pluCmds');if(!host)return;
+  var chosen=ZJ_PLUGINS.filter(function(p){return state.plugins.indexOf(p.id)>=0;});
+  host.innerHTML='';
+  host.className='plucmds'+(chosen.length?'':' empty');
+
+  var head=document.createElement('div');head.className='pchead';
+  var t=document.createElement('span');t.className='pctitle';t.textContent='What ticking these adds';
+  var n=document.createElement('span');n.className='pccount';
+  n.textContent=chosen.length?(chosen.length+' selected'):'none selected';
+  head.appendChild(t);head.appendChild(n);
+
+  var pre=document.createElement('pre');
+  if(chosen.length){
+    var cpy=document.createElement('button');
+    cpy.type='button';cpy.className='pccopy';cpy.textContent='Copy these lines';
+    cpy.addEventListener('click',function(){
+      copyText('mkdir -p ~/.config/zellij/plugins\\n'+chosen.map(pluCmd).join('\\n'));
+      cpy.textContent='Copied \u2713';
+      setTimeout(function(){cpy.textContent='Copy these lines';},1600);
+    });
+    head.appendChild(cpy);
+    var bound=chosen.filter(function(p){return p.bind;}).length;
+    var note=document.createElement('span');note.className='pcnote';
+    note.innerHTML='These run as part of the <b>install command at the bottom of this page</b> \u2014 '
+      +'you do not need to run them separately. The generated <b>config.kdl</b> above already '
+      +'carries the matching <b>plugins</b> aliases'
+      +(bound?' and the keybinds for the '+bound+' that bind one':'')+'.';
+    head.appendChild(note);
+    pre.textContent='mkdir -p ~/.config/zellij/plugins\\n'+chosen.map(pluCmd).join('\\n');
+  }else{
+    pre.textContent='Nothing selected, so the install command downloads no plugins and config.kdl keeps only the ten built-in aliases. Tick one above and the exact command appears here.';
+  }
+  host.appendChild(head);host.appendChild(pre);
+}
+
 function payload(){var pl=copyObj(ccPayload);pl.zj=copyObj(state);pl.zj.on=true;return pl;}
 function refresh(){
   drawWindows();
+  paintPluCmds();
   var c=encodeURIComponent(b64e(payload()));
   $('#cmdtext').textContent='curl -fsSL "'+ORIGIN+'/apply.sh?c='+c+'" | bash';
   window.__sccPayloadC=c;

@@ -243,6 +243,7 @@ ${topBar('herdr', ghSvg)}
     binary. These are real listings from the marketplace, ordered by stars. Tick any and the
     install command below adds <span class="mono">herdr plugin install</span> lines for them.</p>
     <div class="plugrid" id="pluginGrid"></div>
+    <div class="plucmds" id="pluCmds"></div>
     <p class="pluwarn"><b>Worth knowing before you tick one.</b> The marketplace is an
     <i>automatic</i> index of public repos tagged <span class="mono">herdr-plugin</span>, refreshed
     every 30 minutes — herdr validates a plugin's manifest but does <b>not</b> review or sandbox
@@ -632,7 +633,17 @@ function paintPlugins(){
     var a=document.createElement('a');a.href='https://github.com/'+p.repo;
     a.target='_blank';a.rel='noreferrer';a.textContent=p.repo;
     rp.appendChild(a);
-    card.appendChild(head);card.appendChild(bl);card.appendChild(rp);
+    // The single command for this one plugin, so you can take one without the rest.
+    var run=document.createElement('div');run.className='plurun';
+    var code=document.createElement('code');code.textContent=pluCmd(p);
+    var cpy=document.createElement('button');cpy.type='button';cpy.textContent='copy';
+    cpy.setAttribute('aria-label','Copy the install command for '+p.name);
+    cpy.addEventListener('click',function(e){
+      e.preventDefault();copyText(pluCmd(p));
+      cpy.textContent='copied';setTimeout(function(){cpy.textContent='copy';},1400);
+    });
+    run.appendChild(code);run.appendChild(cpy);
+    card.appendChild(head);card.appendChild(bl);card.appendChild(rp);card.appendChild(run);
     cb.addEventListener('change',function(){
       var i=state.plugins.indexOf(p.id);
       if(cb.checked&&i<0)state.plugins.push(p.id);
@@ -645,6 +656,44 @@ function paintPlugins(){
 }
 
 // ── payload + output ──────────────────────────────────────────────────────────
+function pluCmd(p){return 'herdr plugin install '+p.repo;}
+
+// Ticking a box rewrites the install command at the bottom of the page. That was
+// invisible, so this says it out loud and lists the exact lines that will run.
+function paintPluCmds(){
+  var host=$('#pluCmds');if(!host)return;
+  var chosen=HD_PLUGINS.filter(function(p){return state.plugins.indexOf(p.id)>=0;});
+  host.innerHTML='';
+  host.className='plucmds'+(chosen.length?'':' empty');
+
+  var head=document.createElement('div');head.className='pchead';
+  var t=document.createElement('span');t.className='pctitle';t.textContent='What ticking these adds';
+  var n=document.createElement('span');n.className='pccount';
+  n.textContent=chosen.length?(chosen.length+' selected'):'none selected';
+  head.appendChild(t);head.appendChild(n);
+
+  var pre=document.createElement('pre');
+  if(chosen.length){
+    var cpy=document.createElement('button');
+    cpy.type='button';cpy.className='pccopy';cpy.textContent='Copy these lines';
+    cpy.addEventListener('click',function(){
+      copyText(chosen.map(pluCmd).join('\\n'));
+      cpy.textContent='Copied \u2713';
+      setTimeout(function(){cpy.textContent='Copy these lines';},1600);
+    });
+    head.appendChild(cpy);
+    var note=document.createElement('span');note.className='pcnote';
+    note.innerHTML='These run as part of the <b>install command at the bottom of this page</b> \u2014 '
+      +'you do not need to run them separately. They are here so you can see what it will do, '
+      +'or take one on its own.';
+    head.appendChild(note);
+    pre.textContent=chosen.map(pluCmd).join('\\n');
+  }else{
+    pre.textContent='Nothing selected, so the install command touches no plugins. Tick one above and the exact command appears here.';
+  }
+  host.appendChild(head);host.appendChild(pre);
+}
+
 function payload(){
   var pl=copyObj(ccPayload);
   pl.hd=copyObj(state);
@@ -653,6 +702,7 @@ function payload(){
 }
 function refresh(){
   drawWindows();
+  paintPluCmds();
   var c=encodeURIComponent(b64e(payload()));
   $('#cmdtext').textContent='curl -fsSL "'+ORIGIN+'/apply.sh?c='+c+'" | bash';
   window.__sccPayloadC=c;

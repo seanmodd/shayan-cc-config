@@ -1041,6 +1041,16 @@ function bashCheck(src, label) {
     '/herdr: the preview pins and resizes like the others');
   for (const p of HD.HERDR_PLUGINS) ok(hdPage.includes(p.repo), '/herdr: lists plugin ' + p.repo);
   ok(hdPage.includes('saneHerdr'), '/herdr: sanitizes the payload before rendering it');
+  // Ticking a plugin rewrites the install command at the bottom of the page. That was
+  // invisible, so the page now prints the exact lines and each card carries its own.
+  ok(hdPage.includes('id="pluCmds"') && hdPage.includes('function pluCmd('),
+    '/herdr: shows the commands ticking a plugin adds');
+  // And they must genuinely be in the installer, not just described.
+  const hdWithPlugins = HD.herdrApplyBlock(HD.sanitizeHerdr({ on: true, plugins: ['reviewr'] }));
+  ok(/herdr plugin install persiyanov\/herdr-reviewr/.test(hdWithPlugins),
+    '/herdr: a ticked plugin really is in the install command');
+  ok(!/openclaw\/crabbox/.test(hdWithPlugins),
+    '/herdr: an unticked plugin is not');
 
   // A ?c= link is attacker-controlled and several herdr values land inside style="" and
   // class="". The server sanitizer is the backstop for the FILE; these pin the values it
@@ -1084,6 +1094,23 @@ function bashCheck(src, label) {
     '/zellij: the preview pins and resizes like the others');
   for (const p of ZJ.ZJ_PLUGINS) ok(zjPage.includes(p.repo), '/zellij: lists plugin ' + p.repo);
   ok(zjPage.includes('saneZj'), '/zellij: sanitizes the payload before rendering it');
+  ok(zjPage.includes('id="pluCmds"') && zjPage.includes('function pluCmd('),
+    '/zellij: shows the commands ticking a plugin adds');
+  // A Zellij plugin is three things — a download, an alias, and (for some) a keybind.
+  // All three have to land or the plugin is present but unreachable.
+  const zjWithPlugin = ZJ.sanitizeZellij({ on: true, plugins: ['monocle'] });
+  const zjKdlP = ZJ.buildZellijKdl(zjWithPlugin);
+  const zjShP = ZJ.zellijApplyBlock(zjWithPlugin);
+  ok(/releases\/download\/v0\.100\.2\/monocle\.wasm/.test(zjShP),
+    '/zellij: a ticked plugin is downloaded at its pinned tag');
+  ok(/monocle location="file:~\/\.config\/zellij\/plugins\/monocle\.wasm"/.test(zjKdlP),
+    '/zellij: and gets an alias in config.kdl');
+  ok(/LaunchOrFocusPlugin "monocle"/.test(zjKdlP),
+    '/zellij: and a keybind, so it is actually reachable');
+  // The ten built-in aliases must survive: removing them breaks Zellij's own UI.
+  for (const builtin of ['tab-bar', 'status-bar', 'session-manager', 'plugin-manager', 'about']) {
+    ok(zjKdlP.includes(builtin + ' '), '/zellij: keeps the built-in ' + builtin + ' alias');
+  }
 
   const evilZj = ZJ.sanitizeZellij({
     on: true, theme: 'nord"; rm -rf ~', defaultMode: 'DROP TABLE',
