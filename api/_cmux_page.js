@@ -257,7 +257,7 @@ const CMUX_CSS = `
 // about the window around Claude Code, and the Studio is where the transcript itself
 // gets designed.
 const LINES = [
-  ['dim', '❯ '], ['user', 'fix the failing checkout test'],
+  ['prompt', ' > fix the failing checkout test '],
   ['nl', ''],
   ['accent', '✳ '], ['accent', 'Vibing… '], ['dim', '(esc to interrupt)'],
   ['nl', ''],
@@ -480,10 +480,39 @@ function winHTML(s,pal,label){
     }
   });
 
+  // The prompt you send is the most visible Claude Code element inside a cmux window,
+  // so the mock renders it with its actual message styling rather than as plain text —
+  // otherwise the colour controls for it would have nothing to show.
+  var um=(ccPayload.um&&typeof ccPayload.um==='object')?ccPayload.um:{};
+  var promptFg=um.fg?hexOf(um.fg):text;
+  var promptBg=um.bg?hexOf(um.bg):'';
+  var promptCss='color:'+promptFg+';';
+  if(promptBg)promptCss+='background:'+promptBg+';';
+  if((um.st||[]).indexOf('bold')>=0)promptCss+='font-weight:700;';
+  if((um.st||[]).indexOf('italic')>=0)promptCss+='font-style:italic;';
+  var pb=String(ccPayload.ub||'none'), pbc=ccPayload.uc?hexOf(ccPayload.uc):dim;
+  var promptBox=BOX_FOR(pb);
+
   var body='';
   CC_LINES.forEach(function(pair){
     var kind=pair[0], t=pair[1];
     if(kind==='nl'){body+='</div><div class="l">';return;}
+    if(kind==='prompt'){
+      // Border first, because in the terminal it is a whole row of box characters
+      // above and below rather than a hairline on the strip.
+      if(promptBox)body+='</div><div class="l" style="color:'+pbc+'">'
+        +esc(promptBox.t)+esc(promptBox.t)+esc(promptBox.t)+esc(promptBox.t)+esc(promptBox.t)
+        +esc(promptBox.t)+esc(promptBox.t)+esc(promptBox.t)+esc(promptBox.t)+esc(promptBox.t)
+        +esc(promptBox.t)+esc(promptBox.t)+esc(promptBox.t)+esc(promptBox.t)+esc(promptBox.t)
+        +'</div><div class="l">';
+      body+='<span style="'+promptCss+'">'+esc(t)+'</span>';
+      if(promptBox)body+='</div><div class="l" style="color:'+pbc+'">'
+        +esc(promptBox.b)+esc(promptBox.b)+esc(promptBox.b)+esc(promptBox.b)+esc(promptBox.b)
+        +esc(promptBox.b)+esc(promptBox.b)+esc(promptBox.b)+esc(promptBox.b)+esc(promptBox.b)
+        +esc(promptBox.b)+esc(promptBox.b)+esc(promptBox.b)+esc(promptBox.b)+esc(promptBox.b)
+        +'</div><div class="l">';
+      return;
+    }
     var col=kind==='user'?text:kind==='accent'?pv.accent:kind==='green'?pv.ok:kind==='dim'?dim:text;
     var w=kind==='bold'?'font-weight:700;':'';
     body+='<span style="color:'+col+';'+w+'">'+esc(t)+'</span>';
@@ -662,6 +691,70 @@ function syncDeps(){
   });
 }
 
+// Only the topBottom* border styles are drawn on the mock's prompt: those are two
+// full-width rules, which is exactly what a one-line prompt gets. The full-box styles
+// would need a width the mock does not have, so they show as no border here rather
+// than as a wrong one.
+function BOX_FOR(style){
+  if(style==='topBottomSingle')return {t:'\u2500',b:'\u2500'};
+  if(style==='topBottomDouble')return {t:'\u2550',b:'\u2550'};
+  if(style==='topBottomBold')return {t:'\u2501',b:'\u2501'};
+  return null;
+}
+
+// The Studio's border list, so both pages offer the same choices. Only the three
+// topBottom* styles are drawn on the mock (see BOX_FOR); the full-box styles still
+// install, they just need a width the one-line mock prompt does not have.
+var PROMPT_BORDERS=['none','single','round','double','bold','singleDouble','doubleSingle',
+  'classic','topBottomSingle','topBottomDouble','topBottomBold'];
+
+/** The payload stores message colours as rgb() strings, matching the Studio. */
+function hexToRgbStrC(hex){
+  var c=toRGBarr(hexOf(hex));
+  return 'rgb('+c[0]+','+c[1]+','+c[2]+')';
+}
+function promptColorRow(label,help,modeId,pickId){
+  return '<div class="ctl"><span class="cap">'+label+ihtml(help)+'</span>'
+   +'<div class="modrow"><span class="stychips" id="'+modeId+'"></span>'
+   +'<input type="color" id="'+pickId+'">'
+   +'<span class="hint" id="'+modeId+'h"></span></div></div>';
+}
+/**
+ * Default/Custom for a prompt colour. "Default" means the key is absent from the
+ * payload so Claude Code uses its own \u2014 and for the background that means no strip at
+ * all, so these two options are genuinely different states rather than two colours.
+ */
+function promptColorMode(hostId,pickId,key,fallbackPalKey){
+  var host=$('#'+hostId), pick=$('#'+pickId), hint=$('#'+hostId+'h');
+  function cur(){
+    if(!ccPayload.um)ccPayload.um={};
+    return ccPayload.um[key]||'';
+  }
+  function chip(label,on,cb){
+    var el=document.createElement('span');
+    el.className='stychip'+(on?' on':'');el.textContent=label;
+    el.addEventListener('click',function(){if(!el.classList.contains('on'))cb();});
+    return el;
+  }
+  function sync(){
+    var custom=!!cur();
+    host.innerHTML='';
+    host.appendChild(chip('Default',!custom,function(){ccPayload.um[key]='';sync();edited();}));
+    host.appendChild(chip('Custom',custom,function(){
+      ccPayload.um[key]=pick.value||'#ffff00';sync();edited();
+    }));
+    var shown=cur()||(fallbackPalKey?palHex(activePal()[fallbackPalKey],'#c0caf5'):'#ffff00');
+    pick.value=hexOf(shown);
+    hint.textContent=custom?'custom'
+      :(fallbackPalKey?'the theme\u2019s text colour':'no background strip');
+  }
+  pick.addEventListener('input',function(){
+    if(!ccPayload.um)ccPayload.um={};
+    ccPayload.um[key]=this.value;sync();edited();
+  });
+  sync();
+}
+
 function drawWindows(){
   // BEFORE is the machine as it is right now, so it keeps the colours the user already
   // has -- passing it the preset's palette would paint Dracula on both sides and hide
@@ -766,6 +859,10 @@ var HELP={
  showScrollBar:{t:'Show scroll bar',d:'Whether a scroll bar appears inside terminal panes (cmux.json terminal.showScrollBar).'},
  copyOnSelect:{t:'Copy on select',d:'Selecting text copies it straight to the clipboard, no \\u2318C. Off by default, and when off cmux leaves the decision to your Ghostty config.'},
  scrollSpeed:{t:'Scroll speed',d:'Multiplier for mouse and trackpad scrolling in terminals, 0.25 to 3.'},
+ umfg:{t:'Prompt text colour',d:'The colour of the text in the messages YOU send to Claude Code. Default leaves it as the theme\u2019s normal text colour. This is a Claude Code setting rather than a cmux one, but the same install command applies it.'},
+ umbg:{t:'Prompt highlight',d:'A solid background strip behind your own messages \u2014 the thing that makes them stand out from Claude\u2019s replies as you scroll back. Default means no strip at all, so Default and Custom here are two different states rather than two colours.'},
+ umb:{t:'Prompt border',d:'A border around your own messages. In the terminal this is drawn out of box-drawing CHARACTERS, so it costs a whole row above and below rather than being a thin line, and the preview draws it that way. The three topBottom styles are the ones the mock can show honestly at this width; the full-box styles still install.'},
+ umbold:{t:'Bold prompts',d:'Renders your own messages in bold. Combines with the colours above.'},
  contentAlignment:{t:'Session content alignment',d:'Where a session\\u2019s content sits when the pane is wider than the content (cmux.json terminal.sessionContentAlignment).'},
  sidebarHideDetails:{t:'Hide sidebar details',d:'Collapses everything but the workspace names \\u2014 no branch, no PR, no counts. The fastest way to a quiet sidebar.'},
  sidebarDescription:{t:'Show workspace description',d:'Shows the branch and directory line under each workspace name.'},
@@ -988,6 +1085,20 @@ function buildControls(){
    +chk('show pull requests','sidebarPullRequests','m_spr',s.sidebarPullRequests)
    +chk('watch git status','sidebarGitStatus','m_sgs',s.sidebarGitStatus)
   +'</div>'
+  +'<div class="panel"><h3>\u{1F4AC} Your prompts</h3>'
+   +'<p class="phint" style="margin-bottom:9px">The messages you type to Claude Code. '
+   +'These live on the Claude Code side of the setup rather than in cmux \u2014 but they '
+   +'are the most visible thing inside the window, so they are here too, and the same '
+   +'install command applies them.</p>'
+   +promptColorRow('Text colour','umfg','pm_fgm','pm_fg')
+   +promptColorRow('Highlight / background strip','umbg','pm_bgm','pm_bg')
+   +row('Border','umb',selHTML('pm_ub',PROMPT_BORDERS,String(ccPayload.ub||'none')))
+   +'<div class="modrow" style="margin-top:9px"><span class="cap" style="margin:0">Border colour</span>'
+   +'<input type="color" id="pm_uc" value="'+esc(hexOf(ccPayload.uc||'#7aa2f7'))+'"></div>'
+   +'<label class="ctl2"><input type="checkbox" id="pm_bold"'
+   +(((ccPayload.um&&ccPayload.um.st)||[]).indexOf('bold')>=0?' checked':'')+'> bold prompts'
+   +ihtml('umbold')+'</label>'
+  +'</div>'
   +'<div class="panel"><h3>\\u2328 Terminal behaviour</h3>'
    +chk('show scroll bar','showScrollBar','m_ssb',s.showScrollBar)
    +chk('copy on select<span class="nov">no visual change</span>','copyOnSelect','m_cos',s.copyOnSelect)
@@ -1031,6 +1142,20 @@ function buildControls(){
   onChk('m_ssb','showScrollBar');onChk('m_cos','copyOnSelect');
   onRange('m_ss','scrollSpeed','m_ssl',function(v){return v+'x';});
   onSel('m_align','contentAlignment');
+
+  // The prompt controls edit ccPayload, not state: they belong to the Claude Code half
+  // of the setup. Editing them still repaints the mock and rebuilds the install command,
+  // which is what edited() does either way.
+  promptColorMode('pm_fgm','pm_fg','fg','text');
+  promptColorMode('pm_bgm','pm_bg','bg','');
+  $('#pm_ub').addEventListener('change',function(){ccPayload.ub=this.value;edited();});
+  $('#pm_uc').addEventListener('input',function(){ccPayload.uc=hexToRgbStrC(this.value);edited();});
+  $('#pm_bold').addEventListener('change',function(){
+    if(!ccPayload.um)ccPayload.um={};
+    var st=(ccPayload.um.st||[]).filter(function(x){return x!=='bold';});
+    if(this.checked)st.push('bold');
+    ccPayload.um.st=st;edited();
+  });
 
   colorMode('m_pbm','m_pb','paneBorderFromPalette','paneBorder','subtle');
   colorMode('m_apbm','m_apb','activePaneBorderFromPalette','activePaneBorder','accent');
