@@ -78,7 +78,12 @@ const CMUX_CSS = `
   .cterm .l{white-space:pre-wrap;word-break:break-word;}
   .cscroll{position:absolute;right:2px;top:8px;bottom:8px;width:4px;border-radius:3px;
     background:var(--cm-chrome);}
-  .cterm[data-align="center"]{text-align:left;}
+  /* sessionContentAlignment only does anything when the PANE is wider than the session
+     content. The mock's panes are ~275px, narrower than any transcript line, so there is
+     genuinely nothing to align here and faking it would misrepresent the setting. The
+     control is badged instead. (The previous rule mapped center to text-align:left, which
+     was neither honest nor functional.) */
+  .cterm[data-align]{}
   .cbadge{display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:.12em;
     text-transform:uppercase;color:var(--faint);margin-bottom:7px;}
   .cbadge b{color:var(--text);letter-spacing:.02em;}
@@ -891,7 +896,7 @@ function buildControls(){
    +chk('copy on select<span class="nov">no visual change</span>','copyOnSelect','m_cos',s.copyOnSelect)
    +'<div class="inline2">'
    +row('Scroll speed <span class="hint" id="m_ssl"></span><span class="nov">no visual change</span>','scrollSpeed','<input id="m_ss" type="range" min="0.25" max="3" step="0.05" value="'+s.scrollSpeed+'">')
-   +row('Content alignment','contentAlignment',selHTML('m_align',O.alignments,s.contentAlignment))
+   +row('Content alignment<span class="nov">only in a wide pane</span>','contentAlignment',selHTML('m_align',O.alignments,s.contentAlignment))
    +'</div>'
   +'</div>';
 
