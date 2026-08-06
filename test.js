@@ -574,6 +574,77 @@ function bashCheck(src, label) {
   ok(JSON.parse(fs.readFileSync(path.join(newHome, '.config/cmux/cmux.json'), 'utf8')).schemaVersion === 1,
     'a freshly created cmux.json is valid JSON');
 
+  // Every key and every value we can write, checked against cmux's own schema.
+  // This exists because the indicatorStyle enum shipped wrong once — 'typographic'
+  // for 'typography', plus a 'none' that is not a cmux value — and nothing caught
+  // it: `cmux config validate` checks JSONC syntax only and exits 0 on out-of-enum
+  // values. The schema is the only thing that discriminates.
+  const cmSchema = require('./test/fixtures/cmux.schema.json');
+  function schemaProblems(node, sch, at) {
+    const bad = [];
+    if (!sch) return [at + ' is not in the schema'];
+    if (node && typeof node === 'object' && !Array.isArray(node)) {
+      for (const k of Object.keys(node)) {
+        const child = (sch.properties || {})[k];
+        const where = at ? at + '.' + k : k;
+        if (!child) {
+          if (sch.additionalProperties === false) bad.push(where + ' is rejected (additionalProperties:false)');
+          continue;
+        }
+        bad.push(...schemaProblems(node[k], child, where));
+      }
+      return bad;
+    }
+    if (sch.enum && sch.enum.indexOf(node) < 0) {
+      bad.push(at + ' = ' + JSON.stringify(node) + ' is not in [' + sch.enum.join(', ') + ']');
+    }
+    if (sch.type === 'number' || sch.type === 'integer') {
+      if (typeof sch.minimum === 'number' && node < sch.minimum) bad.push(at + ' = ' + node + ' below minimum ' + sch.minimum);
+      if (typeof sch.maximum === 'number' && node > sch.maximum) bad.push(at + ' = ' + node + ' above maximum ' + sch.maximum);
+    } else if (sch.type) {
+      const t = Array.isArray(node) ? 'array' : typeof node;
+      if (t !== sch.type) bad.push(at + ' is ' + t + ', schema wants ' + sch.type);
+    }
+    return bad;
+  }
+  const stripOurs = o => { const c = JSON.parse(JSON.stringify(o)); delete c['$schema']; return c; };
+
+  const defProblems = schemaProblems(stripOurs(CM.buildCmuxJson(cmDef, nord)), cmSchema, '');
+  ok(defProblems.length === 0, 'the default cmux.json validates against the schema', defProblems.slice(0, 3).join('; '));
+
+  // Every value the page can offer, not just the defaults: an enum this UI lists but
+  // cmux does not accept is a config the app silently ignores.
+  const enumSets = [
+    ['indicatorStyle', CM.INDICATOR_STYLES],
+    ['appearance', CM.APPEARANCES],
+    ['placement', CM.PLACEMENTS],
+    ['contentAlignment', CM.ALIGNMENTS],
+    ['branchLayout', CM.BRANCH_LAYOUTS],
+  ];
+  const enumProblems = [];
+  for (const [key, values] of enumSets) {
+    for (const v of values) {
+      const patch = { on: true }; patch[key] = v;
+      const written = CM.buildCmuxJson(CM.sanitizeCmux(patch), nord);
+      const p2 = schemaProblems(stripOurs(written), cmSchema, '');
+      if (p2.length) enumProblems.push(key + '=' + v + ': ' + p2[0]);
+    }
+  }
+  ok(enumProblems.length === 0,
+    'every enum value the page offers is one cmux accepts', enumProblems.slice(0, 3).join('; '));
+
+  // And the reverse: a value cmux supports but the page hides is a missing feature,
+  // which is how 'washRail' and 'blueWashColorRail' went absent for a while.
+  const schemaInd = cmSchema.properties.workspaceColors.properties.indicatorStyle.enum;
+  ok(schemaInd.every(v => CM.INDICATOR_STYLES.indexOf(v) >= 0),
+    'the page offers every indicator style cmux supports',
+    schemaInd.filter(v => CM.INDICATOR_STYLES.indexOf(v) < 0).join(', '));
+
+  // Stale share links carrying a retired value must fall back, never pass through.
+  ok(CM.sanitizeCmux({ on: true, indicatorStyle: 'typographic' }).indicatorStyle === 'leftRail'
+    && CM.sanitizeCmux({ on: true, indicatorStyle: 'none' }).indicatorStyle === 'leftRail',
+    'a share link with a retired indicator style falls back to the default');
+
   // The page and its routes.
   r = await call('/cmux');
   ok(r.status === 200 && /id="winBefore"/.test(r.body) && /id="cmuxControls"/.test(r.body),

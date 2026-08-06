@@ -33,8 +33,12 @@ const APPEARANCES = ['system', 'light', 'dark'];
 const PLACEMENTS = ['top', 'afterCurrent', 'end'];
 const ALIGNMENTS = ['left', 'center', 'right'];
 const BRANCH_LAYOUTS = ['vertical', 'inline'];
+// Verified against the schema the installer itself points at, and against cmux
+// 0.64.22's own binary. Note 'typography', not 'typographic', and there is no
+// 'none' — an out-of-enum value here writes a cmux.json the app will not honour,
+// and `cmux config validate` will not catch it (it checks JSONC syntax only).
 const INDICATOR_STYLES = ['leftRail', 'solidFill', 'rail', 'border', 'wash', 'lift',
-  'typographic', 'none'];
+  'typography', 'washRail', 'blueWashColorRail'];
 
 const CMUX_DEFAULTS = {
   // Ghostty side

@@ -56,8 +56,9 @@ const CMUX_CSS = `
   .cws.on[data-ind="border"]{border-color:var(--cm-sel);}
   .cws.on[data-ind="wash"]{background:var(--cm-selwash);}
   .cws.on[data-ind="lift"]{background:var(--cm-titlebar);box-shadow:0 3px 10px rgba(0,0,0,.5);}
-  .cws.on[data-ind="typographic"]{font-weight:700;color:var(--cm-sel);}
-  .cws.on[data-ind="none"]{}
+  .cws.on[data-ind="typography"]{font-weight:700;color:var(--cm-sel);}
+  .cws.on[data-ind="washRail"]{background:var(--cm-selwash);box-shadow:inset 3px 0 0 var(--cm-sel);}
+  .cws.on[data-ind="blueWashColorRail"]{background:rgba(96,140,220,.20);box-shadow:inset 3px 0 0 var(--cm-sel);}
 
   /* Panes and their surface tab bars. */
   .cpanes{flex:1;display:flex;min-width:0;}
@@ -403,7 +404,7 @@ var HELP={
  tint:{t:'Sidebar tint',d:'A wash of colour over the sidebar (cmux.json sidebarAppearance). Defaults to your Claude Code background so the sidebar reads as part of the same theme. Note this tints only the sidebar \\u2014 terminal transparency is Background opacity above.'},
  tintOpacity:{t:'Tint strength',d:'How strongly the sidebar tint applies, 0 to 1. cmux\\u2019s default is 0.03 \\u2014 a hint rather than a colour.'},
  matchTerminalBg:{t:'Match terminal background',d:'Makes the sidebar exactly the terminal background instead of a tinted version of it, so the window reads as one surface with no seam.'},
- indicatorStyle:{t:'Selected workspace style',d:'How cmux marks the workspace you are in \\u2014 all eight of its styles are here and the preview shows each one. leftRail is the default: a coloured bar down the left edge.'},
+ indicatorStyle:{t:'Selected workspace style',d:'How cmux marks the workspace you are in \\u2014 all nine of its styles are here and the preview shows each one. leftRail is the default: a coloured bar down the left edge.'},
  selectionColor:{t:'Selection colour',d:'The colour that marking uses. Defaults to your Claude Code accent.'},
  showScrollBar:{t:'Show scroll bar',d:'Whether a scroll bar appears inside terminal panes (cmux.json terminal.showScrollBar).'},
  copyOnSelect:{t:'Copy on select',d:'Selecting text copies it straight to the clipboard, no \\u2318C. Off by default, and when off cmux leaves the decision to your Ghostty config.'},
