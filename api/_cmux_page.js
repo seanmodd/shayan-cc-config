@@ -185,7 +185,7 @@ const CMUX_CSS = `
      mock from 201px to 626px and it spilled over the controls underneath. Clipping the
      transcript is the right trade here: pinned, you are watching the chrome and the
      colours, and the top of the transcript is what matters. */
-  body.pinned .cmuxpair{position:sticky;top:0;z-index:45;background:var(--bg);
+  body.pinned .cmuxpair{position:sticky;top:var(--switch-h,46px);z-index:45;background:var(--bg);
     padding-bottom:12px;box-shadow:0 16px 20px -14px rgba(0,0,0,.75);}
   /* The var's fallback is how a dragged height takes precedence without a specificity
      fight: --dock-h only exists once you have used the handle. */
@@ -335,7 +335,7 @@ function renderCmux(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   const lines = JSON.stringify(LINES);
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>cmux · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${CMUX_CSS}</style></head><body>
+<title>cmux · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${CMUX_CSS}</style></head><body class="pinned">
 ${topBar('cmux', ghSvg)}
 <header class="chead"><h1>🪟 cmux</h1>
 <p class="sub" style="margin-top:8px">The terminal <b>around</b> Claude Code. cmux is a native macOS terminal built on Ghostty — sidebar workspaces, split panes, surface tabs. Style it here and it layers <b>on top of</b> the Claude Code theme you picked, so the whole window is one setup. One command applies both.</p></header>
@@ -346,9 +346,9 @@ ${topBar('cmux', ghSvg)}
       <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
       <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
     </div>
-    <button type="button" id="pinbtn" class="pinbtn" aria-pressed="false"
+    <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
-      <span class="pico">\u{1F4CC}</span><span class="ptxt">Pin preview</span></button>
+      <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
   </div>
   <div class="cmuxpair" data-pane="after" id="pair">
     <div class="cmuxcol cmuxcol-before">
@@ -365,8 +365,6 @@ ${topBar('cmux', ghSvg)}
       <span class="gbar"></span><span class="gtxt">drag to resize</span><span class="gbar"></span>
     </div>
   </div>
-
-${compareBlock('cmux')}
 
   <div class="panel presetpanel"><h3>\u{1F3AC} Start from a theme</h3>
     <p class="phint">Pick a starting point, then change anything below. A community
@@ -391,6 +389,8 @@ ${compareBlock('cmux')}
       </div>
     </div>
   </div>
+
+${compareBlock('cmux')}
 </div>
 
 <div class="barbot">
@@ -1456,7 +1456,7 @@ window.addEventListener('scroll',function(){if(_tipBtn)hideTip();},true);
 // a sidebar and two panes, and at its natural height it leaves a phone with nothing
 // but chrome on screen. Whatever you last chose is remembered under scc_cmux_pin.
 installPreviewDock({dock:'#pair',grip:'#dockgrip',pin:'#pinbtn',
-  term:'.cterm',key:'cmux',pinDefault:false});
+  term:'.cterm',key:'cmux',pinDefault:true});
 
 // ── before/after switch ───────────────────────────────────────────────────────
 (function(){

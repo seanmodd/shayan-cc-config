@@ -6,7 +6,7 @@
 
 // ── server-side constants / sanitizers ──────────────────────────────────────
 
-const SL_SEG_IDS = ['model', 'dir', 'git', 'ctx', 'cost', 'dur', 'lines', 'style', 'ver', 'clock', 'text'];
+const SL_SEG_IDS = ['model', 'effort', 'dir', 'git', 'ctx', 'cost', 'dur', 'lines', 'style', 'ver', 'clock', 'text'];
 const SL_SEPS = [' | ', ' \u00b7 ', '  ', ' \u2014 ', ' \u203a '];
 const SL_BARS = {
   blocks: ['\u25ae', '\u25af'],
@@ -15,6 +15,14 @@ const SL_BARS = {
   braille: ['\u28ff', '\u28c0'],
 };
 const SL_CTX_FMTS = ['pct', 'pct-of', 'tokens'];
+// What the context gauge is a fraction OF.
+//   window      — the model's real context window, read from
+//                 context_window.context_window_size in the status-line payload
+//   autocompact — the point this session will actually compact at, which is the number
+//                 that decides when you get interrupted. Claude Code exposes the window
+//                 but NOT the compaction threshold, so the script resolves the
+//                 autoCompactWindow setting itself; see compactWindow() below.
+const SL_CTX_BASIS = ['window', 'autocompact'];
 const UMD_STYLES = ['bold', 'italic', 'underline', 'strikethrough', 'inverse'];
 const UMD_BORDERS = ['none', 'single', 'double', 'round', 'bold', 'singleDouble', 'doubleSingle',
   'classic', 'topBottomSingle', 'topBottomDouble', 'topBottomBold'];
@@ -99,6 +107,7 @@ function sanitizeSL(sl) {
     em: sl.em !== false,
     bar: has(SL_BARS, sl.bar) ? sl.bar : 'blocks',
     ctxFmt: SL_CTX_FMTS.includes(sl.ctxFmt) ? sl.ctxFmt : 'pct-of',
+    ctxBasis: SL_CTX_BASIS.includes(sl.ctxBasis) ? sl.ctxBasis : 'window',
     text: cleanText(sl.text, 24),
   };
 }
@@ -192,7 +201,8 @@ function paletteSeedHex(colors) {
 function buildStatuslineScript(slSan, palette) {
   const p = sanePalette(palette);
   const cfg = {
-    seg: slSan.seg, sep: slSan.sep, em: slSan.em, ctxFmt: slSan.ctxFmt, text: slSan.text,
+    seg: slSan.seg, sep: slSan.sep, em: slSan.em, ctxFmt: slSan.ctxFmt,
+    ctxBasis: slSan.ctxBasis, text: slSan.text,
     barChars: has(SL_BARS, slSan.bar) ? SL_BARS[slSan.bar] : SL_BARS.blocks,
     colors: {
       accent: p.accent, dim: p.comment, text: p.text,
@@ -204,10 +214,12 @@ function buildStatuslineScript(slSan, palette) {
   L.push('#!/usr/bin/env node');
   L.push('// shayan-cc-config status line (generated) \u2014 reads Claude Code status JSON on stdin,');
   L.push('// prints one ANSI-colored line. Rebuild yours at https://shayan-cc-config.vercel.app/customize');
-  L.push("const fs = require('fs'), path = require('path'), cp = require('child_process');");
+  // os is for compactWindow(), which reads ~/.claude/settings.json to find the
+  // autoCompactWindow this session will actually compact at.
+  L.push("const fs = require('fs'), path = require('path'), cp = require('child_process'), os = require('os');");
   // The embedded config is the one thing a truncated or hand-edited install would
   // break, so its parse is guarded like everything else rather than crashing at load.
-  L.push('const FALLBACK_CFG = ' + JSON.stringify({ seg: ['model', 'dir'], sep: ' | ', em: false, ctxFmt: 'pct', text: '', barChars: SL_BARS.blocks, colors: cfg.colors }) + ';');
+  L.push('const FALLBACK_CFG = ' + JSON.stringify({ seg: ['model', 'dir'], sep: ' | ', em: false, ctxFmt: 'pct', ctxBasis: 'window', text: '', barChars: SL_BARS.blocks, colors: cfg.colors }) + ';');
   L.push('let CFG = FALLBACK_CFG;');
   L.push("try { CFG = JSON.parse(Buffer.from('" + b64 + "', 'base64').toString('utf8')); } catch (e) {}");
   L.push('const ESC = String.fromCharCode(27), RST = ESC + "[0m";');
@@ -233,6 +245,9 @@ function buildStatuslineScript(slSan, palette) {
   L.push('function seg(id, j, cwd, k) {');
   L.push('  switch (id) {');
   L.push("    case 'model': { const n = txt(j.model && j.model.display_name, 40); return n ? k.A + n : ''; }");
+  // effort.level is absent whenever the current model has no reasoning-effort
+  // parameter, so this segment renders nothing rather than a blank separator.
+  L.push("    case 'effort': { const e = txt(j.effort && j.effort.level, 8); return e ? k.A + (k.em ? '\\u{1F9E0}' : '') + e : ''; }");
   L.push("    case 'dir': return k.T + (k.em ? '\\u{1F4C1}' : '') + txt(path.basename(cwd), 40);");
   L.push("    case 'git': return gitSeg(cwd, k);");
   L.push("    case 'ctx': return ctxSeg(j, k);");
@@ -259,25 +274,69 @@ function buildStatuslineScript(slSan, palette) {
   L.push('function ctxSeg(j, k) {');
   L.push('  const used = usedTokens(j);');
   L.push("  if (used == null) return '';");
-  L.push('  const win = contextWindow(j);');
+  // Which denominator the gauge is against — the model's window, or the point this
+  // session will actually compact at.
+  L.push("  const win = CFG.ctxBasis === 'autocompact' ? compactWindow(j) : contextWindow(j);");
   L.push('  const pct = Math.max(0, Math.min(100, Math.round(used / win * 100)));');
   L.push('  const cells = 8, fill = Math.max(0, Math.min(cells, Math.round(pct / 100 * cells)));');
   L.push('  const B = (Array.isArray(CFG.barChars) && CFG.barChars.length === 2) ? CFG.barChars : ["\\u25ae", "\\u25af"];');
   L.push('  const bar = k.A + B[0].repeat(fill) + k.S + B[1].repeat(cells - fill);');
-  L.push("  const kk = n => n >= 1000 ? Math.round(n / 1000) + 'k' : String(n);");
+  L.push("  const kk = n => n >= 1000000 ? (Math.round(n / 100000) / 10) + 'M' : n >= 1000 ? Math.round(n / 1000) + 'k' : String(n);");
   // Past the assumed window our guess is wrong, so print the count alone rather than
   // an impossible fraction like 641k/200k.
   L.push("  if (CFG.ctxFmt === 'tokens') return bar + ' ' + k.T + kk(used) + (used > win ? '' : k.D + '/' + kk(win));");
   L.push("  if (CFG.ctxFmt === 'pct') return bar + ' ' + k.T + pct + '%';");
   L.push("  return bar + ' ' + k.T + pct + '% ' + k.D + 'of ' + kk(win);");
   L.push('}');
-  L.push('// Context window from the model id only. It must NOT be inferred from observed');
-  L.push('// usage: tiering up the moment usage crosses 200k made the gauge jump from full');
-  L.push('// down to ~40% exactly when the context filled, which is when it matters most.');
+  L.push('// The real window, straight from the payload when Claude Code sends it — that is');
+  L.push('// authoritative and covers 1M models without pattern-matching a model id. Older');
+  L.push('// builds omit context_window, so the id guess stays as the fallback.');
+  L.push('//');
+  L.push('// It must NOT be inferred from observed usage: tiering up the moment usage crosses');
+  L.push('// 200k made the gauge jump from full down to ~40% exactly when the context filled,');
+  L.push('// which is when it matters most.');
   L.push('function contextWindow(j) {');
+  L.push('  const cw = j.context_window;');
+  L.push("  if (cw && typeof cw === 'object') {");
+  L.push('    const n = num(cw.context_window_size);');
+  L.push('    if (n && n > 0) return n;');
+  L.push('  }');
   L.push("  const mid = String((j.model && typeof j.model === 'object' && j.model.id) || '');");
   L.push('  return /1m|\\[1m\\]/i.test(mid) ? 1000000 : 200000;');
   L.push('}');
+  L.push('// The point THIS session compacts at, which is the number that decides when you');
+  L.push('// get interrupted — usually well below the window.');
+  L.push('//');
+  L.push('// Claude Code does not put it in the status-line payload, so it is resolved the');
+  L.push('// same way Claude Code resolves it: the env override first, then autoCompactWindow');
+  L.push('// from the settings files, nearest scope first. If auto-compaction is switched off');
+  L.push('// there is no threshold to show, and if nothing sets a window Claude Code picks one');
+  L.push('// "tuned for your model" that it does not publish — either way we fall back to the');
+  L.push('// real window rather than inventing a number.');
+  L.push('function compactWindow(j) {');
+  L.push('  const win = contextWindow(j);');
+  L.push('  const envv = num(process.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW);');
+  L.push('  if (envv && envv > 0) return clampWin(envv, win);');
+  L.push("  if (String(process.env.DISABLE_AUTO_COMPACT || '') === '1') return win;");
+  L.push('  const files = [');
+  L.push("    path.join(cwdSafe(), '.claude', 'settings.local.json'),");
+  L.push("    path.join(cwdSafe(), '.claude', 'settings.json'),");
+  L.push("    path.join(os.homedir(), '.claude', 'settings.json'),");
+  L.push('  ];');
+  L.push('  for (const f of files) {');
+  L.push('    try {');
+  L.push('      if (!fs.existsSync(f)) continue;');
+  L.push("      const s = JSON.parse(fs.readFileSync(f, 'utf8'));");
+  L.push('      if (s.autoCompactEnabled === false) return win;');
+  L.push('      const n = num(s.autoCompactWindow);');
+  L.push('      if (n && n > 0) return clampWin(n, win);');
+  L.push('    } catch (e) {}');
+  L.push('  }');
+  L.push('  return win;');
+  L.push('}');
+  L.push('// The setting is documented as 100k–1M, and it can never exceed the real window.');
+  L.push('function clampWin(n, win) { return Math.max(100000, Math.min(win, Math.round(n))); }');
+  L.push('function cwdSafe() { try { return process.cwd(); } catch (e) { return os.homedir(); } }');
   L.push('function usedTokens(j) {');
   L.push('  try {');
   L.push('    const tp = j.transcript_path;');
@@ -318,6 +377,7 @@ function buildStatuslineScript(slSan, palette) {
 const TERM_SRC = `
 var SL_SEG_META=[
  {id:'model',name:'Model name'},
+ {id:'effort',name:'Reasoning effort'},
  {id:'dir',name:'Folder'},
  {id:'git',name:'Git branch'},
  {id:'ctx',name:'Context bar'},
@@ -351,10 +411,11 @@ var CHEV_MAP={claude:'accent',planMode:'planMode',success:'success',warning:'war
 function slDemo(T){
   var d=new Date();var pad=function(n){return ('0'+n).slice(-2);};
   return {model:'Opus 5',dir:'senpex-frontend',branch:'main',dirty:T.sends>0,pct:T.pct,
-    used:T.pct*2000,win:200000,cost:0.42+T.sends*0.07,dur:38+T.sends*2,add:214+T.sends*6,del:58+T.sends,
+    used:T.pct*2000,win:200000,compact:140000,effort:'high',
+    cost:0.42+T.sends*0.07,dur:38+T.sends*2,add:214+T.sends*6,del:58+T.sends,
     style:'default',ver:'2.1.12',time:pad(d.getHours())+':'+pad(d.getMinutes())};
 }
-function kk(n){return n>=1000?Math.round(n/1000)+'k':String(n);}
+function kk(n){return n>=1000000?(Math.round(n/100000)/10)+'M':n>=1000?Math.round(n/1000)+'k':String(n);}
 function slHTML(m,T){
   var sl=m.sl;if(!sl||!sl.on)return '';
   var c=m.colors,d=slDemo(T),em=sl.em!==false;
@@ -367,12 +428,18 @@ function slHTML(m,T){
     else if(id==='dir')h=span(c.text,(em?'\u{1F4C1}':'')+eH(d.dir));
     else if(id==='git')h=span(c.text,(em?'\u{1F500}':'\u2387 ')+eH(d.branch))+(d.dirty?' '+span(c.error,'\u2717'):'');
     else if(id==='ctx'){
-      var fill=Math.max(0,Math.min(8,Math.round(d.pct/100*8)));
+      // Same denominator choice the installed script makes: against the model's window,
+      // or against the point this session actually compacts at. The percentage has to be
+      // recomputed from it, or the bar would say 42% of two different numbers.
+      var basis=(sl.ctxBasis==='autocompact')?d.compact:d.win;
+      var bpct=Math.max(0,Math.min(100,Math.round(d.used/basis*100)));
+      var fill=Math.max(0,Math.min(8,Math.round(bpct/100*8)));
       var bar=span(c.accent,Array(fill+1).join(B[0]))+span(c.subtle,Array(8-fill+1).join(B[1]));
-      if(sl.ctxFmt==='tokens')h=bar+' '+span(c.text,kk(d.used))+(d.used>d.win?'':span(c.inactive,'/'+kk(d.win)));
-      else if(sl.ctxFmt==='pct')h=bar+' '+span(c.text,d.pct+'%');
-      else h=bar+' '+span(c.text,d.pct+'% ')+span(c.inactive,'of '+kk(d.win));
+      if(sl.ctxFmt==='tokens')h=bar+' '+span(c.text,kk(d.used))+(d.used>basis?'':span(c.inactive,'/'+kk(basis)));
+      else if(sl.ctxFmt==='pct')h=bar+' '+span(c.text,bpct+'%');
+      else h=bar+' '+span(c.text,bpct+'% ')+span(c.inactive,'of '+kk(basis));
     }
+    else if(id==='effort')h=span(c.accent,(em?'\u{1F9E0}':'')+eH(d.effort));
     else if(id==='cost')h=span(c.text,(em?'\u{1F4B0}':'')+'$'+d.cost.toFixed(2));
     else if(id==='dur')h=span(c.text,(em?'\u23F1 ':'')+d.dur+'m');
     else if(id==='lines')h=span(c.success,'+'+d.add)+span(c.inactive,'/')+span(c.error,'-'+d.del);
@@ -741,7 +808,7 @@ const TERM_CSS = `
 
 module.exports = {
   TERM_SRC, TERM_CSS,
-  SL_SEG_IDS, SL_SEPS, SL_BARS, SL_CTX_FMTS, UMD_STYLES, UMD_BORDERS, IB_CHEVRON_KEYS,
+  SL_SEG_IDS, SL_SEPS, SL_BARS, SL_CTX_FMTS, SL_CTX_BASIS, UMD_STYLES, UMD_BORDERS, IB_CHEVRON_KEYS,
   sanitizeSL, buildUMD, buildInputBox, buildStatuslineScript,
   previewColors, paletteSeedHex, sanePalette, PALETTE_KEYS,
   cleanText, cleanTerm, cleanName, cleanFormat, toRgbStr, clampInt,

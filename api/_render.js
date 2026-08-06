@@ -456,6 +456,25 @@ function installPreviewDock(o){
   var savedPin=read(KEY_PIN);
   setPin(savedPin===null?!!o.pinDefault:savedPin==='1',false);
 
+  // The row holding the Pin button sticks too, directly above the preview — otherwise
+  // the control that unpins scrolls away the moment pinning starts mattering, and you
+  // have to scroll back to the top to turn it off.
+  //
+  // Two stacked sticky elements need the lower one offset by the height of the upper
+  // one, and that height is not a constant: the row wraps to two full-width buttons on a
+  // phone. So it is measured and published as --switch-h for the CSS to offset against.
+  var row=document.querySelector('.switchrow');
+  if(row){
+    var measure2=function(){
+      var h=Math.round(row.getBoundingClientRect().height);
+      if(h>0)root.style.setProperty('--switch-h',h+'px');
+    };
+    measure2();
+    window.addEventListener('resize',measure2);
+    window.addEventListener('orientationchange',measure2);
+    if(window.ResizeObserver)new ResizeObserver(measure2).observe(row);
+  }
+
   if(!grip)return;
 
   // Measuring the live terminal rather than tracking a number in JS means a drag

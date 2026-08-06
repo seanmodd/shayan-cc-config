@@ -108,6 +108,14 @@ const ZJ_CSS = `
     font-size:10.5px;letter-spacing:.04em;}
   .zbadge .pill.aft{border-color:var(--accent);color:var(--accent);}
 
+  /* Pinned: same arrangement as the other terminal pages — the mock sticks below the
+     switch row, and the pane height stops tracking its content so the window cannot
+     grow over the controls underneath. A dragged height wins via the var's fallback. */
+  body.pinned .zpair{position:sticky;top:var(--switch-h,46px);z-index:45;background:var(--bg);
+    padding-bottom:12px;box-shadow:0 16px 20px -14px rgba(0,0,0,.75);}
+  body.pinned .zterm{height:var(--dock-h,min(24dvh,180px));flex:none;overflow:hidden;}
+  body.docked .zterm{height:var(--dock-h);flex:none;overflow:hidden;}
+
   .zpanels{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;
     align-items:start;}
   @media(min-width:760px){#zjControls{grid-template-columns:repeat(auto-fit,minmax(370px,1fr));}}
@@ -156,7 +164,7 @@ function renderZellij(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   const plugins = JSON.stringify(ZJ_PLUGINS);
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Zellij · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${ZJ_CSS}</style></head><body>
+<title>Zellij · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${ZJ_CSS}</style></head><body class="pinned">
 ${topBar('zellij', ghSvg)}
 <header class="zhead"><h1>\u{1F9E9} Zellij</h1>
 <p class="sub" style="margin-top:8px">A terminal workspace with <b>layouts you can check into the repo</b> and sessions that come back after a crash,
@@ -169,9 +177,9 @@ Build a <span class="mono">config.kdl</span> and an agent layout here; one comma
       <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
       <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
     </div>
-    <button type="button" id="pinbtn" class="pinbtn" aria-pressed="false"
+    <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
-      <span class="pico">\u{1F4CC}</span><span class="ptxt">Pin preview</span></button>
+      <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
   </div>
   <div class="zpair" data-pane="after" id="pair">
     <div class="zcol zcol-before">
@@ -188,8 +196,6 @@ Build a <span class="mono">config.kdl</span> and an agent layout here; one comma
       <span class="gbar"></span><span class="gtxt">drag to resize</span><span class="gbar"></span>
     </div>
   </div>
-
-${compareBlock('zellij')}
 
   <div class="panel" style="margin-bottom:14px"><h3>\u{1F3A8} Theme</h3>
     <p class="phint">All 41 themes that ship with Zellij 0.44.3. Names are taken from inside each
@@ -233,6 +239,8 @@ ${compareBlock('zellij')}
       <div class="zfiles" id="layoutOut"></div>
     </div>
   </div>
+
+${compareBlock('zellij')}
 </div>
 
 <div class="barbot">
@@ -641,7 +649,7 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();})
 })();
 
 installPreviewDock({dock:'#pair',grip:'#dockgrip',pin:'#pinbtn',
-  term:'.zterm',key:'zellij',pinDefault:false});
+  term:'.zterm',key:'zellij',pinDefault:true});
 installNav();
 `;
 

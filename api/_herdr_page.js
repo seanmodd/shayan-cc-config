@@ -104,6 +104,15 @@ const HERDR_CSS = `
     font-size:10.5px;letter-spacing:.04em;}
   .hbadge .pill.aft{border-color:var(--accent);color:var(--accent);}
 
+  /* Pinned: the mock rides the top with the controls sliding under it, offset by the
+     sticky switch row above. The terminal takes a fixed height while pinned so the
+     window stops growing with its content, and a dragged height overrides that through
+     the var's fallback. */
+  body.pinned .hpair{position:sticky;top:var(--switch-h,46px);z-index:45;background:var(--bg);
+    padding-bottom:12px;box-shadow:0 16px 20px -14px rgba(0,0,0,.75);}
+  body.pinned .hterm{height:var(--dock-h,min(26dvh,200px));flex:none;overflow:hidden;}
+  body.docked .hterm{height:var(--dock-h);flex:none;overflow:hidden;}
+
   .hpanels{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;
     align-items:start;}
   @media(min-width:760px){#herdrControls{grid-template-columns:repeat(auto-fit,minmax(370px,1fr));}}
@@ -186,7 +195,7 @@ function renderHerdr(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   const lines = JSON.stringify(LINES);
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>herdr · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${HERDR_CSS}</style></head><body>
+<title>herdr · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${HERDR_CSS}</style></head><body class="pinned">
 ${topBar('herdr', ghSvg)}
 <header class="hhead"><h1>\u{1F9AC} herdr</h1>
 <p class="sub" style="margin-top:8px">The multiplexer that knows what your agents are <b>doing</b>. herdr classifies every agent pane as
@@ -199,9 +208,9 @@ ${topBar('herdr', ghSvg)}
       <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
       <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
     </div>
-    <button type="button" id="pinbtn" class="pinbtn" aria-pressed="false"
+    <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
-      <span class="pico">\u{1F4CC}</span><span class="ptxt">Pin preview</span></button>
+      <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
   </div>
   <div class="hpair" data-pane="after" id="pair">
     <div class="hcol hcol-before">
@@ -218,8 +227,6 @@ ${topBar('herdr', ghSvg)}
       <span class="gbar"></span><span class="gtxt">drag to resize</span><span class="gbar"></span>
     </div>
   </div>
-
-${compareBlock('herdr')}
 
   <div class="panel" style="margin-bottom:14px"><h3>\u{1F3A8} Theme</h3>
     <p class="phint">herdr ships 18 built-in themes. Pick one and the whole window follows —
@@ -262,6 +269,8 @@ brew install herdr</div>
       way — the hook supplies the session identity.</p>
     </div>
   </div>
+
+${compareBlock('herdr')}
 </div>
 
 <div class="barbot">
@@ -741,7 +750,7 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();})
 })();
 
 installPreviewDock({dock:'#pair',grip:'#dockgrip',pin:'#pinbtn',
-  term:'.hterm',key:'herdr',pinDefault:false});
+  term:'.hterm',key:'herdr',pinDefault:true});
 installNav();
 `;
 

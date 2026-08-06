@@ -93,6 +93,18 @@ function bashCheck(src, label) {
     // One menu button per page, and the registry travels with it. Without the second
     // check the menu would render but have nothing in it.
     ok(r.body.split('id="navbtn"').length === 2, p + ': exactly one menu button');
+    // Every page with a preview pins it by default, and all four parts have to agree:
+    // the markup, the JS default, the sticky rule for the preview, and the sticky rule
+    // for the row holding the unpin button. /herdr and /zellij shipped once with the JS
+    // but no CSS, so pinning silently did nothing — hence checking the rule, not the flag.
+    if (r.body.includes('id="pinbtn"')) {
+      ok(/<body class="pinned">/.test(r.body), p + ': starts pinned in the markup');
+      ok(/pinDefault:true/.test(r.body), p + ': starts pinned in the script');
+      ok(/body\.pinned \.(terms|cmuxpair|hpair|zpair)\{position:sticky;top:var\(--switch-h/.test(r.body),
+        p + ': the pinned preview actually sticks');
+      ok(/body\.pinned \.switchrow\{position:sticky;top:0;/.test(r.body),
+        p + ': the pin button stays on screen while you scroll');
+    }
     ok(/var NAV=\{/.test(r.body), p + ': ships the page registry');
     for (const pg of PAGES) {
       ok(r.body.includes(JSON.stringify(pg.path)), p + ': menu knows about ' + pg.path);
@@ -393,8 +405,66 @@ function bashCheck(src, label) {
   ok(pctOf(a.plain) === 99 && pctOf(b.plain) === 100,
     'gauge rises to 100% instead of collapsing when 200k fills', `${pctOf(a.plain)}% then ${pctOf(b.plain)}%`);
   ok(/of 200k/.test(b.plain), 'window stays 200k rather than inventing a larger tier', b.plain);
+  // "1M", not "1000k" — a million-token window is the case the window basis exists for,
+  // and spelling it in thousands is the least readable way to write it.
   const oneM = runSl({ transcript_path: justOver, cwd: ROOT, model: { id: 'claude-sonnet-5[1m]', display_name: 'M' } });
-  ok(/of 1000k/.test(oneM.plain), '1m marker still selects the 1m window', oneM.plain);
+  ok(/of 1M/.test(oneM.plain), '1m marker still selects the 1m window', oneM.plain);
+  // The payload's own context_window_size outranks the model-id guess when present.
+  const fromPayload = runSl({
+    transcript_path: justOver, cwd: ROOT, model: { id: 'no-marker-here', display_name: 'M' },
+    context_window: { context_window_size: 1000000 },
+  });
+  ok(/of 1M/.test(fromPayload.plain),
+    'the reported context window beats the model-id guess', fromPayload.plain);
+
+  // ── the effort segment and the auto-compact basis ─────────────────────────
+  // Through the real route, like every other status-line test here — that exercises the
+  // sanitizer and the generator together rather than just the generator.
+  const slFile2 = path.join(TMP, 'sl-effort.js');
+  const mkSl = async (seg, basis) => {
+    const res = await call('/statusline.js?c=' + encodeURIComponent(b64e({
+      ...LEGACY,
+      sl: { on: true, seg, sep: ' | ', em: false, bar: 'blocks', ctxFmt: 'pct-of', ctxBasis: basis, text: '' },
+    })));
+    fs.writeFileSync(slFile2, res.body);
+    return slFile2;
+  };
+  const runSl2 = (file, payload, env) => {
+    const out = cp.spawnSync('node', [file], {
+      input: JSON.stringify(payload), encoding: 'utf8', timeout: 5000,
+      env: { ...process.env, ...(env || {}) },
+    });
+    return (out.stdout || '').replace(/\x1b\[[0-9;]*m/g, '');
+  };
+  const tr84 = path.join(TMP, 'tr84.jsonl');
+  fs.writeFileSync(tr84, JSON.stringify({ message: { usage: { input_tokens: 84000, output_tokens: 0 } } }) + '\n');
+  const base = { transcript_path: tr84, cwd: ROOT, model: { id: 'claude-fable-5', display_name: 'F' } };
+
+  const withEffort = runSl2(await mkSl(['effort'], 'window'), { ...base, effort: { level: 'xhigh' } });
+  ok(/xhigh/.test(withEffort), 'effort segment prints the live level', withEffort);
+  // Absent on models with no effort parameter — it must vanish, not leave a stray gap.
+  const noEffort = runSl2(await mkSl(['model', 'effort', 'ver'], 'window'), { ...base, version: '2.1.1' });
+  ok(!/\|\s*\|/.test(noEffort) && /F \| v2\.1\.1/.test(noEffort),
+    'effort segment disappears cleanly when the model has no effort', noEffort);
+
+  // The auto-compact basis: the env override is what Claude Code itself honours first.
+  const compactEnv = runSl2(await mkSl(['ctx'], 'autocompact'),
+    { ...base, context_window: { context_window_size: 1000000 } },
+    { CLAUDE_CODE_AUTO_COMPACT_WINDOW: '120000' });
+  ok(/70% of 120k/.test(compactEnv), '84k against a 120k compact window reads 70%', compactEnv);
+  const windowBasis = runSl2(await mkSl(['ctx'], 'window'),
+    { ...base, context_window: { context_window_size: 1000000 } });
+  ok(/8% of 1M/.test(windowBasis), 'the same usage against the 1M window reads 8%', windowBasis);
+  // Nothing configured: fall back to the real window rather than inventing a threshold.
+  const compactUnset = runSl2(await mkSl(['ctx'], 'autocompact'),
+    { ...base, context_window: { context_window_size: 200000 } }, { CLAUDE_CODE_AUTO_COMPACT_WINDOW: '' });
+  ok(/of 200k/.test(compactUnset),
+    'with no autoCompactWindow set, the basis falls back to the real window', compactUnset);
+  // The documented floor is 100k, and it can never exceed the real window.
+  const compactSilly = runSl2(await mkSl(['ctx'], 'autocompact'),
+    { ...base, context_window: { context_window_size: 200000 } },
+    { CLAUDE_CODE_AUTO_COMPACT_WINDOW: '999999999' });
+  ok(/of 200k/.test(compactSilly), 'a compact window larger than the real one is clamped', compactSilly);
 
   // non-numeric fields must degrade, never print NaN
   const badTok = mkTr({ message: { usage: { input_tokens: 'lots', output_tokens: 5 } } }, 'badtok.jsonl');

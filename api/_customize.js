@@ -29,7 +29,7 @@ const STUDIO_CSS = `
      point of the page, but a preview that owns the top of the screen is exactly
      wrong when you are reading a long control panel, so it comes off. */
   .terms{position:relative;z-index:40;background:var(--bg);padding:14px 0 16px;display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-  body.pinned .terms{position:sticky;top:0;box-shadow:0 18px 22px -14px rgba(0,0,0,.65);}
+  body.pinned .terms{position:sticky;top:var(--switch-h,46px);box-shadow:0 18px 22px -14px rgba(0,0,0,.65);}
   /* Matched specificity, or the pinned rule above would out-rank this and stick a
      full-height terminal to the top of a narrow screen. */
   @media(max-width:980px){
@@ -122,6 +122,13 @@ const STUDIO_CSS = `
      behaviour behind both lives in installPreviewDock(). */
   .switchrow{display:flex;align-items:center;gap:10px;margin-bottom:2px;}
   .switchrow .paneswitch{flex:1;}
+  /* Pinned, the row sticks above the preview so the button that unpins is still
+     reachable — it is the one control you want when a pinned preview is in the way.
+     z-index sits above the preview's own, and the background keeps the controls
+     scrolling underneath from showing through. --switch-h is published by
+     installPreviewDock(); the fallback covers the moment before the script runs. */
+  body.pinned .switchrow{position:sticky;top:0;z-index:46;background:var(--bg);
+    padding:8px 0 4px;margin-bottom:0;}
   .pinbtn{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-family:inherit;
     font-size:12.5px;font-weight:600;letter-spacing:.02em;border:1px solid var(--border);
     background:#10141b;color:var(--dim);border-radius:10px;padding:0 12px;min-height:38px;
@@ -311,7 +318,7 @@ function defaultState(){
     ub:'none', uc:'#7aa2f7',
     um:{f:' > {} ', st:[], fg:'', bg:'', px:0, py:0, fit:false},
     ib:{rb:false, ch:''},
-    sl:{on:true, seg:['model','dir','git','ctx'], sep:' | ', em:true, bar:'blocks', ctxFmt:'pct-of', text:''},
+    sl:{on:true, seg:['model','dir','git','ctx'], sep:' | ', em:true, bar:'blocks', ctxFmt:'pct-of', ctxBasis:'window', text:''},
     id:''};
 }
 // merge an incoming shared payload into a fresh state (defensive: shapes + colors validated)
@@ -358,6 +365,7 @@ function stateFromPayload(pl){
       st.sl.em=sl.em!==false;
       if(ownKey(SL_BARSETS,sl.bar))st.sl.bar=sl.bar;
       if(['pct','pct-of','tokens'].indexOf(sl.ctxFmt)>=0)st.sl.ctxFmt=sl.ctxFmt;
+      if(['window','autocompact'].indexOf(sl.ctxBasis)>=0)st.sl.ctxBasis=sl.ctxBasis;
       if(typeof sl.text==='string')st.sl.text=cText(sl.text,24);
     }
     if(typeof pl.id==='string')st.id=pl.id.slice(0,16);
@@ -423,7 +431,7 @@ function afterModel(){
       paddingX:state.um.px,paddingY:state.um.py,fitBoxToContent:state.um.fit},
     verbs:verbs,verbFormat:cFmt(state.vf,24,'{}… '),phases:phases,reverseMirror:state.rm,interval:state.iv,
     ib:{rb:state.ib.rb,ch:state.ib.ch},
-    sl:{on:slLive,seg:state.sl.seg,sep:state.sl.sep,em:state.sl.em,bar:state.sl.bar,ctxFmt:state.sl.ctxFmt,text:cText(state.sl.text,24)}
+    sl:{on:slLive,seg:state.sl.seg,sep:state.sl.sep,em:state.sl.em,bar:state.sl.bar,ctxFmt:state.sl.ctxFmt,ctxBasis:state.sl.ctxBasis,text:cText(state.sl.text,24)}
   };
 }
 function beforeModel(pe){
@@ -431,7 +439,7 @@ function beforeModel(pe){
     name:pe.name,colors:pe.pv,umd:pe.umd,
     verbs:pe.verbs,verbFormat:pe.verbFormat,phases:pe.phases,reverseMirror:pe.reverseMirror,interval:pe.interval,
     ib:{rb:false,ch:''},
-    sl:{on:true,seg:['model','dir','git','ctx'],sep:' | ',em:true,bar:'blocks',ctxFmt:'pct',text:''}
+    sl:{on:true,seg:['model','dir','git','ctx'],sep:' | ',em:true,bar:'blocks',ctxFmt:'pct',ctxBasis:'window',text:''}
   };
 }
 
@@ -526,13 +534,15 @@ var HELP={
  sltext:{t:'Custom text segment',d:'Any text you want pinned in the status line — a project name, a reminder, an emoji. Typing here switches the “Custom text” segment on for you.'},
  slsep:{t:'Separator',d:'The characters printed between one segment and the next.'},
  slbar:{t:'Bar style',d:'Which pair of characters draws the context gauge — one for the filled part, one for the empty part. “shade” is solid blocks, “braille” is the finest grained. Only matters if the Context bar segment is on.'},
- slctx:{t:'Context as',d:'How the context window is written: a bare percentage, a percentage with the window size after it, or used and total tokens.'},
+ slctx:{t:'Context as',d:'How the number is written: a bare percentage, a percentage with the total after it, or used and total tokens.'},
+ slbasis:{t:'Measured against',d:'What the gauge is a fraction OF. \u201cModel window\u201d uses the real context window Claude Code reports \u2014 200k, or 1M on an extended\u2011context model \u2014 so it answers \u201chow much room is left\u201d. \u201cAuto\u2011compact point\u201d uses the threshold this session will actually compact at, which is usually lower, and answers the more useful question: how long until I get interrupted. That threshold is not in the status\u2011line data, so the script resolves it the way Claude Code does \u2014 CLAUDE_CODE_AUTO_COMPACT_WINDOW first, then autoCompactWindow in your project and user settings. If auto\u2011compaction is off, or nothing sets a window, it falls back to the model window rather than inventing a number.'},
  slem:{t:'emoji icons',d:'Puts a small emoji in front of each segment instead of a plain label. Shorter, but it needs a terminal font that has them — if you see boxes, turn this off.'},
  status:{t:'Legacy context‑bar.sh accent',d:'Only affects the older standalone context‑bar.sh script, if you happen to use one. It has NO effect on the status line built above, and nothing in the preview changes when you touch it. Leave it alone unless you know you want it.'},
  seg_model:{t:'Model name',d:'The model answering right now, e.g. Opus 5.'},
+ seg_effort:{t:'Reasoning effort',d:'The effort level the current model is running at \u2014 low, medium, high, xhigh or max \u2014 read live, so it follows a mid\u2011session /effort change. Models without an effort setting send nothing, and the segment disappears rather than printing a blank.'},
  seg_dir:{t:'Folder',d:'The name of the folder Claude Code is working in — just the last part, not the whole path.'},
  seg_git:{t:'Git branch',d:'The branch currently checked out, with a marker when the working tree has uncommitted changes. Blank outside a git repository.'},
- seg_ctx:{t:'Context bar',d:'A small gauge of how much of the context window is in use, drawn with the Bar style characters and written in the Context as format.'},
+ seg_ctx:{t:'Context bar',d:'A gauge of how much context is in use, drawn with the Bar style characters, written in the Context as format, and measured against whichever Measured against basis you pick.'},
  seg_cost:{t:'Session cost',d:'What this session has cost so far, in dollars.'},
  seg_dur:{t:'Duration',d:'How long this session has been running, in minutes (or hours and minutes once it passes an hour).'},
  seg_lines:{t:'Lines +/−',d:'How many lines this session has added and removed across all its edits.'},
@@ -715,6 +725,7 @@ function buildControls(){
     '<label class="ctl"><span class="cap">Separator'+ihtml('slsep')+'</span><select id="c_slsep"></select></label>'+
     '<label class="ctl"><span class="cap">Bar style'+ihtml('slbar')+'</span><select id="c_slbar"></select></label>'+
     '<label class="ctl"><span class="cap">Context as'+ihtml('slctx')+'</span><select id="c_slctx"><option value="pct">42%</option><option value="pct-of">42% of 200k</option><option value="tokens">84k/200k</option></select></label>'+
+    '<label class="ctl"><span class="cap">Measured against'+ihtml('slbasis')+'</span><select id="c_slbasis"><option value="window">Model window (200k / 1M)</option><option value="autocompact">Auto-compact point</option></select></label>'+
     '</div>'+
     '<label class="ctl2"><input id="c_slem" type="checkbox"> emoji icons'+ihtml('slem')+'</label>'+
     '<label class="ctl"><span class="cap">Legacy context-bar.sh accent'+ihtml('status')+'</span><select id="c_status"></select></label>'+
@@ -796,6 +807,8 @@ function buildControls(){
   barSel.addEventListener('change',function(){state.sl.bar=this.value;edited();});
   $('#c_slctx').value=state.sl.ctxFmt;
   $('#c_slctx').addEventListener('change',function(){state.sl.ctxFmt=this.value;edited();});
+  $('#c_slbasis').value=state.sl.ctxBasis;
+  $('#c_slbasis').addEventListener('change',function(){state.sl.ctxBasis=this.value;edited();});
   $('#c_slem').checked=state.sl.em;
   $('#c_slem').addEventListener('change',function(){state.sl.em=this.checked;edited();});
   var stSel=$('#c_status');
