@@ -196,7 +196,9 @@ const CMUX_CSS = `
   body.pinned .cwin{box-shadow:0 8px 22px rgba(0,0,0,.4);}
   /* The editable cmux.json. Monospace and the same colours as the read-only box beside
      it, so it still reads as the file rather than as a form field. */
-  .jsonbox{padding:10px 12px 11px;}
+  .filebox.jsonbox{padding:10px 12px 11px;white-space:normal;}
+  /* Short files should not leave a tall empty box beside a tall editor. */
+  .cpanels{align-items:start;}
   .jsonbox .editable{margin-left:7px;font-size:9px;letter-spacing:.08em;color:var(--accent);
     border:1px solid var(--accent);border-radius:20px;padding:1px 6px;}
   #jsonEdit{display:block;width:100%;min-height:230px;resize:vertical;
@@ -1298,8 +1300,8 @@ function buildControls(){
    +promptColorRow('Text colour','umfg','pm_fgm','pm_fg')
    +promptColorRow('Highlight / background strip','umbg','pm_bgm','pm_bg')
    +row('Border','umb',selHTML('pm_ub',PROMPT_BORDERS,String(ccPayload.ub||'none')))
-   +'<div class="modrow" style="margin-top:9px"><span class="cap" style="margin:0">Border colour</span>'
-   +'<input type="color" id="pm_uc" value="'+esc(hexOf(ccPayload.uc||'#7aa2f7'))+'"></div>'
+   +'<div class="ctl"><span class="cap">Border colour</span>'
+   +'<div class="modrow"><input type="color" id="pm_uc" value="'+esc(hexOf(ccPayload.uc||'#7aa2f7'))+'"></div></div>'
    +'<label class="ctl2"><input type="checkbox" id="pm_bold"'
    +(((ccPayload.um&&ccPayload.um.st)||[]).indexOf('bold')>=0?' checked':'')+'> bold prompts'
    +ihtml('umbold')+'</label>'
