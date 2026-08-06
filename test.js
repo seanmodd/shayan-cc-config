@@ -894,6 +894,29 @@ function bashCheck(src, label) {
   ok(r.status === 200 && /shayan-cc-config [(]cmux[)]/.test(r.body) && /Claude Code [+] cmux/.test(r.body),
     'one install command carries both the Claude Code and the cmux halves');
 
+  // The pieces of the page that are easy to break from the server side: an id renamed
+  // here is a control that silently stops working in the browser, and the browser
+  // harnesses in tools/ are the only other thing that would catch it.
+  r = await call('/cmux');
+  const cmPage = r.body;
+  for (const [needle, label] of [
+    ['id="jsonEdit"', 'cmux.json is an editable textarea'],
+    ['id="jsonApply"', 'the JSON editor has an Apply button'],
+    ['stateFromCmuxJson', 'an edited cmux.json can be read back into the controls'],
+    ["'scc_cmux_saved'", 'saved setups have a storage key'],
+    ["'Our Community'", 'the Our Community section exists'],
+    ['id="pinbtn"', 'the preview can be pinned'],
+    ['id="themenote"', 'the Ghostty theme box says whether it can be previewed'],
+    ["promptColorMode('pm_fgm','pm_fg','fg'", 'prompt text colour is controllable'],
+    ["promptColorMode('pm_bgm','pm_bg','bg'", 'prompt highlight is controllable'],
+    ['presetByThemeName', 'a typed theme name previews when its palette is known'],
+  ]) ok(cmPage.includes(needle), '/cmux: ' + label);
+  // Our Community has to render above the community themes: it is the shortest list and
+  // the one you came back for.
+  ok(cmPage.indexOf("'Our Community'") > 0
+    && cmPage.indexOf("'Our Community'") < cmPage.indexOf("'Popular in the community'"),
+    '/cmux: Our Community is ordered above Popular in the community');
+
   console.log('— misc —');
   r = await call('/nope');
   ok(r.status === 404, '404 fallback');

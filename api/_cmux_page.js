@@ -194,6 +194,39 @@ const CMUX_CSS = `
     padding-bottom:12px;box-shadow:0 16px 20px -14px rgba(0,0,0,.75);}
   body.pinned .cterm{height:min(26dvh,200px);flex:none;overflow:hidden;}
   body.pinned .cwin{box-shadow:0 8px 22px rgba(0,0,0,.4);}
+  /* The editable cmux.json. Monospace and the same colours as the read-only box beside
+     it, so it still reads as the file rather than as a form field. */
+  .jsonbox{padding:10px 12px 11px;}
+  .jsonbox .editable{margin-left:7px;font-size:9px;letter-spacing:.08em;color:var(--accent);
+    border:1px solid var(--accent);border-radius:20px;padding:1px 6px;}
+  #jsonEdit{display:block;width:100%;min-height:230px;resize:vertical;
+    font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.6;
+    color:#b7c3d6;background:#080b10;border:1px solid var(--border);border-radius:8px;
+    padding:9px 10px;white-space:pre;overflow:auto;tab-size:2;}
+  #jsonEdit:focus{outline:none;border-color:var(--accent);}
+  .jsonbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:9px;}
+  .jsonbar button{cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:600;
+    border:1px solid var(--border);background:#161c26;color:var(--text);border-radius:8px;
+    padding:7px 12px;min-height:34px;}
+  .jsonbar button:hover{border-color:var(--accent);}
+  .jsonbar button.ghost{background:transparent;color:var(--dim);font-weight:500;}
+  .jsonmsg{font-size:11px;color:var(--faint);flex:1 1 100%;line-height:1.4;}
+  .jsonmsg.ok{color:var(--ok);}
+  .jsonmsg.bad{color:var(--red,#f7768e);}
+
+  /* Our Community: saved setups, and the card that saves one. */
+  .pchip.savechip{border-style:dashed;}
+  .pchip.savechip .pcname{color:var(--accent);}
+  .pctag.ours{border-color:var(--accent);color:var(--accent);}
+  .ouracts{display:flex;gap:10px;margin-top:6px;}
+  .ouract{font-size:10.5px;color:var(--dim);border-bottom:1px solid var(--border);
+    cursor:pointer;line-height:1.4;}
+  .ouract:hover{color:var(--accent);border-bottom-color:var(--accent);}
+  @media(max-width:700px),(max-height:520px){
+    #jsonEdit{min-height:180px;font-size:16px;}
+    .jsonbar button{min-height:44px;}
+    .pchip.savechip .pcblurb{display:block;}
+  }
   .chead{padding-bottom:2px;}
   .chead h1{font-size:32px;}
 
@@ -325,7 +358,15 @@ function renderCmux(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
 
   <div class="cpanels" style="margin-top:16px">
     <div class="filebox" id="fileGhostty"></div>
-    <div class="filebox" id="fileJson"></div>
+    <div class="filebox jsonbox">
+      <h4>~/.config/cmux/cmux.json <span class="editable">editable</span></h4>
+      <textarea id="jsonEdit" spellcheck="false" aria-label="cmux.json, editable"></textarea>
+      <div class="jsonbar">
+        <button type="button" id="jsonApply">Apply to controls</button>
+        <button type="button" id="jsonRevert" class="ghost">Revert</button>
+        <span class="jsonmsg" id="jsonMsg"></span>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -549,9 +590,44 @@ function presetById(id){
   for(var i=0;i<CMUX_PRESETS.length;i++)if(CMUX_PRESETS[i].id===id)return CMUX_PRESETS[i];
   return null;
 }
+/**
+ * A Ghostty theme name typed by hand, matched against the schemes this page ships a
+ * palette for. Ghostty has hundreds of bundled themes and this page knows the colours
+ * of twelve, so a typed name that is not one of them installs fine but cannot be
+ * previewed — themeNote() says which of the two you are in rather than leaving the
+ * control looking broken.
+ */
+function presetByThemeName(name){
+  if(!name)return null;
+  var want=String(name).trim().toLowerCase();
+  if(!want)return null;
+  for(var i=0;i<CMUX_PRESETS.length;i++){
+    var p=CMUX_PRESETS[i];
+    if(p.theme&&String(p.theme).toLowerCase()===want)return p;
+  }
+  return null;
+}
 function activePal(){
-  var pre=presetById(state.preset);
+  var pre=presetById(state.preset)||presetByThemeName(state.theme);
   return (pre&&pre.pal)?pre.pal:ccPayload.p;
+}
+function themeNote(){
+  var el=$('#themenote'); if(!el)return;
+  var name=(state.theme||'').trim();
+  if(!name){
+    el.className='hint';
+    el.textContent='Leaving your Ghostty colours alone.';
+    return;
+  }
+  var pre=presetByThemeName(name);
+  if(pre){
+    el.className='hint ok';
+    el.textContent='Known scheme — the preview is using its palette.';
+  }else{
+    el.className='hint warn';
+    el.textContent='cmux will apply it. This page does not ship that theme’s colours, '
+      +'so the preview keeps the ones above.';
+  }
 }
 
 // A terminal font can only be previewed if the browser can actually load it, which
@@ -808,14 +884,64 @@ function cmuxJsonObj(s,pal){
   if(s.titleTemplate)o.app.windowTitleTemplate=s.titleTemplate;
   return o;
 }
+/**
+ * Read a cmux.json back into the controls.
+ *
+ * The inverse of buildCmuxJson, and deliberately partial: only keys this page owns are
+ * mapped, so pasting a config with extra keys does not silently drop them from your
+ * head — it just means those keys are not editable here. Colours arrive resolved, so
+ * setting one flips its from-palette flag off, which is what the Theme/Custom chips
+ * would have done.
+ */
+function stateFromCmuxJson(j){
+  if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a JSON object');
+  var d=defaultCmux(), n=0;
+  function num(v,lo,hi){var x=Number(v);return isFinite(x)?Math.max(lo,Math.min(hi,x)):null;}
+  function put(k,v){if(v!==null&&v!==undefined){state[k]=v;n++;}}
+  function pickOne(v,list){return list.indexOf(v)>=0?v:null;}
+  function hex(v){return (typeof v==='string'&&/^#[0-9a-fA-F]{6}$/.test(v))?v.toLowerCase():null;}
+  function bool(v){return typeof v==='boolean'?v:null;}
+
+  if(hex(j.paneBorderColor)){put('paneBorder',hex(j.paneBorderColor));put('paneBorderFromPalette',false);}
+  if(hex(j.activePaneBorderColor)){put('activePaneBorder',hex(j.activePaneBorderColor));put('activePaneBorderFromPalette',false);}
+  var app=j.app||{};
+  put('appearance',pickOne(app.appearance,CMUX_OPTS.appearances));
+  put('minimalMode',bool(app.minimalMode));
+  put('placement',pickOne(app.newWorkspacePlacement,CMUX_OPTS.placements));
+  if(typeof app.windowTitleTemplate==='string')put('titleTemplate',app.windowTitleTemplate.slice(0,60));
+  var t=j.terminal||{};
+  put('showScrollBar',bool(t.showScrollBar));
+  put('copyOnSelect',bool(t.copyOnSelect));
+  put('scrollSpeed',num(t.scrollSpeed,0.25,3));
+  put('contentAlignment',pickOne(t.sessionContentAlignment,CMUX_OPTS.alignments));
+  var sb=j.sidebar||{};
+  put('sidebarHideDetails',bool(sb.hideAllDetails));
+  put('sidebarDescription',bool(sb.showWorkspaceDescription));
+  put('sidebarPullRequests',bool(sb.showPullRequests));
+  put('sidebarGitStatus',bool(sb.watchGitStatus));
+  put('branchLayout',pickOne(sb.branchLayout,CMUX_OPTS.branchLayouts));
+  var sa=j.sidebarAppearance||{};
+  put('matchTerminalBg',bool(sa.matchTerminalBackground));
+  if(hex(sa.tintColor)){put('tintColor',hex(sa.tintColor));put('tintFromPalette',false);}
+  put('tintOpacity',num(sa.tintOpacity,0,1));
+  var wc=j.workspaceColors||{};
+  put('indicatorStyle',pickOne(wc.indicatorStyle,CMUX_OPTS.indicators));
+  if(hex(wc.selectionColor)){put('selectionColor',hex(wc.selectionColor));put('selectionFromPalette',false);}
+  if(!n)throw new Error('no settings this page recognises');
+  return n;
+}
+
+var _jsonDirty=false;
 function drawFiles(){
   var pal=activePal();
   var g=ghosttyLines(state,pal).map(function(kv){
     return '<span class="fk">'+esc(kv[0])+'</span> = '+esc(kv[1]);
   }).join('\\n');
   $('#fileGhostty').innerHTML='<h4>~/.config/ghostty/config</h4>'+g;
-  $('#fileJson').innerHTML='<h4>~/.config/cmux/cmux.json</h4>'
-    +esc(JSON.stringify(cmuxJsonObj(state,pal),null,2));
+  // Do not stomp on what someone is halfway through typing. Once they apply or revert
+  // it goes back to tracking the controls.
+  var ta=$('#jsonEdit');
+  if(ta&&!_jsonDirty)ta.value=JSON.stringify(cmuxJsonObj(state,pal),null,2);
 }
 
 function payload(){
@@ -832,7 +958,7 @@ function drawCmd(){
     if(allowDraft){try{localStorage.setItem('scc_cmux',JSON.stringify(state));}catch(e){}}
   },400);
 }
-function edited(){allowDraft=true;drawWindows();paintPresetNote();paintFontNote();syncDeps();}
+function edited(){allowDraft=true;drawWindows();paintPresetNote();paintFontNote();themeNote();syncDeps();}
 
 // ── controls ───────────────────────────────────────────────────────────────────
 var HELP={
@@ -962,6 +1088,82 @@ function paintPresets(){
   none.addEventListener('click',function(){applyPreset('');});
   host.appendChild(none);
 
+  // Ours goes first, above the community themes, because it is the shortest list and
+  // the one you came back for.
+  var mineSaved=ours_get();
+  host.appendChild(headRow('Our Community',
+    mineSaved.length
+      ? mineSaved.length+' saved in this browser \u2014 share a link to pass one on'
+      : 'nothing saved yet \u2014 build a look and press Save'));
+  var saveBtn=document.createElement('button');
+  saveBtn.type='button';saveBtn.className='pchip savechip';
+  var sb=document.createElement('div');sb.className='pcbody';
+  var sn=document.createElement('div');sn.className='pcname';
+  sn.textContent='\uFF0B  Save this setup';sb.appendChild(sn);
+  var sbl=document.createElement('div');sbl.className='pcblurb';
+  sbl.textContent='Keeps the whole thing \u2014 cmux settings, colours and your Claude Code side.';
+  sb.appendChild(sbl);
+  saveBtn.appendChild(sb);
+  saveBtn.addEventListener('click',saveOurs);
+  host.appendChild(saveBtn);
+
+  mineSaved.forEach(function(item){
+    var b=document.createElement('button');
+    b.type='button';b.className='pchip';
+    var pal=item.pal||ccPayload.p;
+    var sw=document.createElement('div');
+    sw.className='pcswatch';
+    sw.style.background=palHex(pal.bg,'#0b0e14');
+    ['accent','green','red','yellow','accent2'].forEach(function(k){
+      var d=document.createElement('span');d.className='dot';
+      d.style.background=palHex(pal[k],'#888');sw.appendChild(d);
+    });
+    var samp=document.createElement('span');
+    samp.className='sample';samp.textContent='\u276F claude';
+    samp.style.color=palHex(pal.text,'#ccc');
+    sw.appendChild(samp);
+
+    var body=document.createElement('div');body.className='pcbody';
+    var nm=document.createElement('div');nm.className='pcname';
+    nm.appendChild(document.createTextNode(item.name));
+    var tag=document.createElement('span');tag.className='pctag ours';tag.textContent='saved';
+    nm.appendChild(tag);
+    body.appendChild(nm);
+    var cr=document.createElement('div');cr.className='pccredit';
+    cr.textContent='saved '+(item.savedAt||'');
+    body.appendChild(cr);
+
+    var acts=document.createElement('div');acts.className='ouracts';
+    function act(label,fn){
+      var a=document.createElement('span');
+      a.className='ouract';a.textContent=label;
+      a.addEventListener('click',function(e){e.stopPropagation();fn();});
+      return a;
+    }
+    acts.appendChild(act('share',function(){
+      copyText(ORIGIN+'/cmux?c='+encodeURIComponent(b64e(item.payload)));
+      toast('Link to \u201c'+item.name+'\u201d copied');
+    }));
+    acts.appendChild(act('delete',function(){
+      ours_set(ours_get().filter(function(x){return x.name!==item.name;}));
+      paintPresets();toast('Removed \u201c'+item.name+'\u201d');
+    }));
+    body.appendChild(acts);
+
+    b.appendChild(sw);b.appendChild(body);
+    b.addEventListener('click',function(){
+      // Load the whole saved setup, both halves.
+      ccPayload=copyObj(item.payload);
+      var d=defaultCmux(), src=item.payload.cm||{};
+      for(var k in d){if(ownKey(d,k)&&ownKey(src,k))d[k]=src[k];}
+      d.on=true;state=d;
+      allowDraft=true;_jsonDirty=false;
+      buildControls();paintPresets();drawWindows();paintFontNote();themeNote();syncDeps();
+      toast('Loaded \u201c'+item.name+'\u201d');
+    });
+    host.appendChild(b);
+  });
+
   if(community.length){
     host.appendChild(headRow('Popular in the community',community.length+' schemes cmux already ships'));
     community.forEach(function(p){host.appendChild(chip(p));});
@@ -1035,7 +1237,7 @@ function applyPreset(id){
   buildControls();      // rebuild so the changed controls show their new values
   paintPresets();
   drawWindows();
-  paintFontNote();
+  paintFontNote();themeNote();
   syncDeps();
   toast(pre?(pre.name+' applied \u2014 tweak anything below'):'Back to your own colours');
 }
@@ -1052,7 +1254,10 @@ function buildControls(){
    +'</div>'
    +'<div class="inline2">'
    +row('Tab bar font <span class="hint" id="m_tfl"></span>','tabBarFontSize','<input id="m_tf" type="range" min="8" max="20" step="1" value="'+s.tabBarFontSize+'">')
-   +row('Ghostty theme <span class="hint">(optional)</span>','theme','<input id="m_theme" type="text" maxlength="40" placeholder="leave blank" value="'+esc(s.theme)+'">')
+   +row('Ghostty theme <span class="hint">(optional)</span>','theme','<input id="m_theme" type="text" maxlength="40" placeholder="leave blank" value="'+esc(s.theme)+'" list="themelist">'
+       +'<datalist id="themelist">'+CMUX_PRESETS.filter(function(p){return p.theme;})
+         .map(function(p){return '<option value="'+esc(p.theme)+'">';}).join('')+'</datalist>'
+       +'<span class="hint" id="themenote" style="display:block;margin-top:5px"></span>')
    +'</div>'
    +'<div class="inline2">'
    +row('Background opacity <span class="hint" id="m_bol"></span>','bgOpacity','<input id="m_bo" type="range" min="0.3" max="1" step="0.02" value="'+s.bgOpacity+'">')
@@ -1296,7 +1501,7 @@ window.addEventListener('scroll',function(){if(_tipBtn)hideTip();},true);
 buildControls();
 paintPresets();
 drawWindows();
-paintFontNote();
+paintFontNote();themeNote();
 syncDeps();
 
 $('#c_copy').addEventListener('click',function(){
@@ -1310,10 +1515,79 @@ $('#c_share').addEventListener('click',function(){
 $('#c_reset').addEventListener('click',function(){
   state=defaultCmux();allowDraft=false;
   try{localStorage.removeItem('scc_cmux');}catch(e){}
-  buildControls();paintPresets();drawWindows();paintFontNote();syncDeps();
+  buildControls();paintPresets();drawWindows();paintFontNote();themeNote();syncDeps();
   clearTimeout(_urlT);history.replaceState(null,'','/cmux');
   toast('Back to stock cmux');
 });
+// ── the editable cmux.json ────────────────────────────────────────────────────
+// Editing the generated file directly is the fastest way to move a config in from
+// somewhere else, or to reach a key faster than hunting for its control. Applying it
+// runs the same sanitizers the controls do, so nothing typed here can produce a config
+// the installer would not have produced anyway.
+(function(){
+  var ta=$('#jsonEdit'), msg=$('#jsonMsg');
+  if(!ta)return;
+  function say(text,kind){
+    msg.textContent=text||'';
+    msg.className='jsonmsg'+(kind?' '+kind:'');
+  }
+  ta.addEventListener('input',function(){
+    _jsonDirty=true;
+    try{
+      JSON.parse(this.value);
+      say('Valid JSON \u2014 Apply to load it into the controls.','ok');
+    }catch(e){
+      say(String(e.message).replace(/^JSON.parse:?\s*/i,'').slice(0,90),'bad');
+    }
+  });
+  $('#jsonApply').addEventListener('click',function(){
+    var parsed;
+    try{parsed=JSON.parse(ta.value);}
+    catch(e){say('Cannot apply: '+String(e.message).slice(0,80),'bad');return;}
+    var n;
+    try{n=stateFromCmuxJson(parsed);}
+    catch(e){say('Cannot apply: '+e.message,'bad');return;}
+    _jsonDirty=false;
+    // Colours came in resolved, so the preset's palette no longer describes them.
+    buildControls();paintPresets();drawWindows();paintFontNote();themeNote();syncDeps();
+    say('Applied '+n+' setting'+(n===1?'':'s')+' to the controls.','ok');
+    toast('cmux.json applied \u2014 '+n+' setting'+(n===1?'':'s'));
+  });
+  $('#jsonRevert').addEventListener('click',function(){
+    _jsonDirty=false;drawFiles();say('Back to what the controls say.','');
+  });
+})();
+
+// ── Our Community ─────────────────────────────────────────────────────────────
+// Saved setups, kept in this browser under the same localStorage convention the
+// Studio's Publish button already uses. They are yours until you hand someone the
+// link — which is what the Share button on each card is for — so the section says
+// where they live rather than implying a server keeps them.
+function ours_get(){
+  try{
+    var a=JSON.parse(localStorage.getItem('scc_cmux_saved')||'[]');
+    return Object.prototype.toString.call(a)==='[object Array]'?a:[];
+  }catch(e){return [];}
+}
+function ours_set(a){try{localStorage.setItem('scc_cmux_saved',JSON.stringify(a));}catch(e){}}
+
+function saveOurs(){
+  var name=(prompt('Name this setup:', (ccPayload.n||'My cmux setup'))||'').trim();
+  if(!name)return;
+  var pl=payload();
+  pl.n=name.slice(0,40);
+  var all=ours_get().filter(function(x){return x.name!==pl.n;});
+  all.push({
+    name: pl.n,
+    savedAt: new Date().toISOString().slice(0,10),
+    pal: copyObj(activePal()),
+    payload: pl
+  });
+  ours_set(all);
+  paintPresets();
+  toast('Saved \u201c'+pl.n+'\u201d to Our Community');
+}
+
 installMobileNav();
 `;
 

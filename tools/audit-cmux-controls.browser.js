@@ -34,7 +34,8 @@
       ind:(q('#winAfter .cws.on')||{getAttribute:()=>''}).getAttribute('data-ind'),
       title:(q('#winAfter .ttext')||{}).textContent||''});
   };
-  const files=()=>q('#fileGhostty').textContent+'||'+q('#fileJson').textContent;
+  // cmux.json is a textarea now (it is editable), so read .value rather than text.
+  const files=()=>q('#fileGhostty').textContent+'||'+(q('#jsonEdit')||{value:''}).value;
   // Reset every dependency parent OFF first, so nothing is masked, then flip each
   // control to a value it is genuinely not at.
   for (const [id,want] of [['m_shd',false],['m_mtb',false],['m_min',false]]) {
