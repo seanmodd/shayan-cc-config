@@ -94,11 +94,18 @@ const CSS = `
     /* The favourite star is absolutely positioned in the corner; without this the
        author name slides underneath it. */
     .tauthor{padding-right:20px;}
-    .grid{grid-template-columns:1fr!important;gap:12px;}
+    /* #grid, not .grid: the gallery is <main id="grid">, so a .grid rule here was
+       dead CSS that merely looked like a fix.
+       minmax(0,1fr) and not 1fr: a bare 1fr track has an auto minimum, so it grows
+       to the card's min-content width — the terminal previews inside contain long
+       unbreakable lines, and the grid blew out to 625px on a 390px screen. */
+    #grid{grid-template-columns:minmax(0,1fr)!important;gap:12px;}
+    #grid>*{min-width:0;}
     .card{padding:12px;}
     footer{padding:8px 16px 40px;font-size:12px;}
-    /* Wide, unbreakable install commands must scroll in their own box, never the page. */
-    .cmdbox,.cmd{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    /* Wide, unbreakable install commands must scroll in their own box, never the
+       page. (.cmdbox does not exist — the box is .cmd.) */
+    .cmd{overflow-x:auto;-webkit-overflow-scrolling:touch;}
   }
 
   /* ── Mobile navigator ───────────────────────────────────────────────────────
