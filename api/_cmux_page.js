@@ -122,6 +122,34 @@ const CMUX_CSS = `
     .phint{font-size:11.5px;}
   }
   @media(max-width:380px){#presetGrid{grid-template-columns:1fr;}}
+  /* Background opacity and blur are visible properties, so the preview shows them
+     rather than only writing them to the file. The pane sits on a stand-in "desktop"
+     gradient; at opacity 1 nothing shows through and this is inert. */
+  .cwin.seethru .cterm{background:transparent;}
+  .cwin.seethru .cpanes{position:relative;}
+  .cwin.seethru .cpanes::before{content:"";position:absolute;inset:0;z-index:0;
+    background:
+      repeating-linear-gradient(115deg,rgba(140,120,200,.55) 0 22px,rgba(90,140,190,.5) 22px 44px,rgba(60,90,150,.55) 44px 66px);
+  }
+  .cwin.seethru .cpane{position:relative;z-index:1;}
+  .cwin.seethru .cpane .cterm{
+    background-color:color-mix(in srgb, var(--cm-termbg) calc(var(--cm-opacity) * 100%), transparent);}
+  .cwin.blurred .cpanes::before{filter:var(--cm-blur);}
+  /* "no visual change" is a promise to the user: this control is doing something, it
+     just is not something a mock can show. Without it these read as broken. */
+  .nov{margin-left:7px;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--faint);border:1px solid var(--border);border-radius:20px;padding:1px 6px;
+    white-space:nowrap;}
+  .hint.ok{color:var(--ok);}
+  .hint.warn{color:var(--gold);}
+  /* An overridden control stays readable — you need to see what it is set to — but it
+     is visibly not in play, and it says what is holding it. */
+  .ctl.overridden,.ctl2.overridden{opacity:.5;}
+  .ctl.overridden input,.ctl.overridden select,
+  .ctl2.overridden input,.ctl2.overridden select{cursor:not-allowed;}
+  .ovnote{display:block;margin-top:4px;font-size:10.5px;color:var(--gold);
+    letter-spacing:.01em;}
+  .ctl2.overridden .ovnote{margin-left:26px;}
   .chead{padding-bottom:2px;}
   .chead h1{font-size:32px;}
 
@@ -331,14 +359,27 @@ function winHTML(s,pal,label){
   var dim=hasPreset?palHex(pal.comment,pv.inactive):pv.inactive;
   var faint=dim;
 
-  // Light schemes need the chrome darkened, not lightened. Deriving this from the
-  // background's own luminance rather than from the appearance setting means a light
-  // preset renders correctly even before appearance is switched over.
-  var lightBg=relLum(toRGBarr(hexOf(bg)))>0.4;
+  // Light schemes need the chrome darkened, not lightened.
+  //
+  // Two things decide this and they are genuinely independent: the TERMINAL's own
+  // background (which the theme sets) and cmux's APP appearance (which dresses the
+  // window furniture). Setting appearance to light around a dark terminal is a real
+  // combination, and previously only the background was consulted — so changing
+  // appearance moved the cmux.json and nothing else, which read as a dead control.
+  var bgIsLight=relLum(toRGBarr(hexOf(bg)))>0.4;
+  var lightBg = s.appearance==='light' ? true
+              : s.appearance==='dark'  ? false
+              : bgIsLight;
   var lift=lightBg?'#000000':'#ffffff';
-  var titlebar=mix(bg,lift,lightBg?0.05:0.06);
-  var sidebar=s.matchTerminalBg?bg:mix(bg,c.tint,Math.max(s.tintOpacity,0.02));
-  var chrome=mix(bg,lift,lightBg?0.16:0.12);
+  // When the app appearance disagrees with the terminal background, the furniture is
+  // the app's colour rather than a tint of the terminal's — which is what cmux does,
+  // and what makes the setting visible at all.
+  var furnitureBase = (s.appearance==='light'&&!bgIsLight) ? '#e9eaee'
+                    : (s.appearance==='dark'&&bgIsLight)   ? '#22242a'
+                    : bg;
+  var titlebar=mix(furnitureBase,lift,lightBg?0.05:0.06);
+  var sidebar=s.matchTerminalBg?bg:mix(furnitureBase,c.tint,Math.max(s.tintOpacity,0.02));
+  var chrome=mix(furnitureBase,lift,lightBg?0.16:0.12);
   var vars=[
     '--cm-bg:'+bg,'--cm-text:'+text,'--cm-dim:'+dim,'--cm-faint:'+faint,
     '--cm-titlebar:'+titlebar,'--cm-sidebar:'+sidebar,'--cm-chrome:'+chrome,
@@ -346,10 +387,17 @@ function winHTML(s,pal,label){
     '--cm-divider:'+c.divider,'--cm-divider-w:'+(s.minimalMode?'1px':'2px'),
     '--cm-sel:'+c.selection,'--cm-selwash:'+mix(bg,c.selection,lightBg?0.22:0.16),
     '--cm-onsel:'+(relLum(toRGBarr(hexOf(c.selection)))>0.45?'#0b0e14':'#f4f7fb'),
+    '--cm-termbg:'+bg,
+    '--cm-opacity:'+s.bgOpacity,
+    '--cm-blur:'+(s.bgBlur?('blur('+Math.round(s.bgBlur/3)+'px)'):'none'),
     '--cm-font:'+s.fontSize+'px','--cm-sidefont:'+s.sidebarFontSize+'px',
     '--cm-tabfont:'+s.tabBarFontSize+'px'
   ].join(';');
-  var fam=s.fontFamily?('font-family:'+JSON.stringify(s.fontFamily)+',ui-monospace,Menlo,monospace;'):'';
+  // JSON.stringify put DOUBLE quotes around the family name, and this string goes into
+  // a style="..." attribute — so the attribute ended at the first quote and the font
+  // silently never applied, for any choice. Single quotes are valid in CSS and survive
+  // a double-quoted attribute intact.
+  var fam=s.fontFamily?("font-family:'"+esc(s.fontFamily)+"',ui-monospace,Menlo,monospace;"):'';
 
   var title=s.titleTemplate||'senpex-frontend — cmux';
   var ws=[['dev','2'],['server','1'],['logs','']];
@@ -361,10 +409,19 @@ function winHTML(s,pal,label){
       +'<span class="wname">'+esc(w[0])+'</span>'
       +((!s.sidebarHideDetails&&w[1])?'<span class="wmeta">'+esc(w[1])+'</span>':'')
       +'</div>';
-    if(on&&s.sidebarDescription&&!s.sidebarHideDetails)
-      side+='<div class="sgroup" style="padding:0 7px 6px;letter-spacing:0;text-transform:none">'
-        +(s.branchLayout==='inline'?'main · ':'main<br>')
-        +(s.sidebarPullRequests?'#512':'')+(s.sidebarGitStatus?' ✎':'')+'</div>';
+    // The description, the PR and the git mark are three independent features in the
+    // schema, so they render independently here. Nesting the latter two inside the
+    // description meant turning the description off silently killed both toggles,
+    // which is indistinguishable from them being broken.
+    if(on&&!s.sidebarHideDetails){
+      var bits=[];
+      if(s.sidebarDescription)bits.push('main');
+      if(s.sidebarPullRequests)bits.push('#512');
+      if(s.sidebarGitStatus)bits.push('\u270e');
+      if(bits.length)
+        side+='<div class="sgroup" style="padding:0 7px 6px;letter-spacing:0;text-transform:none">'
+          +bits.join(s.branchLayout==='inline'?' \u00b7 ':'<br>')+'</div>';
+    }
   });
 
   var body='';
@@ -387,7 +444,8 @@ function winHTML(s,pal,label){
       +'</div></div>';
   }
 
-  return '<div class="cwin" style="'+vars+'">'
+  return '<div class="cwin'+(s.bgOpacity<1?' seethru':'')+(s.bgBlur>0?' blurred':'')
+    +'" style="'+vars+'">'
     +'<div class="ctitle">'
     +'<span class="tdot" style="background:#ff5f57"></span>'
     +'<span class="tdot" style="background:#febc2e"></span>'
@@ -409,6 +467,97 @@ function presetById(id){
 function activePal(){
   var pre=presetById(state.preset);
   return (pre&&pre.pal)?pre.pal:ccPayload.p;
+}
+
+// A terminal font can only be previewed if the browser can actually load it, which
+// means it has to be installed on this machine. Silently falling back looked exactly
+// like a broken control, so the preview says which case you are in.
+// document.fonts.check() is not usable for this: it returned true for every name
+// tried, including 'ThisFontCertainlyDoesNotExist12345'. Measuring a string rendered
+// in the candidate family against the same string rendered in a family that certainly
+// does not exist does discriminate — a missing font falls back to the same metrics as
+// the missing sentinel, an installed one does not.
+var _fontCanvas=null,_fontCache={};
+function fontAvailable(name){
+  if(!name)return true;
+  if(Object.prototype.hasOwnProperty.call(_fontCache,name))return _fontCache[name];
+  var ok=true;
+  try{
+    if(!_fontCanvas)_fontCanvas=document.createElement('canvas').getContext('2d');
+    var SENTINEL='ZZZNoSuchFamilyZZZ', SAMPLE='mmmiiilll0O@W';
+    var probe=function(fam){
+      _fontCanvas.font="72px '"+fam+"', "+SENTINEL;
+      return _fontCanvas.measureText(SAMPLE).width;
+    };
+    var base=probe(SENTINEL);
+    ok=Math.abs(probe(name)-base)>0.5;
+  }catch(e){ok=true;}
+  _fontCache[name]=ok;
+  return ok;
+}
+function paintFontNote(){
+  var el=$('#fontnote'); if(!el)return;
+  if(!state.fontFamily){
+    el.textContent='Leaving your terminal font alone.';
+    el.className='hint';
+    return;
+  }
+  if(fontAvailable(state.fontFamily)){
+    el.textContent='Installed here \u2014 the preview above is using it.';
+    el.className='hint ok';
+  }else{
+    el.textContent='Not installed on this Mac, so the preview falls back to a system '
+      +'mono. cmux will still use it once you install it.';
+    el.className='hint warn';
+  }
+}
+
+/**
+ * Some settings override others, and cmux does not tell you which. Toggling
+ * "show pull requests" while "hide all sidebar details" is on changes the cmux.json
+ * and nothing else — correct, and indistinguishable from a broken control. Same for
+ * the sidebar tint under "match terminal background", and blur at full opacity.
+ *
+ * So the overridden control is disabled and says what is overriding it. This is the
+ * actual fix for the page feeling buggy: every control that looks inert now either
+ * moves the preview or explains why it cannot.
+ */
+var DEPS=[
+  { ids:['m_sd','m_spr','m_sgs','m_bl'], off:function(){return state.sidebarHideDetails;},
+    why:'hide all sidebar details is on' },
+  { ids:['m_bl'], off:function(){
+      // Nothing to lay out until at least two of the three details are showing.
+      return state.sidebarHideDetails
+        || (!!state.sidebarDescription + !!state.sidebarPullRequests + !!state.sidebarGitStatus) < 2;
+    }, why:'needs two or more sidebar details showing' },
+  { ids:['m_to','m_tn'], off:function(){return state.matchTerminalBg;},
+    why:'match terminal background is on' },
+  { ids:['m_tf'], off:function(){return state.minimalMode;},
+    why:'minimal mode hides the tab bars' },
+  { ids:['m_bb'], off:function(){return state.bgOpacity>=1;},
+    why:'blur needs a background under 100% opacity' }
+];
+function syncDeps(){
+  DEPS.forEach(function(d){
+    var off=d.off();
+    d.ids.forEach(function(id){
+      var el=$('#'+id); if(!el)return;
+      var row=el.closest('.ctl')||el.closest('.ctl2'); if(!row)return;
+      el.disabled=off;
+      row.classList.toggle('overridden',off);
+      var note=row.querySelector('.ovnote');
+      if(off){
+        if(!note){
+          note=document.createElement('span');
+          note.className='ovnote';
+          row.appendChild(note);
+        }
+        note.textContent='\u2192 '+d.why;
+      }else if(note){
+        note.remove();
+      }
+    });
+  });
 }
 
 function drawWindows(){
@@ -488,7 +637,7 @@ function drawCmd(){
     if(allowDraft){try{localStorage.setItem('scc_cmux',JSON.stringify(state));}catch(e){}}
   },400);
 }
-function edited(){allowDraft=true;drawWindows();paintPresetNote();}
+function edited(){allowDraft=true;drawWindows();paintPresetNote();paintFontNote();syncDeps();}
 
 // ── controls ───────────────────────────────────────────────────────────────────
 var HELP={
@@ -687,6 +836,8 @@ function applyPreset(id){
   buildControls();      // rebuild so the changed controls show their new values
   paintPresets();
   drawWindows();
+  paintFontNote();
+  syncDeps();
   toast(pre?(pre.name+' applied \u2014 tweak anything below'):'Back to your own colours');
 }
 
@@ -694,7 +845,8 @@ function buildControls(){
   var s=state,O=CMUX_OPTS;
   $('#cmuxControls').innerHTML=
   '<div class="panel"><h3>\\u{1F5A5} Terminal (Ghostty)</h3>'
-   +row('Terminal font','fontFamily',selHTML('m_font',O.fonts,s.fontFamily))
+   +row('Terminal font','fontFamily',selHTML('m_font',O.fonts,s.fontFamily)
+       +'<span class="hint" id="fontnote" style="display:block;margin-top:5px"></span>')
    +'<div class="inline2">'
    +row('Font size <span class="hint" id="m_fsl"></span>','fontSize','<input id="m_fs" type="range" min="8" max="32" step="1" value="'+s.fontSize+'">')
    +row('Sidebar font <span class="hint" id="m_sfl"></span>','sidebarFontSize','<input id="m_sf" type="range" min="8" max="24" step="1" value="'+s.sidebarFontSize+'">')
@@ -707,12 +859,12 @@ function buildControls(){
    +row('Background opacity <span class="hint" id="m_bol"></span>','bgOpacity','<input id="m_bo" type="range" min="0.3" max="1" step="0.02" value="'+s.bgOpacity+'">')
    +row('Background blur <span class="hint" id="m_bbl"></span>','bgBlur','<input id="m_bb" type="range" min="0" max="64" step="2" value="'+s.bgBlur+'">')
    +'</div>'
-   +row('Scrollback limit <span class="hint" id="m_sbl"></span>','scrollback','<input id="m_sb" type="range" min="1000000" max="100000000" step="1000000" value="'+s.scrollback+'">')
+   +row('Scrollback limit <span class="hint" id="m_sbl"></span><span class="nov">no visual change</span>','scrollback','<input id="m_sb" type="range" min="1000000" max="100000000" step="1000000" value="'+s.scrollback+'">')
   +'</div>'
   +'<div class="panel"><h3>\\u{1F3A8} Window &amp; panes</h3>'
    +'<div class="inline2">'
    +row('App appearance','appearance',selHTML('m_appear',O.appearances,s.appearance))
-   +row('New workspace position','placement',selHTML('m_place',O.placements,s.placement))
+   +row('New workspace position<span class="nov">no visual change</span>','placement',selHTML('m_place',O.placements,s.placement))
    +'</div>'
    +row('Window title <span class="hint">(blank = cmux default)</span>','titleTemplate','<input id="m_title" type="text" maxlength="60" value="'+esc(s.titleTemplate)+'">')
    +colorRow('Pane border','paneBorder','m_pbm','m_pb',s.paneBorderFromPalette,s.paneBorder)
@@ -736,9 +888,9 @@ function buildControls(){
   +'</div>'
   +'<div class="panel"><h3>\\u2328 Terminal behaviour</h3>'
    +chk('show scroll bar','showScrollBar','m_ssb',s.showScrollBar)
-   +chk('copy on select','copyOnSelect','m_cos',s.copyOnSelect)
+   +chk('copy on select<span class="nov">no visual change</span>','copyOnSelect','m_cos',s.copyOnSelect)
    +'<div class="inline2">'
-   +row('Scroll speed <span class="hint" id="m_ssl"></span>','scrollSpeed','<input id="m_ss" type="range" min="0.25" max="3" step="0.05" value="'+s.scrollSpeed+'">')
+   +row('Scroll speed <span class="hint" id="m_ssl"></span><span class="nov">no visual change</span>','scrollSpeed','<input id="m_ss" type="range" min="0.25" max="3" step="0.05" value="'+s.scrollSpeed+'">')
    +row('Content alignment','contentAlignment',selHTML('m_align',O.alignments,s.contentAlignment))
    +'</div>'
   +'</div>';
@@ -892,6 +1044,8 @@ window.addEventListener('scroll',function(){if(_tipBtn)hideTip();},true);
 buildControls();
 paintPresets();
 drawWindows();
+paintFontNote();
+syncDeps();
 
 $('#c_copy').addEventListener('click',function(){
   copyText($('#cmdtext').textContent);
@@ -904,7 +1058,7 @@ $('#c_share').addEventListener('click',function(){
 $('#c_reset').addEventListener('click',function(){
   state=defaultCmux();allowDraft=false;
   try{localStorage.removeItem('scc_cmux');}catch(e){}
-  buildControls();paintPresets();drawWindows();
+  buildControls();paintPresets();drawWindows();paintFontNote();syncDeps();
   clearTimeout(_urlT);history.replaceState(null,'','/cmux');
   toast('Back to stock cmux');
 });
