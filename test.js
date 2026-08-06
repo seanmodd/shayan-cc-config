@@ -720,6 +720,87 @@ function bashCheck(src, label) {
     'each preset drives the ghostty colour lines and the cmux chrome from its own palette',
     layerProblems.slice(0, 4).join('; '));
 
+  // Example themes are ours, so unlike the community ones their readability is our
+  // responsibility rather than their author's. Every number below is computed from the
+  // hex, not asserted in a comment — an earlier draft of these themes claimed a
+  // comment contrast of 5.3:1 while shipping 2.27:1 in the slot that actually renders
+  // dimmed text, which is exactly the mistake this catches.
+  const tools = require('./tools/extract-ghostty-themes.js');
+  const hx2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const ratio = (a, b) => tools.contrast(
+    typeof a === 'string' ? hx2rgb(a) : a, typeof b === 'string' ? hx2rgb(b) : b);
+
+  const examples = clientPresets.filter(pr => pr.kind === 'example');
+  ok(examples.length >= 5, 'example themes are defined', examples.length + ' examples');
+
+  const exProblems = [];
+  for (const pr of examples) {
+    const full = PRE.presetById(pr.id);
+    const sc = full && full.scheme;
+    if (!sc) { exProblems.push(pr.id + ': no scheme, so nothing would be written'); continue; }
+    if (!/^#[0-9a-f]{6}$/.test(sc.bg) || !/^#[0-9a-f]{6}$/.test(sc.fg)) exProblems.push(pr.id + ': bad bg/fg');
+    if (!Array.isArray(sc.ansi) || sc.ansi.length !== 16) {
+      exProblems.push(pr.id + ': ansi has ' + (sc.ansi || []).length + ' entries, needs 16');
+      continue;
+    }
+    sc.ansi.forEach((h, i) => { if (!/^#[0-9a-f]{6}$/.test(h)) exProblems.push(pr.id + ': ansi' + i + ' = ' + h); });
+
+    const textCR = ratio(sc.fg, sc.bg);
+    if (textCR < 4.5) exProblems.push(pr.id + ': body text ' + textCR.toFixed(2) + ':1 below 4.5');
+    const cmtCR = ratio(pr.pal.comment, pr.pal.bg);
+    if (cmtCR < 3) exProblems.push(pr.id + ': dimmed text ' + cmtCR.toFixed(2) + ':1 below 3');
+    const bordCR = ratio(pr.pal.subtle, pr.pal.bg);
+    if (bordCR < 1.25) exProblems.push(pr.id + ': border ' + bordCR.toFixed(2) + ':1 — invisible');
+
+    for (const k of ['accent', 'accent2', 'cyan', 'green', 'red', 'orange', 'yellow', 'pink', 'blue']) {
+      const r = ratio(pr.pal[k], pr.pal.bg);
+      if (r < 3) exProblems.push(pr.id + ': ' + k + ' ' + r.toFixed(2) + ':1 on its background');
+    }
+
+    // A bright slot that matches its normal counterpart makes bold text invisible.
+    for (let i = 0; i < 8; i++) {
+      const a = hx2rgb(sc.ansi[i]), b = hx2rgb(sc.ansi[i + 8]);
+      const d = Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+      if (d < 30) exProblems.push(pr.id + ': ansi' + (i + 8) + ' is indistinguishable from ansi' + i);
+    }
+
+    // The palette must be derived from the scheme, or preview and install disagree.
+    if (pr.pal.bg.join(',') !== hx2rgb(sc.bg).join(',')) exProblems.push(pr.id + ': pal.bg does not match scheme.bg');
+    if (pr.pal.text.join(',') !== hx2rgb(sc.fg).join(',')) exProblems.push(pr.id + ': pal.text does not match scheme.fg');
+  }
+  ok(exProblems.length === 0, 'every example theme is readable and internally consistent',
+    exProblems.slice(0, 5).join('; '));
+
+  // Calling something "made for this site" while shipping a near-copy of a community
+  // theme would be the one dishonest thing this table could do.
+  const dupes = [];
+  for (const ex of examples) {
+    for (const cp of clientPresets.filter(x => x.kind === 'community')) {
+      if (ratio(ex.pal.bg, cp.pal.bg) < 1.06 && ratio(ex.pal.accent, cp.pal.accent) < 1.06) {
+        dupes.push(ex.name + ' is a near-duplicate of ' + cp.name);
+      }
+    }
+  }
+  ok(dupes.length === 0, 'no example theme is a near-copy of a community theme', dupes.join('; '));
+
+  // Range and setting variety are the reason to ship five rather than one.
+  const lights = examples.filter(pr => tools.lum(pr.pal.bg) > 0.5).length;
+  ok(lights >= 1 && lights < examples.length,
+    'the examples cover both light and dark', lights + ' light of ' + examples.length);
+  const indStyles = new Set(examples.map(pr => (PRE.presetById(pr.id).cm || {}).indicatorStyle || 'leftRail'));
+  ok(indStyles.size === examples.length,
+    'no two example themes share an indicator style', [...indStyles].join(', '));
+
+  // An example preset must write its colours out; there is no theme file to name.
+  const notWritten = examples.filter(pr => {
+    const lines = CM.buildGhosttyLines(CM.sanitizeCmux({ on: true, preset: pr.id }), ccPal);
+    const kv = lines.filter(l => l[0] === 'palette');
+    return kv.length !== 16 || !lines.some(l => l[0] === 'background') || !lines.some(l => l[0] === 'foreground');
+  }).map(pr => pr.id);
+  ok(notWritten.length === 0,
+    'each example theme writes background, foreground and all 16 palette lines',
+    notWritten.join(', '));
+
   // Against the real installed bundle, when there is one: the named theme file must
   // exist, and the stored palette must equal what the extraction tool derives from it.
   const THEMES_DIR = '/Applications/cmux.app/Contents/Resources/ghostty/themes';

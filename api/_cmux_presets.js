@@ -153,8 +153,89 @@ const CMUX_PRESETS = [
   },
 
   // — example themes, made for this site ————————————————————————————————
-  // Filled in from the design pass. Each carries a full `scheme` because there is no
-  // Ghostty theme file to point at.
+  // No Ghostty theme file to point at, so each carries a full `scheme`: a background,
+  // a foreground and all sixteen ANSI slots, written straight into the config. These
+  // are real colour schemes, not renames.
+  //
+  // The five cover deliberately different jobs — quiet, warm light, glare-proof,
+  // high-chroma, alert-tuned — and no two share an indicator style, because the cmux
+  // settings are half of what a preset is for.
+  //
+  // Every one is checked in test.js: body text at least 4.5:1 on its own background,
+  // dimmed text at least 3:1, every printable colour at least 3:1, each bright ANSI
+  // slot distinguishable from its normal counterpart, and no near-duplicate of a
+  // community theme. `evidence` on an example preset states its design intent rather
+  // than a popularity claim, since there is no popularity to claim.
+  //
+  // Note on the bright slots: they are NOT required to be lighter than their normal
+  // counterparts. Measured across the 22 themes cmux ships, 33 of 176 bright slots are
+  // darker — Catppuccin Mocha, Everforest and Flexoki each invert 6 of 8 — so that
+  // ordering is not a convention real authors follow.
+  {
+    id: "ash", name: "Ash", kind: 'example',
+    credit: 'made for shayan-cc-config',
+    blurb: "Near-monochrome warm grey with one cool blue, used sparingly. For long days.",
+    evidence: "lowest-contrast set here; dimmed text still clears 3:1",
+    // dark — text 10.6:1, dimmed 3.1:1
+    scheme: {
+      bg: '#16171a', fg: '#c9c7c3',
+      ansi: ['#26282c', '#a8807c', '#8b9a86', '#b3a184', '#7f9bb3', '#9b8fa3', '#84a09e', '#b6b4b0', '#63666b', '#c49994', '#a4b39d', '#ccbb9c', '#9bb6cd', '#b4a7bc', '#9cb8b6', '#d8d6d1'],
+    },
+    pal: { bg: [22, 23, 26], raised: [67, 69, 71], text: [201, 199, 195], comment: [99, 102, 107], subtle: [58, 59, 62], accent: [127, 155, 179], accent2: [155, 143, 163], cyan: [132, 160, 158], green: [139, 154, 134], red: [168, 128, 124], orange: [179, 161, 132], yellow: [204, 187, 156], pink: [180, 167, 188], blue: [155, 182, 205] },
+    cm: {"minimalMode":true,"indicatorStyle":"typography","matchTerminalBg":true,"showScrollBar":false,"tintOpacity":0.02},
+  },
+  {
+    id: "copper-leaf", name: "Copper Leaf", kind: 'example',
+    credit: 'made for shayan-cc-config',
+    blurb: "Aged paper under a desk lamp: warm cream, terracotta, olive and oxidised copper.",
+    evidence: "light scheme; every accent holds 3:1 on cream",
+    // light — text 11.8:1, dimmed 5.4:1
+    scheme: {
+      bg: '#f2e9dc', fg: '#33291f',
+      ansi: ['#4a3f33', '#a33f2c', '#5c6b32', '#9a6f1a', '#2f6b73', '#7d4a6b', '#2b7068', '#5d5245', '#6b5c4b', '#c2543c', '#74863f', '#ad7c14', '#3d8891', '#9a5f85', '#398c81', '#3d3428'],
+    },
+    pal: { bg: [242, 233, 220], raised: [70, 59, 47], text: [51, 41, 31], comment: [107, 92, 75], subtle: [74, 63, 51], accent: [47, 107, 115], accent2: [125, 74, 107], cyan: [43, 112, 104], green: [92, 107, 50], red: [163, 63, 44], orange: [154, 111, 26], yellow: [173, 124, 20], pink: [154, 95, 133], blue: [61, 136, 145] },
+    cm: {"appearance":"light","indicatorStyle":"border","tintOpacity":0.06,"branchLayout":"inline"},
+  },
+  {
+    id: "noon", name: "Noon", kind: 'example',
+    credit: 'made for shayan-cc-config',
+    blurb: "Built for a bright room: paper white, near-black text, colours that survive glare.",
+    evidence: "text 17.3:1 — built to survive glare",
+    // light — text 17.3:1, dimmed 5.9:1
+    scheme: {
+      bg: '#fcfcfb', fg: '#15181c',
+      ansi: ['#2a2f36', '#b3001b', '#00662e', '#8a5000', '#0a4fb3', '#8a1a86', '#00636b', '#4a5158', '#5b636d', '#d1002a', '#008a3e', '#a86300', '#1666d6', '#a82aa3', '#00808a', '#20252b'],
+    },
+    pal: { bg: [252, 252, 251], raised: [38, 43, 49], text: [21, 24, 28], comment: [91, 99, 109], subtle: [42, 47, 54], accent: [10, 79, 179], accent2: [138, 26, 134], cyan: [0, 99, 107], green: [0, 102, 46], red: [179, 0, 27], orange: [138, 80, 0], yellow: [168, 99, 0], pink: [168, 42, 163], blue: [22, 102, 214] },
+    cm: {"appearance":"light","indicatorStyle":"solidFill","tintOpacity":0.07,"tabBarFontSize":12},
+  },
+  {
+    id: "pigment-ink", name: "Pigment Ink", kind: 'example',
+    credit: 'made for shayan-cc-config',
+    blurb: "Saturated pigment hues on deep ink. For reading dense diffs fast.",
+    evidence: "every ANSI slot distinguishable at a glance; text 15.9:1",
+    // dark — text 15.9:1, dimmed 3.2:1
+    scheme: {
+      bg: '#0c0e14', fg: '#e4eaf3',
+      ansi: ['#171b24', '#f2503c', '#23c26a', '#f0a52a', '#4d84f5', '#b45cf0', '#17bcd4', '#ced7e3', '#5a6479', '#ff7a63', '#55e08f', '#ffc457', '#7fa8ff', '#d18cff', '#55d9ec', '#f5f8fc'],
+    },
+    pal: { bg: [12, 14, 20], raised: [60, 64, 73], text: [228, 234, 243], comment: [90, 100, 121], subtle: [48, 52, 61], accent: [77, 132, 245], accent2: [180, 92, 240], cyan: [23, 188, 212], green: [35, 194, 106], red: [242, 80, 60], orange: [240, 165, 42], yellow: [255, 196, 87], pink: [209, 140, 255], blue: [127, 168, 255] },
+    cm: {"indicatorStyle":"blueWashColorRail","tintOpacity":0.18,"tabBarFontSize":12,"scrollback":50000000,"copyOnSelect":true},
+  },
+  {
+    id: "signal", name: "Signal", kind: 'example',
+    credit: 'made for shayan-cc-config',
+    blurb: "Calm slate baseline with alert colours tuned to jump. For watching agents work.",
+    evidence: "calm baseline, only red/orange/yellow at full chroma",
+    // dark — text 10.3:1, dimmed 3.1:1
+    scheme: {
+      bg: '#0f1317', fg: '#b7c2cd',
+      ansi: ['#1c2229', '#ff5f56', '#6f9c73', '#ffb300', '#5f87b8', '#8f7fa8', '#6d9ea3', '#a4aeb8', '#5a646f', '#ff8078', '#88b58c', '#ffc94d', '#7fa4d1', '#a898c0', '#87b9be', '#d6dee7'],
+    },
+    pal: { bg: [15, 19, 23], raised: [56, 63, 71], text: [183, 194, 205], comment: [90, 100, 111], subtle: [47, 53, 61], accent: [95, 135, 184], accent2: [143, 127, 168], cyan: [109, 158, 163], green: [111, 156, 115], red: [255, 95, 86], orange: [255, 179, 0], yellow: [255, 201, 77], pink: [168, 152, 192], blue: [127, 164, 209] },
+    cm: {"indicatorStyle":"leftRail","showScrollBar":false,"contentAlignment":"left","scrollback":50000000,"minimalMode":false},
+  },
 ];
 
 /** Every preset id, in page order. */
@@ -194,6 +275,9 @@ function presetsForClient() {
     blurb: p.blurb || '',
     evidence: p.evidence || '',
     theme: p.theme || '',
+    // The page mirrors buildGhosttyLines(), so it needs the literal colours too —
+    // without them the preview silently omits the 18 lines an example preset writes.
+    scheme: p.scheme || null,
     pal: presetPalette(p.id),
     cm: p.cm || {},
   }));
