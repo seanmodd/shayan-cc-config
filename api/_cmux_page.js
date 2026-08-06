@@ -174,15 +174,8 @@ const CMUX_CSS = `
     .fontget .fcopy{min-height:40px;}
     .fontget code{font-size:10.5px;}
   }
-  .switchrow{display:flex;align-items:center;gap:10px;margin-bottom:2px;}
-  .switchrow .paneswitch{flex:1;}
-  .pinbtn{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-family:inherit;
-    font-size:12.5px;font-weight:600;letter-spacing:.02em;border:1px solid var(--border);
-    background:#10141b;color:var(--dim);border-radius:10px;padding:0 12px;min-height:38px;
-    white-space:nowrap;transition:all .14s;}
-  .pinbtn:hover{border-color:var(--accent);color:var(--text);}
-  .pinbtn.on{border-color:var(--accent);color:var(--accent);background:rgba(122,162,247,.12);}
-  .pinbtn .pico{font-size:13px;}
+  /* .switchrow, .pinbtn and .dockgrip are in STUDIO_CSS — the Studio renders the
+     same row above its own preview, and two copies of that would drift. */
 
   /* Pinned: the mock rides the top of the viewport with the controls sliding under it.
      The terminal takes a fixed height while pinned so the window's own height stops
@@ -192,8 +185,14 @@ const CMUX_CSS = `
      colours, and the top of the transcript is what matters. */
   body.pinned .cmuxpair{position:sticky;top:0;z-index:45;background:var(--bg);
     padding-bottom:12px;box-shadow:0 16px 20px -14px rgba(0,0,0,.75);}
-  body.pinned .cterm{height:min(26dvh,200px);flex:none;overflow:hidden;}
+  /* The var's fallback is how a dragged height takes precedence without a specificity
+     fight: --dock-h only exists once you have used the handle. */
+  body.pinned .cterm{height:var(--dock-h,min(26dvh,200px));flex:none;overflow:hidden;}
   body.pinned .cwin{box-shadow:0 8px 22px rgba(0,0,0,.4);}
+  /* Unpinned the mock is content-sized, so a dragged height needs saying outright.
+     This out-ranks the phone and landscape heights further down on specificity, which
+     is the point: an explicit drag beats a breakpoint guess. */
+  body.docked .cterm{height:var(--dock-h);flex:none;overflow:hidden;}
   /* The editable cmux.json. Monospace and the same colours as the read-only box beside
      it, so it still reads as the file rather than as a form field. */
   .filebox.jsonbox{padding:10px 12px 11px;white-space:normal;}
@@ -274,12 +273,11 @@ const CMUX_CSS = `
     .ctitle .tdot{width:9px;height:9px;}
     .cpanels{grid-template-columns:1fr;}
     .filebox{font-size:10.5px;padding:9px 10px;}
-    .switchrow{flex-wrap:wrap;gap:7px;}
-    .switchrow .paneswitch{flex:1 1 100%;}
-    .pinbtn{flex:1 1 100%;justify-content:center;min-height:44px;}
     /* A pinned mock may not take more than half the screen on a phone, or there is
-       nothing left to scroll the controls in. */
+       nothing left to scroll the controls in. Dragging past that is allowed — the
+       handle clamps to 72% of the viewport — so the cap lifts once you have asked. */
     body.pinned .cmuxpair{max-height:52dvh;overflow:hidden;height:auto;}
+    body.pinned.docked .cmuxpair{max-height:none;}
   }
   /* Landscape has width to spare and almost no height. */
   @media(max-height:460px){
@@ -344,6 +342,11 @@ function renderCmux(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
     <div class="cmuxcol cmuxcol-after">
       <div class="cbadge"><span class="pill aft">after</span><b>Your cmux</b><span>— live preview</span></div>
       <div id="winAfter"></div>
+    </div>
+    <div class="dockgrip" id="dockgrip" role="separator" aria-orientation="horizontal" tabindex="0"
+      aria-label="Resize the preview. Arrow keys adjust the height, Home resets it."
+      title="Drag to resize the preview · double-click to reset">
+      <span class="gbar"></span><span class="gtxt">drag to resize</span><span class="gbar"></span>
     </div>
   </div>
 
@@ -1434,30 +1437,17 @@ document.addEventListener('click',function(e){
 document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();});
 window.addEventListener('scroll',function(){if(_tipBtn)hideTip();},true);
 
-// ── pin the preview ──────────────────────────────────────────────────────────
+// ── pin and resize the preview ────────────────────────────────────────────────
 // Adjusting a control you cannot see the effect of is the whole problem with a long
-// settings page. Pinning sticks the window mock to the top of the viewport at whatever
-// height it currently has, so the controls scroll underneath it.
+// settings page. Pinning sticks the window mock to the top of the viewport so the
+// controls scroll underneath it; the handle under the mock decides how much of the
+// screen it gets. Both live in installPreviewDock(), shared with the Studio.
 //
-// position:sticky rather than fixed: sticky keeps the element in normal flow, so the
-// controls below do not jump up by the mock's height the moment you pin it, and it
-// stops sticking naturally when you scroll back past it.
-(function(){
-  var btn=$('#pinbtn'); if(!btn)return;
-  function apply(on){
-    document.body.classList.toggle('pinned',on);
-    btn.classList.toggle('on',on);
-    btn.setAttribute('aria-pressed',on?'true':'false');
-    $('.ptxt',btn).textContent=on?'Preview pinned':'Pin preview';
-    // No height freeze needed: while pinned the terminal has a fixed height, so the
-    // mock does not resize when a control changes and the page cannot jump.
-    try{localStorage.setItem('scc_cmux_pin',on?'1':'0');}catch(e){}
-  }
-  btn.addEventListener('click',function(){apply(!document.body.classList.contains('pinned'));});
-  var saved='0';
-  try{saved=localStorage.getItem('scc_cmux_pin')||'0';}catch(e){}
-  if(saved==='1')apply(true);
-})();
+// Unpinned by default, unlike the Studio: this mock is a whole terminal window with
+// a sidebar and two panes, and at its natural height it leaves a phone with nothing
+// but chrome on screen. Whatever you last chose is remembered under scc_cmux_pin.
+installPreviewDock({dock:'#pair',grip:'#dockgrip',pin:'#pinbtn',
+  term:'.cterm',key:'cmux',pinDefault:false});
 
 // ── before/after switch ───────────────────────────────────────────────────────
 (function(){

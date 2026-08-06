@@ -23,10 +23,23 @@ function studioPreset(DATA, p) {
 
 const STUDIO_CSS = `
   .swrap{max-width:1440px;margin:0 auto;padding:0 22px 80px;}
-  .terms{position:sticky;top:0;z-index:40;background:var(--bg);box-shadow:0 18px 22px -14px rgba(0,0,0,.65);padding:14px 0 16px;display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-  @media(max-width:980px){.terms{position:static;grid-template-columns:1fr;}}
+  /* Sticky is now a choice rather than the only option — see .pinbtn below. The
+     Studio defaults to pinned because watching the AFTER pane react is the whole
+     point of the page, but a preview that owns the top of the screen is exactly
+     wrong when you are reading a long control panel, so it comes off. */
+  .terms{position:relative;z-index:40;background:var(--bg);padding:14px 0 16px;display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  body.pinned .terms{position:sticky;top:0;box-shadow:0 18px 22px -14px rgba(0,0,0,.65);}
+  /* Matched specificity, or the pinned rule above would out-rank this and stick a
+     full-height terminal to the top of a narrow screen. */
+  @media(max-width:980px){
+    .terms{grid-template-columns:1fr;}
+    body.pinned .terms{position:static;box-shadow:none;}
+  }
   .tcol{display:flex;flex-direction:column;gap:8px;min-width:0;}
   .tcol .xterm{height:clamp(300px,44vh,520px);}
+  /* Dragged height wins over every breakpoint default, including .xterm's own
+     min-height:300px — you asked for 140px, you get 140px. */
+  body.docked .tcol .xterm{height:var(--dock-h);min-height:0;}
   .tbadge{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);}
   .tbadge b{color:var(--text);letter-spacing:.02em;}
   .tbadge .pill{border:1px solid var(--border);border-radius:20px;padding:2px 9px;font-size:10.5px;letter-spacing:.04em;}
@@ -103,6 +116,39 @@ const STUDIO_CSS = `
     background:#10141b;color:var(--dim);border-radius:10px;min-height:44px;padding:0 10px;}
   .pswbtn.on{border-color:var(--accent);color:var(--accent);background:rgba(122,162,247,.12);}
 
+  /* ── the preview dock's own two controls ──────────────────────────────────
+     Shared with /cmux, which renders the same row above its window mock. The
+     behaviour behind both lives in installPreviewDock(). */
+  .switchrow{display:flex;align-items:center;gap:10px;margin-bottom:2px;}
+  .switchrow .paneswitch{flex:1;}
+  .pinbtn{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-family:inherit;
+    font-size:12.5px;font-weight:600;letter-spacing:.02em;border:1px solid var(--border);
+    background:#10141b;color:var(--dim);border-radius:10px;padding:0 12px;min-height:38px;
+    white-space:nowrap;transition:all .14s;}
+  .pinbtn:hover{border-color:var(--accent);color:var(--text);}
+  .pinbtn.on{border-color:var(--accent);color:var(--accent);background:rgba(122,162,247,.12);}
+  .pinbtn .pico{font-size:13px;}
+  /* The resize handle. grid-column:1/-1 because it is a child of the preview grid
+     itself — that way it stays glued to the bottom edge of the preview and rides
+     along inside the sticky region when the preview is pinned. */
+  .dockgrip{grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:9px;
+    width:100%;height:20px;margin:1px 0 0;padding:0;border:none;background:transparent;
+    color:var(--faint);cursor:ns-resize;border-radius:8px;
+    transition:color .14s,background .14s;
+    user-select:none;-webkit-user-select:none;
+    /* Without this a touch-drag scrolls the page instead of resizing. */
+    touch-action:none;}
+  .dockgrip:hover,.dockgrip:focus-visible{color:var(--accent);background:rgba(122,162,247,.09);}
+  .dockgrip:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .dockgrip .gbar{height:3px;flex:0 1 54px;border-radius:3px;background:currentColor;opacity:.5;}
+  .dockgrip .gtxt{font-size:10px;letter-spacing:.09em;text-transform:uppercase;
+    white-space:nowrap;opacity:0;transition:opacity .14s;}
+  .dockgrip:hover .gtxt,.dockgrip:focus-visible .gtxt{opacity:.9;}
+  /* Mid-drag the pointer is nowhere near the 20px handle, so the resize cursor and
+     the selection lock have to live on the whole document instead. */
+  body.dockdrag{cursor:ns-resize;user-select:none;-webkit-user-select:none;}
+  body.dockdrag .dockgrip{color:var(--accent);background:rgba(122,162,247,.09);}
+
   /* Phones — by width OR by height. A phone in landscape is 844x390: a width-only
      breakpoint left it on the desktop layout, stacking two 698px terminals into
      390px of viewport. The comma is an OR in CSS media queries.
@@ -113,6 +159,16 @@ const STUDIO_CSS = `
        cmux with a description. Same reason the homepage hides its Studio link here. */
     .top a.iconbtn.cmuxlink{display:none;}
     .paneswitch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 10px;}
+    /* Stacked, both full width: a 390px row cannot hold a two-button switch and a
+       "Preview pinned" chip side by side. The switch's own bottom margin would
+       double up with the row gap, so it goes. */
+    .switchrow{flex-wrap:wrap;gap:7px;}
+    .switchrow .paneswitch{flex:1 1 100%;margin-bottom:0;}
+    .pinbtn{flex:1 1 100%;justify-content:center;min-height:44px;}
+    /* A 20px target is a miss on a touchscreen, and there is no hover to reveal the
+       label, so it stays visible. */
+    .dockgrip{height:34px;}
+    .dockgrip .gtxt{opacity:.75;}
     .terms{gap:0;}
     .terms[data-pane="after"] .tcol-before{display:none;}
     .terms[data-pane="before"] .tcol-after{display:none;}
@@ -929,6 +985,15 @@ $('#c_reset').addEventListener('click',function(){
   var tc=$('#tocmux'); if(tc)tc.href='/cmux';
   toast('Reset to defaults');
 });
+// Pinned by default here: the Studio's whole premise is that you change a control and
+// watch the AFTER terminal answer, which only works if it is still on screen. The
+// toggle exists because that stops being true once you are reading rather than tweaking.
+//
+// <body> ships with class="pinned" to match, so the terminals do not start unpinned and
+// visibly jump when this runs. Keep the two in step: the markup states the default, this
+// states it again for the case where localStorage overrides it.
+installPreviewDock({dock:'.terms',grip:'#dockgrip',pin:'#pinbtn',
+  term:'.tcol .xterm',key:'studio',pinDefault:true});
 installMobileNav();
 `;
 
@@ -937,7 +1002,7 @@ function renderCustomize(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   const payload = JSON.stringify(presets).replace(/</g, '\\u003c');
   const { STARTERS } = require('./_theme.js');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Customize · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}</style></head><body>
+<title>Customize · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}</style></head><body class="pinned">
 <div class="top"><a class="brand" href="/" style="text-decoration:none">← shayan-cc-config</a><span class="spacer"></span>
 <a class="iconbtn" href="/">Home</a>
 <a class="iconbtn cmuxlink" id="tocmux" href="/cmux">🪟 cmux</a>
@@ -945,13 +1010,23 @@ function renderCustomize(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
 <header style="padding-bottom:2px"><h1 style="font-size:32px">🎛 The Studio</h1>
 <p class="sub" style="margin-top:8px">Your terminal, <b>before</b> and <b>after</b> — both are real, scrollable Claude Code sessions. <b>Type a message into either one</b> (or fire a sample) and watch both respond in their own style. Tweak everything below; the AFTER side updates live.</p></header>
 <div class="swrap">
-  <div class="paneswitch" data-pane-toggle role="tablist" aria-label="Which terminal to show">
-    <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
-    <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
+  <div class="switchrow">
+    <div class="paneswitch" data-pane-toggle role="tablist" aria-label="Which terminal to show">
+      <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
+      <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
+    </div>
+    <button type="button" id="pinbtn" class="pinbtn" aria-pressed="true"
+      title="Keep the terminals on screen while you scroll through the controls">
+      <span class="pico">📌</span><span class="ptxt">Preview pinned</span></button>
   </div>
   <div class="terms" data-pane="after">
     <div class="tcol tcol-before"><div class="tbadge"><span class="pill">before</span><b>Your current setup</b><span>— pick what you run today</span></div><div id="termB"></div></div>
     <div class="tcol tcol-after"><div class="tbadge"><span class="pill aft">after</span><b>Your custom setup</b><span>— live preview</span></div><div id="termA"></div></div>
+    <div class="dockgrip" id="dockgrip" role="separator" aria-orientation="horizontal" tabindex="0"
+      aria-label="Resize the terminals. Arrow keys adjust the height, Home resets it."
+      title="Drag to resize the terminals · double-click to reset">
+      <span class="gbar"></span><span class="gtxt">drag to resize</span><span class="gbar"></span>
+    </div>
   </div>
   <div class="toolrow" id="chipbar">
     <span class="lbl">Try it:</span>

@@ -298,6 +298,25 @@ function bashCheck(src, label) {
   ok(/c_reset[\s\S]{0,400}clearTimeout\(_urlT\)/.test(cust), 'reset cancels the pending URL write');
   extractScripts(cust).forEach((s, i) => nodeCheck(s, 'customize_fixed_script' + i));
 
+  // The preview dock: sticky is a choice, and the height is draggable. Both pages get
+  // the same behaviour out of installPreviewDock(), so both are checked the same way.
+  for (const [page, html, term] of [['/customize', cust, '.tcol .xterm'], ['/cmux', (await call('/cmux')).body, '.cterm']]) {
+    ok(html.includes('id="pinbtn"'), page + ': the preview can be pinned');
+    ok(html.includes('id="dockgrip"') && html.includes('role="separator"'),
+      page + ': the preview has a resize handle');
+    ok(html.includes("term:'" + term + "'"), page + ': the handle resizes that page’s terminal');
+    ok(html.includes('body.docked'), page + ': a dragged height has a rule to apply it');
+    // Sticky must be conditional, or the toggle has nothing to turn off.
+    ok(/body\.pinned (\.terms|\.cmuxpair)\{position:sticky/.test(html),
+      page + ': sticky is gated on the pin, not unconditional');
+    ok(html.includes('aria-orientation="horizontal"') && html.includes('tabindex="0"'),
+      page + ': the handle is reachable and described for assistive tech');
+  }
+  // A phone must still be able to scroll the controls: the drag clamps to 72% of the
+  // viewport, and the floor keeps a zero-height (backgrounded) viewport from collapsing it.
+  ok(cust.includes('window.innerHeight*0.72') && cust.includes('Math.max(MIN+60'),
+    'the dragged height is clamped at both ends');
+
   // usage beyond the assumed window: full bar, count alone, no impossible fraction
   const bigTr = path.join(TMP, 'big.jsonl');
   fs.writeFileSync(bigTr, JSON.stringify({ message: { usage: { input_tokens: 640000, output_tokens: 1000 } } }) + '\n');
@@ -905,7 +924,6 @@ function bashCheck(src, label) {
     ['stateFromCmuxJson', 'an edited cmux.json can be read back into the controls'],
     ["'scc_cmux_saved'", 'saved setups have a storage key'],
     ["'Our Community'", 'the Our Community section exists'],
-    ['id="pinbtn"', 'the preview can be pinned'],
     ['id="themenote"', 'the Ghostty theme box says whether it can be previewed'],
     ["promptColorMode('pm_fgm','pm_fg','fg'", 'prompt text colour is controllable'],
     ["promptColorMode('pm_bgm','pm_bg','bg'", 'prompt highlight is controllable'],

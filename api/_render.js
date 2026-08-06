@@ -354,6 +354,121 @@ function installMobileNav(){
     if(bar)new ResizeObserver(lift).observe(bar);
   }
 }
+
+// ── the preview dock ──────────────────────────────────────────────────────────
+// The Studio and /cmux both hang a live before/after preview above a long column of
+// controls, and both need the same two decisions made about it: whether it stays on
+// screen while you scroll, and how much of the screen it is allowed to take. That is
+// this function, shared, so the two pages cannot drift apart.
+//
+// Sticky rather than fixed for the pin: sticky keeps the dock in normal flow, so the
+// controls below do not jump up by its height the moment you pin it, and it stops
+// sticking naturally when you scroll back past it.
+//
+// The height is published as one custom property, --dock-h, on <html>. Each page
+// decides what that property sizes -- the Studio sizes .xterm, /cmux sizes .cterm --
+// so one drag reads correctly on two quite different mocks. Until you actually grab
+// the handle no property is set at all, which is what lets each page keep its own
+// responsive default height at every breakpoint.
+function installPreviewDock(o){
+  var dock=document.querySelector(o.dock); if(!dock)return;
+  var grip=document.querySelector(o.grip);
+  var pin=document.querySelector(o.pin);
+  var root=document.documentElement;
+  var KEY_PIN='scc_'+o.key+'_pin', KEY_H='scc_'+o.key+'_dockh';
+  var MIN=120;
+  // A dock that may grow to the full viewport leaves nothing to scroll the controls
+  // in, which is the one thing the dock exists to help you do.
+  function maxH(){return Math.max(MIN+60,Math.round(window.innerHeight*0.72));}
+  function store(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+  function read(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+
+  function setPin(on,save){
+    document.body.classList.toggle('pinned',on);
+    if(pin){
+      pin.classList.toggle('on',on);
+      pin.setAttribute('aria-pressed',on?'true':'false');
+      var t=pin.querySelector('.ptxt');
+      if(t)t.textContent=on?'Preview pinned':'Pin preview';
+    }
+    if(save)store(KEY_PIN,on?'1':'0');
+  }
+  if(pin)pin.addEventListener('click',function(){
+    setPin(!document.body.classList.contains('pinned'),true);
+  });
+  var savedPin=read(KEY_PIN);
+  setPin(savedPin===null?!!o.pinDefault:savedPin==='1',false);
+
+  if(!grip)return;
+
+  // Measuring the live terminal rather than tracking a number in JS means a drag
+  // always starts from whatever the stylesheet currently computes, at any breakpoint.
+  // The loop skips hidden panes: on a phone the before/after switch display:none-s one
+  // whole column, and a hidden element measures zero.
+  function measure(){
+    var els=document.querySelectorAll(o.term);
+    for(var i=0;i<els.length;i++){
+      var h=els[i].getBoundingClientRect().height;
+      if(h>0)return Math.round(h);
+    }
+    return 300;
+  }
+  function setH(px,save){
+    var v=Math.max(MIN,Math.min(maxH(),Math.round(px)));
+    root.style.setProperty('--dock-h',v+'px');
+    document.body.classList.add('docked');
+    grip.setAttribute('aria-valuenow',String(v));
+    grip.setAttribute('aria-valuemin',String(MIN));
+    grip.setAttribute('aria-valuemax',String(maxH()));
+    if(save)store(KEY_H,String(v));
+    return v;
+  }
+  function clearH(){
+    root.style.removeProperty('--dock-h');
+    document.body.classList.remove('docked');
+    grip.removeAttribute('aria-valuenow');
+    try{localStorage.removeItem(KEY_H);}catch(e){}
+  }
+  var savedH=parseInt(read(KEY_H)||'',10);
+  if(isFinite(savedH)&&savedH>0)setH(savedH,false);
+
+  var startY=0,startH=0,dragging=false;
+  grip.addEventListener('pointerdown',function(e){
+    dragging=true;startY=e.clientY;startH=measure();
+    document.body.classList.add('dockdrag');
+    // Capture, so the drag survives the pointer leaving the 20px handle -- which it
+    // does immediately, since dragging is the act of moving away from it.
+    if(grip.setPointerCapture){try{grip.setPointerCapture(e.pointerId);}catch(err){}}
+    e.preventDefault();
+  });
+  grip.addEventListener('pointermove',function(e){
+    if(dragging)setH(startH+(e.clientY-startY),false);
+  });
+  function stop(){
+    if(!dragging)return;
+    dragging=false;
+    document.body.classList.remove('dockdrag');
+    var cur=parseInt(root.style.getPropertyValue('--dock-h'),10);
+    if(isFinite(cur))store(KEY_H,String(cur));
+  }
+  grip.addEventListener('pointerup',stop);
+  grip.addEventListener('pointercancel',stop);
+  // A drag handle nobody can reach from the keyboard is a control half the people on
+  // the page do not have. Arrows nudge it, Home hands the height back to the stylesheet.
+  grip.addEventListener('keydown',function(e){
+    var k=e.key;
+    if(k==='ArrowUp'||k==='ArrowDown'){
+      e.preventDefault();
+      setH(measure()+(k==='ArrowDown'?1:-1)*(e.shiftKey?48:16),true);
+    }else if(k==='Home'){e.preventDefault();clearH();}
+  });
+  grip.addEventListener('dblclick',function(e){e.preventDefault();clearH();});
+  // Rotating a phone can drop the ceiling below the height you dragged to.
+  window.addEventListener('resize',function(){
+    var cur=parseInt(root.style.getPropertyValue('--dock-h'),10);
+    if(isFinite(cur))setH(cur,false);
+  });
+}
 `;
 
 // The card renderer + homepage boot logic (no template literals inside).
