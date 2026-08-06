@@ -11,6 +11,8 @@ const { sanitizeHerdr, buildHerdrToml, herdrApplyBlock } = require('./_herdr.js'
 const { renderHerdr } = require('./_herdr_page.js');
 const { sanitizeZellij, buildZellijKdl, buildAgentLayout, zellijApplyBlock } = require('./_zellij.js');
 const { renderZellij } = require('./_zellij_page.js');
+const { sanitizeWarp, buildWarpTheme, buildWarpLaunch, buildWarpSettingsSnippet, warpApplyBlock } = require('./_warp.js');
+const { renderWarp } = require('./_warp_page.js');
 const {
   sanitizeSL, buildUMD, buildInputBox, buildStatuslineScript,
   cleanText, cleanTerm, cleanName, cleanFormat, sanePalette, clampInt,
@@ -134,10 +136,12 @@ function customApplyScript(origin, rawC, pl) {
   const cmSan = sanitizeCmux(pl.cm);
   const hdSan = sanitizeHerdr(pl.hd);
   const zjSan = sanitizeZellij(pl.zj);
+  const wpSan = sanitizeWarp(pl.wp);
   // Each terminal layer is independent and additive: a payload can carry none, one, or
   // both, and the summary line names whichever actually ran.
   const layers = ['Claude Code'].concat(cmSan ? ['cmux'] : [])
-    .concat(hdSan ? ['herdr'] : []).concat(zjSan ? ['Zellij'] : []);
+    .concat(hdSan ? ['herdr'] : []).concat(zjSan ? ['Zellij'] : [])
+    .concat(wpSan ? ['Warp'] : []);
   return `#!/bin/bash
 set -euo pipefail
 # shayan-cc-config — apply custom setup "${name}"
@@ -149,6 +153,7 @@ ${slSan ? statuslineBlock(buildStatuslineScript(slSan, pl.p)) : ''}
 ${cmSan ? cmuxApplyBlock(cmSan, pl.p) : ''}
 ${hdSan ? herdrApplyBlock(hdSan) : ''}
 ${zjSan ? zellijApplyBlock(zjSan) : ''}
+${wpSan ? warpApplyBlock(wpSan, pl.p) : ''}
 echo ""
 echo "✓ '${name}' applied — ${layers.join(' + ')}. Start a new claude session to see it."
 echo "  Build another at ${origin}/customize"
@@ -309,6 +314,25 @@ function route(req, res) {
   }
   if (path === '/zellij' || path === '/zellij/') {
     return sendHTML(renderZellij(DATA, CSS, CLIENT_LIB, FAVICON, GH_SVG, GITHUB_URL));
+  }
+  if (path === '/warp' || path === '/warp/') {
+    return sendHTML(renderWarp(DATA, CSS, CLIENT_LIB, FAVICON, GH_SVG, GITHUB_URL));
+  }
+  // The theme, the launch configuration, and the settings snippet the installer will NOT
+  // write. Split on a marker so the page makes one request; built here so there is one
+  // YAML builder rather than a second one in the browser that can drift.
+  if (path === '/warp-files.txt') {
+    const c = u.searchParams.get('c');
+    if (!c) return sendText('missing ?c= payload', 'text/plain; charset=utf-8', 400);
+    try {
+      const pl = decodeCustom(c);
+      const wpSan = sanitizeWarp(pl.wp);
+      if (!wpSan) return sendText('this setup has no Warp layer enabled', 'text/plain; charset=utf-8', 404);
+      const body = buildWarpTheme(wpSan, pl.p)
+        + '@@SPLIT@@' + (wpSan.launchConfig ? buildWarpLaunch(wpSan) : '')
+        + '@@SPLIT@@' + buildWarpSettingsSnippet(wpSan);
+      return sendText(body, 'text/plain; charset=utf-8');
+    } catch (e) { return sendText('bad payload: ' + cleanText(e.message, 120), 'text/plain; charset=utf-8', 400); }
   }
   // Both files the Zellij layer writes. The page splits on the marker rather than making
   // two requests, and rebuilds neither in the browser — one KDL builder, so the preview

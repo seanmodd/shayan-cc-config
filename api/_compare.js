@@ -72,6 +72,26 @@ const TOOLS = [
     docs: 'https://zellij.dev/documentation/',
   },
   {
+    id: 'warp',
+    name: 'Warp',
+    kind: 'terminal app',
+    icon: '\u{1F300}',
+    what: 'A terminal that puts every command in its own block — its own output, its own exit status — with an agent, a code-review pane and cloud sync built into the app rather than bolted on.',
+    bestFor: [
+      'Reading back what happened: each command is a discrete, collapsible block instead of one long scrollback.',
+      'Wanting the agent <b>in</b> the terminal — Warp ships its own, with permission profiles and command allow/deny lists.',
+      'Saved window layouts — a launch configuration opens a set of tabs and panes with their commands already running.',
+      'Theming from a file: themes are plain YAML you can keep in your dotfiles, background image included.',
+      'People who want a GUI for all of it rather than a config file.',
+    ],
+    notFor: [
+      'Anyone who needs their config to be plain files end to end — <span class="mono">settings.toml</span> is owned and rewritten by the app.',
+      'Avoiding an account and a network: it has settings sync, cloud conversation storage and telemetry settings, which tells you those exist.',
+      'Surviving a disconnect. Nothing in its settings suggests detach-and-reattach; for that you still run a multiplexer inside it.',
+    ],
+    docs: 'https://docs.warp.dev/',
+  },
+  {
     id: 'herdr',
     name: 'herdr',
     kind: 'agent multiplexer',
@@ -96,15 +116,16 @@ const TOOLS = [
 // Rows are only worth a table when every tool has a real answer. "unclear from docs" is
 // a legitimate answer and appears verbatim where that is the honest one.
 const MATRIX = {
-  cols: ['Claude Code', 'cmux (app)', 'cmux TUI', 'Zellij', 'herdr'],
+  cols: ['Claude Code', 'cmux (app)', 'Warp', 'cmux TUI', 'Zellij', 'herdr'],
   rows: [
-    ['Platforms', 'macOS, Linux, WSL, Windows', 'macOS 14+ only', 'macOS, Linux, Windows', 'Linux, macOS, Windows', 'Linux + macOS stable; Windows beta'],
-    ['Survives disconnect', 'background sessions only', 'no — layout and agent ids only', 'yes, headless server', 'yes, plus crash resurrection', 'yes — processes never stop'],
-    ['Restores the conversation', 'yes, <span class="mono">--resume</span>', 'yes, via integration hooks', 'unclear from docs', 'no — reruns the command', 'yes, on by default'],
-    ['Knows the agent is blocked', 'n/a', 'notification rings', 'unclear from docs', 'no agent concept', 'yes — a first-class state'],
-    ['Mouse', 'fullscreen mode only', 'native macOS GUI', 'unclear from docs', 'yes, on by default', 'yes — the headline feature'],
-    ['Config format', 'JSON + <span class="mono">CLAUDE.md</span>', 'JSONC + Ghostty config', 'JSON', 'KDL', 'TOML'],
-    ['Plugins', 'plugins, skills, hooks, MCP', 'none — socket API instead', 'none — socket API instead', 'WASM (Rust today)', 'any executable + manifest'],
+    ['Platforms', 'macOS, Linux, WSL, Windows', 'macOS 14+ only', 'macOS, Linux, Windows', 'macOS, Linux, Windows', 'Linux, macOS, Windows', 'Linux + macOS stable; Windows beta'],
+    ['Survives disconnect', 'background sessions only', 'no — layout and agent ids only', 'no — run a multiplexer inside it', 'yes, headless server', 'yes, plus crash resurrection', 'yes — processes never stop'],
+    ['Restores the conversation', 'yes, <span class="mono">--resume</span>', 'yes, via integration hooks', 'its own agent, in the cloud', 'unclear from docs', 'no — reruns the command', 'yes, on by default'],
+    ['Knows the agent is blocked', 'n/a', 'notification rings', 'for its own agent', 'unclear from docs', 'no agent concept', 'yes — a first-class state'],
+    ['Mouse', 'fullscreen mode only', 'native macOS GUI', 'native GUI', 'unclear from docs', 'yes, on by default', 'yes — the headline feature'],
+    ['Config format', 'JSON + <span class="mono">CLAUDE.md</span>', 'JSONC + Ghostty config', 'TOML + YAML, app-owned', 'JSON', 'KDL', 'TOML'],
+    ['Plugins', 'plugins, skills, hooks, MCP', 'none — socket API instead', 'none — themes and workflows', 'none — socket API instead', 'WASM (Rust today)', 'any executable + manifest'],
+    ['Account / telemetry', 'account; no telemetry setting', 'none', 'account, sync and telemetry settings', 'none', 'none', 'none'],
   ],
 };
 
@@ -135,10 +156,11 @@ function card(t, currentId) {
 function compareBlock(currentId) {
   return `<section class="cmpwrap" id="compare">
   <h3 class="cmphead">\u{1F9ED} Which one do you actually want?</h3>
-  <p class="cmpintro">These are not four versions of the same thing. <b>Claude Code</b> is the agent.
-  <b>cmux</b> is a macOS terminal you run it in. <b>Zellij</b> and <b>herdr</b> are multiplexers that
-  run <i>inside</i> a terminal and keep sessions alive when you disconnect. Everything below comes
-  from each project's own documentation — where the docs do not answer, the table says so.</p>
+  <p class="cmpintro">These are not five versions of the same thing. <b>Claude Code</b> is the agent.
+  <b>cmux</b> and <b>Warp</b> are terminals you run it in. <b>Zellij</b> and <b>herdr</b> are
+  multiplexers that run <i>inside</i> a terminal and keep sessions alive when you disconnect — so a
+  terminal and a multiplexer are a pair, not a choice. Everything below comes from each project's own
+  documentation, and for Warp from the config files it writes; where neither answers, the table says so.</p>
   <div class="cmpgrid">${TOOLS.map(t => card(t, currentId)).join('')}</div>
 
   <div class="cmptablewrap">
@@ -176,7 +198,9 @@ const COMPARE_CSS = `
     margin:0 0 9px;display:flex;align-items:center;gap:7px;}
   .cmpintro{margin:0 0 15px;font-size:13px;line-height:1.6;color:var(--dim);max-width:88ch;}
   .cmpintro b{color:var(--text);}
-  .cmpgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:13px;
+  /* 244px rather than 258: five cards across a 1440px page is the case now, and the
+     wider minimum dropped the fifth onto a row of its own. */
+  .cmpgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(244px,1fr));gap:13px;
     align-items:start;}
   .cmpcard{background:var(--panel);border:1px solid var(--border);border-radius:13px;
     padding:14px 15px 13px;min-width:0;}
@@ -209,7 +233,9 @@ const COMPARE_CSS = `
      than pushing the whole document sideways. */
   .cmptablewrap{margin-top:16px;overflow-x:auto;border:1px solid var(--border);
     border-radius:12px;background:var(--panel);}
-  .cmptable{border-collapse:collapse;width:100%;min-width:720px;font-size:12px;}
+  /* Grows with the number of columns — at 720px a sixth column crammed every cell to
+     two characters a line. It scrolls inside .cmptablewrap either way. */
+  .cmptable{border-collapse:collapse;width:100%;min-width:860px;font-size:12px;}
   .cmptable th,.cmptable td{text-align:left;padding:9px 12px;
     border-bottom:1px solid var(--border);vertical-align:top;line-height:1.45;}
   .cmptable thead th{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;
@@ -225,7 +251,7 @@ const COMPARE_CSS = `
   .cmpsmall{font-size:11.5px !important;color:var(--faint) !important;}
   @media(max-width:700px),(max-height:520px){
     .cmpgrid{grid-template-columns:1fr;}
-    .cmptable{min-width:640px;font-size:11.5px;}
+    .cmptable{min-width:720px;font-size:11.5px;}
     .cmpintro{font-size:12.5px;}
   }
 `;

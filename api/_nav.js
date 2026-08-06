@@ -30,6 +30,10 @@ const PAGES = [
     id: 'zellij', path: '/zellij', icon: '\u{1F9E9}', label: 'Zellij', short: 'Zellij',
     sub: 'layouts you commit, sessions that survive',
   },
+  {
+    id: 'warp', path: '/warp', icon: '\u{1F300}', label: 'Warp', short: 'Warp',
+    sub: 'blocks, themes and launch configurations',
+  },
 ];
 
 const GITHUB_URL = 'https://github.com/seanmodd/shayan-cc-config';

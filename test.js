@@ -1157,6 +1157,60 @@ function bashCheck(src, label) {
     console.log('  – zellij not on PATH, skipping the real-binary check');
   }
 
+  // ── /warp ─────────────────────────────────────────────────────────────────
+  const wpPage = (await call('/warp')).body;
+  const WP = require(path.join(ROOT, 'api/_warp.js'));
+  ok(wpPage.includes('id="compare"'), '/warp: has the comparison block');
+  ok(/class="cmpcard here"[\s\S]{0,400}Warp/.test(wpPage), '/warp: comparison marks Warp');
+  ok(wpPage.includes('saneWarp'), '/warp: sanitizes the payload before rendering it');
+  // The page has to be explicit that settings.toml is the one file it will not write.
+  ok(wpPage.includes('not written by the installer'),
+    '/warp: says settings.toml is left alone');
+
+  const wpal = { bg: [26, 27, 38], text: [192, 202, 245], subtle: [48, 52, 70], accent: [122, 162, 247],
+    accent2: [187, 154, 247], cyan: [125, 207, 255], green: [158, 206, 106], red: [247, 118, 142],
+    yellow: [224, 175, 104], blue: [122, 162, 247] };
+  const wpOk = WP.sanitizeWarp({ on: true, themeName: 'My Theme' });
+  const wpTheme = WP.buildWarpTheme(wpOk, wpal);
+  // Warp needs both ANSI rows filled; a theme with only `normal` renders half-stock.
+  for (const k of WP.ANSI) {
+    ok(new RegExp('^    ' + k + ': "#[0-9a-f]{6}"$', 'm').test(wpTheme),
+      '/warp: theme defines ' + k);
+  }
+  ok((wpTheme.match(/^  (normal|bright):$/gm) || []).length === 2,
+    '/warp: theme has both the normal and bright rows');
+  ok(/^name: My Theme$/m.test(wpTheme), '/warp: theme carries its name');
+  // The installer must never write settings.toml — that file is Warp's, and it holds
+  // agent command allow/deny lists that a font-size change has no business replacing.
+  const wpSh = WP.warpApplyBlock(wpOk, wpal);
+  ok(!/settings\.toml"?\s*<</.test(wpSh) && !/> *"\$WARP_DIR\/settings\.toml/.test(wpSh),
+    '/warp: the installer never writes settings.toml');
+  ok(/themes\/My Theme\.yaml/.test(wpSh), '/warp: the installer writes the theme');
+
+  // A hostile payload: the theme name becomes a FILENAME and the agent command is
+  // EXECUTED, so both are the interesting ones.
+  const wpEvil = WP.sanitizeWarp({
+    on: true, themeName: '../../../etc/pwn"; rm -rf ~; #', lcName: 'a/b$(whoami)',
+    lcAgentCommand: 'rm -rf ~', background: 'red;x', cursorType: 'nope',
+    opacity: 9999, fontSize: -3,
+  });
+  ok(!/[^A-Za-z0-9 _-]/.test(wpEvil.themeName), '/warp: a theme name is reduced to a safe filename');
+  ok(!wpEvil.themeName.includes('..') && !wpEvil.themeName.includes('/'),
+    '/warp: a theme name cannot climb out of the themes directory');
+  ok(wpEvil.lcAgentCommand === 'claude', '/warp: the executed command comes from a fixed list');
+  ok(wpEvil.background === WP.WARP_DEFAULTS.background, '/warp: a bad colour falls back');
+  ok(wpEvil.opacity === 100 && wpEvil.fontSize === 8, '/warp: numbers are clamped');
+  const wpEvilSh = WP.warpApplyBlock(wpEvil, wpal);
+  bashCheck('#!/bin/bash\nset -euo pipefail\n' + wpEvilSh, 'warp_apply_hostile');
+  // Whatever words survive the character filter land inside double quotes or a quoted
+  // heredoc, so they cannot execute. The property to pin is that no shell metacharacter
+  // reaches the script FROM THE PAYLOAD — the installer's own $(date …) for the backup
+  // stamp is legitimate, so a blanket ban on substitution would flag the wrong thing.
+  for (const [field, v] of Object.entries(wpEvil)) {
+    if (typeof v !== 'string') continue;
+    ok(!/[$`"'\\;|&<>()]/.test(v), '/warp: no shell metacharacter survives in ' + field);
+  }
+
   // Naming a saved setup must not go through prompt(): the browser counts every second
   // that a modal is open as time the click handler blocked the main thread, so naming one
   // at human speed reported a ~6s interaction and Chrome flagged the page for it.
