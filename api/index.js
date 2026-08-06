@@ -7,6 +7,8 @@ const { renderCustomize } = require('./_customize.js');
 const { expandPalette } = require('./_theme.js');
 const { sanitizeCmux, buildGhosttyLines, buildCmuxJson, cmuxApplyBlock } = require('./_cmux.js');
 const { renderCmux } = require('./_cmux_page.js');
+const { sanitizeHerdr, buildHerdrToml, herdrApplyBlock } = require('./_herdr.js');
+const { renderHerdr } = require('./_herdr_page.js');
 const {
   sanitizeSL, buildUMD, buildInputBox, buildStatuslineScript,
   cleanText, cleanTerm, cleanName, cleanFormat, sanePalette, clampInt,
@@ -128,6 +130,10 @@ function customApplyScript(origin, rawC, pl) {
   // The cmux layer rides along in the same payload, so one pasted command sets up
   // Claude Code AND the terminal it runs in. Absent or off, nothing is emitted.
   const cmSan = sanitizeCmux(pl.cm);
+  const hdSan = sanitizeHerdr(pl.hd);
+  // Each terminal layer is independent and additive: a payload can carry none, one, or
+  // both, and the summary line names whichever actually ran.
+  const layers = ['Claude Code'].concat(cmSan ? ['cmux'] : []).concat(hdSan ? ['herdr'] : []);
   return `#!/bin/bash
 set -euo pipefail
 # shayan-cc-config — apply custom setup "${name}"
@@ -137,8 +143,9 @@ npx -y tweakcc@latest --apply --yes --config-url "${cfgUrl}"
 ${activationBlock('custom', statusColorOf(pl))}
 ${slSan ? statuslineBlock(buildStatuslineScript(slSan, pl.p)) : ''}
 ${cmSan ? cmuxApplyBlock(cmSan, pl.p) : ''}
+${hdSan ? herdrApplyBlock(hdSan) : ''}
 echo ""
-echo "✓ '${name}' applied.${cmSan ? ' Claude Code + cmux.' : ''} Start a new claude session to see it."
+echo "✓ '${name}' applied — ${layers.join(' + ')}. Start a new claude session to see it."
 echo "  Build another at ${origin}/customize"
 `;
 }
@@ -291,6 +298,22 @@ function route(req, res) {
   }
   if (path === '/cmux' || path === '/cmux/') {
     return sendHTML(renderCmux(DATA, CSS, CLIENT_LIB, FAVICON, GH_SVG, GITHUB_URL));
+  }
+  if (path === '/herdr' || path === '/herdr/') {
+    return sendHTML(renderHerdr(DATA, CSS, CLIENT_LIB, FAVICON, GH_SVG, GITHUB_URL));
+  }
+  // The single file the herdr layer writes, verbatim. The page fetches this rather than
+  // building TOML in the browser too — one builder, so the preview cannot drift from
+  // what the installer actually writes.
+  if (path === '/herdr-files.txt') {
+    const c = u.searchParams.get('c');
+    if (!c) return sendText('missing ?c= payload', 'text/plain; charset=utf-8', 400);
+    try {
+      const pl = decodeCustom(c);
+      const hdSan = sanitizeHerdr(pl.hd);
+      if (!hdSan) return sendText('this setup has no herdr layer enabled', 'text/plain; charset=utf-8', 404);
+      return sendText(buildHerdrToml(hdSan), 'text/plain; charset=utf-8');
+    } catch (e) { return sendText('bad payload: ' + cleanText(e.message, 120), 'text/plain; charset=utf-8', 400); }
   }
   // The two files the cmux layer writes, verbatim. Linked from the page as "peek
   // under the hood", and what the parity test compares the preview against.

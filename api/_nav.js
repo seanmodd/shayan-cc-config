@@ -22,6 +22,10 @@ const PAGES = [
     id: 'cmux', path: '/cmux', icon: '\u{1FA9F}', label: 'cmux', short: 'cmux',
     sub: 'the macOS terminal around Claude Code',
   },
+  {
+    id: 'herdr', path: '/herdr', icon: '\u{1F9AC}', label: 'herdr', short: 'herdr',
+    sub: 'the multiplexer that tracks agent state',
+  },
 ];
 
 const GITHUB_URL = 'https://github.com/seanmodd/shayan-cc-config';
