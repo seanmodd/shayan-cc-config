@@ -13,7 +13,7 @@ const { sanitizeZellij, buildZellijKdl, buildAgentLayout, zellijApplyBlock } = r
 const { renderZellij } = require('./_zellij_page.js');
 const { sanitizeWarp, buildWarpTheme, buildWarpTabConfig, buildWarpSettingsSnippet, warpApplyBlock } = require('./_warp.js');
 const { renderWarp } = require('./_warp_page.js');
-const { sanitizeCodex, buildCodexTomlLines, buildCodexTmTheme, customStem, codexApplyBlock } = require('./_codex.js');
+const { sanitizeCodex, buildCodexTomlLines, buildCodexRootLines, buildCodexTmTheme, customStem, codexApplyBlock } = require('./_codex.js');
 const { renderCodex } = require('./_codex_page.js');
 const {
   sanitizeSL, buildUMD, buildInputBox, buildStatuslineScript,
@@ -360,7 +360,9 @@ echo "  Adjust anytime at ${origin}/codex"
       const cxSan = sanitizeCodex(pl.cx);
       if (!cxSan) return sendText('this setup has no Codex layer enabled', 'text/plain; charset=utf-8', 404);
       const lines = buildCodexTomlLines(cxSan).map(([k, v]) => `${k} = ${v}`).join('\n');
+      const rootLines = buildCodexRootLines(cxSan).map(([k, v]) => `${k} = ${v}`).join('\n');
       const body = lines + '\n'
+        + (rootLines ? '@@ROOT@@' + rootLines + '\n' : '')
         + (cxSan.custom.on ? '@@TMTHEME@@' + customStem(cxSan) + '.tmTheme@@' + buildCodexTmTheme(cxSan) : '');
       return sendText(body, 'text/plain; charset=utf-8');
     } catch (e) { return sendText('bad payload: ' + cleanText(e.message, 120), 'text/plain; charset=utf-8', 400); }

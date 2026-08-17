@@ -100,6 +100,15 @@ const PICKER_VIEWS = ['dense', 'comfortable'];
 // resume_cwd: '' = unset (codex prompts when the session's directory differs from the
 // current one); the enum ResumeCwdMode is verified in the binary.
 const RESUME_CWDS = ['', 'current', 'session'];
+// All source-verified at tag rust-v0.147.0 (config/src/types.rs):
+const ALT_SCREENS = ['auto', 'always', 'never'];
+const NOTIF_MODES = ['all', 'off', 'custom'];
+// The COMPLETE notification vocabulary — matched by exact string equality in
+// tui/src/chatwidget/notifications.rs; an unknown string silently never fires.
+const NOTIF_EVENTS = ['agent-turn-complete', 'approval-requested', 'plan-mode-prompt'];
+const NOTIF_METHODS = ['auto', 'osc9', 'bel'];
+const NOTIF_CONDITIONS = ['unfocused', 'always'];
+const REASONING_SUMMARIES = ['auto', 'concise', 'detailed', 'none'];
 
 const CODEX_DEFAULTS = {
   theme: '',
@@ -124,6 +133,20 @@ const CODEX_DEFAULTS = {
     fg: '#c0caf5', com: '#565f89', kw: '#bb9af7', kw2: '#f7768e',
     str: '#9ece6a', fn: '#7aa2f7', num: '#ff9e64',
   },
+  // The advanced [tui] keys, defaults from the source (all #[serde(default)]).
+  vimMode: false,
+  altScreen: 'auto',
+  notifMode: 'all',            // notifications = true | false | ["event", ...]
+  notifEvents: NOTIF_EVENTS.slice(),
+  notifMethod: 'auto',
+  notifCondition: 'unfocused',
+  reflowRows: -1,              // -1 = auto (per-terminal); 0 = keep ALL rows; N = cap
+  // TUI-visible keys at the ROOT of config.toml (not [tui]), each source-verified:
+  // written only when they differ from stock, and removed when set back.
+  updateBanner: true,          // check_for_update_on_startup
+  pasteBurst: true,            // !disable_paste_burst — collapse pastes to a placeholder
+  rawReasoning: false,         // show_raw_agent_reasoning
+  reasoningSummary: 'auto',    // model_reasoning_summary
 };
 
 const STATUS_IDS = STATUS_ITEMS.map(i => i.id);
@@ -168,6 +191,19 @@ function sanitizeCodex(cx) {
     pickerView: pick(cx.pickerView, PICKER_VIEWS, d.pickerView),
     rawOutput: bool(cx.rawOutput, d.rawOutput),
     resumeCwd: pick(cx.resumeCwd, RESUME_CWDS, d.resumeCwd),
+    vimMode: bool(cx.vimMode, d.vimMode),
+    altScreen: pick(cx.altScreen, ALT_SCREENS, d.altScreen),
+    notifMode: pick(cx.notifMode, NOTIF_MODES, d.notifMode),
+    notifEvents: idList(cx.notifEvents, NOTIF_EVENTS, d.notifEvents),
+    notifMethod: pick(cx.notifMethod, NOTIF_METHODS, d.notifMethod),
+    notifCondition: pick(cx.notifCondition, NOTIF_CONDITIONS, d.notifCondition),
+    // -1 = auto (no line); 0 = keep all rendered rows; 1..50000 = cap.
+    reflowRows: (Number.isInteger(cx.reflowRows) && cx.reflowRows >= -1 && cx.reflowRows <= 50000)
+      ? cx.reflowRows : d.reflowRows,
+    updateBanner: bool(cx.updateBanner, d.updateBanner),
+    pasteBurst: bool(cx.pasteBurst, d.pasteBurst),
+    rawReasoning: bool(cx.rawReasoning, d.rawReasoning),
+    reasoningSummary: pick(cx.reasoningSummary, REASONING_SUMMARIES, d.reasoningSummary),
     custom: {
       on: bool(cu.on, false),
       name: name(cu.name, d.custom.name),
@@ -248,15 +284,43 @@ function buildCodexTomlLines(s) {
   lines.push(['raw_output_mode', s.rawOutput ? 'true' : 'false']);
   // '' = unset: codex asks which directory to resume into when they differ.
   if (s.resumeCwd) lines.push(['resume_cwd', str(s.resumeCwd)]);
+  lines.push(['vim_mode_default', s.vimMode ? 'true' : 'false']);
+  lines.push(['alternate_screen', str(s.altScreen)]);
+  // notifications is an untagged enum with exactly two shapes (source-verified):
+  // a bool, or an array of event names matched by exact string equality.
+  lines.push(['notifications',
+    s.notifMode === 'custom' ? arr(s.notifEvents) : (s.notifMode === 'all' ? 'true' : 'false')]);
+  lines.push(['notification_method', str(s.notifMethod)]);
+  lines.push(['notification_condition', str(s.notifCondition)]);
+  // -1 = auto: codex picks a cap per terminal; no line. 0 = keep every rendered row.
+  if (s.reflowRows >= 0) lines.push(['terminal_resize_reflow_max_rows', String(s.reflowRows)]);
   return lines;
 }
+
+// The TUI-visible keys at the ROOT of config.toml. Emitted only when they differ from
+// stock — writing a root default the user never chose would be noise in a file that
+// is mostly not ours — and the merge drops the managed set first, so returning a
+// control to stock REMOVES the line a previous run wrote.
+function buildCodexRootLines(s) {
+  const str = v => '"' + String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  const lines = [];
+  if (!s.updateBanner) lines.push(['check_for_update_on_startup', 'false']);
+  if (!s.pasteBurst) lines.push(['disable_paste_burst', 'true']);
+  if (s.rawReasoning) lines.push(['show_raw_agent_reasoning', 'true']);
+  if (s.reasoningSummary !== 'auto') lines.push(['model_reasoning_summary', str(s.reasoningSummary)]);
+  return lines;
+}
+const MANAGED_ROOT_KEYS = ['check_for_update_on_startup', 'disable_paste_burst',
+  'show_raw_agent_reasoning', 'model_reasoning_summary'];
 
 // Every key this page owns — the merge drops ALL of these from an existing [tui]
 // before adding the generated lines, so turning the pet (or a pinned theme) OFF here
 // actually removes the key a previous run wrote.
 const MANAGED_KEYS = ['theme', 'status_line', 'status_line_use_colors',
   'terminal_title', 'pet', 'pet_anchor', 'animations', 'show_tooltips',
-  'session_picker_view', 'raw_output_mode', 'resume_cwd'];
+  'session_picker_view', 'raw_output_mode', 'resume_cwd', 'vim_mode_default',
+  'alternate_screen', 'notifications', 'notification_method', 'notification_condition',
+  'terminal_resize_reflow_max_rows'];
 
 // ── the installer block ──────────────────────────────────────────────────────
 // Contract, same as the cmux layer: parse first and ABORT if the user's file does not
@@ -264,6 +328,7 @@ const MANAGED_KEYS = ['theme', 'status_line', 'status_line_use_colors',
 // and every other byte of the file; validate the result before writing; idempotent.
 function codexApplyBlock(s) {
   const lines = buildCodexTomlLines(s).map(kv => kv[0] + ' = ' + kv[1]).join('\n');
+  const rootLines = buildCodexRootLines(s).map(kv => kv[0] + ' = ' + kv[1]).join('\n');
   // The custom theme file, written before the config merge so the theme value never
   // points at a file that does not exist yet. Content is fully sanitized upstream
   // (see buildCodexTmTheme) and carries no shell-active characters beyond the XML.
@@ -294,6 +359,10 @@ CODEX_TUI="$(mktemp)"
 cat > "$CODEX_TUI" <<'SCC_CODEX_TUI'
 ${lines}
 SCC_CODEX_TUI
+CODEX_ROOT="$(mktemp)"
+cat > "$CODEX_ROOT" <<'SCC_CODEX_ROOT'
+${rootLines}
+SCC_CODEX_ROOT
 # The merge needs tomllib (python 3.11+). macOS's own /usr/bin/python3 is 3.9, so
 # finding A python3 is not enough — find one that can actually do the job. The
 # capability check lives HERE so that when the python script exits 0 it means
@@ -307,17 +376,21 @@ for CODEX_CAND in python3 python3.13 python3.12 python3.11 \
   fi
 done
 if [ -z "$CODEX_PY" ]; then
-  rm -f "$CODEX_TUI"
+  rm -f "$CODEX_TUI" "$CODEX_ROOT"
   echo "  ✗ the Codex layer needs python 3.11+ (for tomllib) to merge config.toml safely,"
   echo "    and none was found. Nothing was changed. Install one and rerun:"
   echo "      brew install python3"
-elif "$CODEX_PY" - "$CODEX_CFG" "$CODEX_TUI" "${MANAGED_KEYS.join(',')}" <<'SCC_CODEX_PY'
+elif "$CODEX_PY" - "$CODEX_CFG" "$CODEX_TUI" "${MANAGED_KEYS.join(',')}" "$CODEX_ROOT" "${MANAGED_ROOT_KEYS.join(',')}" <<'SCC_CODEX_PY'
 import sys, io, os, re
 import tomllib
 path, managed_path, managed_csv = sys.argv[1], sys.argv[2], sys.argv[3]
+root_path, root_csv = sys.argv[4], sys.argv[5]
 managed_src = io.open(managed_path, encoding='utf-8').read()
+root_src = io.open(root_path, encoding='utf-8').read()
 tomllib.loads(managed_src)                       # our own lines must parse
+tomllib.loads(root_src)
 managed_keys = set(managed_csv.split(','))
+root_keys = set(root_csv.split(','))
 # newline='' or universal-newline mode flattens CRLF before the eol detection below
 # ever sees it, and the file would come back rewritten in LF.
 src = io.open(path, encoding='utf-8', newline='').read() if os.path.exists(path) else ''
@@ -363,17 +436,67 @@ def is_real_header(i):
         return True
     except Exception:
         return False
-headers = []
-for i, ln in enumerate(lines):
-    h = looks_like_header(ln)
-    if h is not None and is_real_header(i):
-        headers.append((i, h))
+def scan_headers():
+    out = []
+    for i, ln in enumerate(lines):
+        h = looks_like_header(ln)
+        if h is not None and is_real_header(i):
+            out.append((i, h))
+    return out
+headers = scan_headers()
+
+# A [tui.<key>] SECTION whose <key> is one this page manages is stale state from a
+# hand edit or an older run — and it would collide with the managed assignment the
+# rebuilt [tui] table carries (TOML forbids a key to be both). Those sections (and
+# anything nested under them) are removed outright.
+def owned_section(h):
+    if not h.startswith('tui.'):
+        return False
+    first = h[4:].split('.', 1)[0].strip().strip('"').strip("'")
+    return first in managed_keys
+kill = set()
+for hi, (i, h) in enumerate(headers):
+    if owned_section(h):
+        j = headers[hi + 1][0] if hi + 1 < len(headers) else len(lines)
+        kill.update(range(i, j))
+if kill:
+    lines = [ln for i, ln in enumerate(lines) if i not in kill]
+    headers = scan_headers()
 sub_headers = set(h for _, h in headers if h == 'tui' or h.startswith('tui.'))
+
+# ── the ROOT region: everything before the first real header ─────────────────
+# The managed root keys are removed statement-surgically (a statement starts at a
+# line whose prefix parses as complete toml), which keeps every comment and every
+# unmanaged root key byte-identical — this region holds the user's model and
+# approval settings, so a rebuild is out of the question.
+root_end = headers[0][0] if headers else len(lines)
+KEYLINE = re.compile(r'^\\s*([A-Za-z0-9_-]+)\\s*=')
+starts = [i for i in range(root_end) if is_real_header(i) or i == 0]
+drop = set()
+for si, i in enumerate(starts):
+    m = KEYLINE.match(lines[i])
+    if m and m.group(1) in root_keys:
+        j = starts[si + 1] if si + 1 < len(starts) else root_end
+        drop.update(range(i, j))
+root_region = [lines[i] for i in range(root_end) if i not in drop]
+while root_region and not root_region[-1].strip():
+    root_region.pop()
+root_lines_new = [l for l in root_src.splitlines() if l.strip()]
+if root_lines_new:
+    root_region += root_lines_new
+if headers and (root_region and root_region[-1].strip()):
+    root_region.append('')
+shift = len(root_region) - root_end
+lines = root_region + lines[root_end:]
+headers = [(i + shift, h) for i, h in headers]
 kept = []
 for k, v in tui.items():
     if k in managed_keys:
         continue
-    if isinstance(v, dict) and ('tui.' + k) in sub_headers:
+    # A dict that lives in its own section stays where it is. That includes the case
+    # where only a DEEPER header exists ([tui.keymap.global] with no [tui.keymap]):
+    # re-serializing the parent inline would declare the table twice.
+    if isinstance(v, dict) and any(h == 'tui.' + k or h.startswith('tui.' + k + '.') for h in sub_headers):
         continue
     try:
         kept.append(bare(k) + ' = ' + ser(v))
@@ -415,6 +538,10 @@ except Exception as e:
 # [tui] = managed lines + kept keys. A mismatch means a boundary was misjudged -
 # abort rather than write.
 expect = dict(data)
+for k in root_keys:
+    expect.pop(k, None)
+for k, v in tomllib.loads(root_src).items():
+    expect[k] = v
 merged_tui = dict(tomllib.loads(managed_src))
 for k, v in tui.items():
     if k not in managed_keys and k not in merged_tui:
@@ -427,7 +554,7 @@ io.open(path, 'w', encoding='utf-8', newline='') .write(text)
 print('  merged the [tui] block into ' + path)
 SCC_CODEX_PY
 then
-  rm -f "$CODEX_TUI"
+  rm -f "$CODEX_TUI" "$CODEX_ROOT"
   if command -v codex >/dev/null 2>&1; then
     echo "  restart codex to see it (the config is read at startup)."
   else
@@ -437,7 +564,7 @@ then
 else
   # A command inside an if-condition does not trip set -e, so this message can run;
   # the trailing false re-raises the failure so the whole install exits non-zero.
-  rm -f "$CODEX_TUI"
+  rm -f "$CODEX_TUI" "$CODEX_ROOT"
   echo "  the Codex layer did not apply — everything above it still did."
   false
 fi`;
@@ -445,6 +572,8 @@ fi`;
 
 module.exports = {
   CODEX_THEMES, CODEX_SYNTAX, STATUS_ITEMS, TITLE_ITEMS, CODEX_PETS, PET_ANCHORS,
-  PICKER_VIEWS, RESUME_CWDS, CODEX_DEFAULTS, MANAGED_KEYS,
-  sanitizeCodex, buildCodexTomlLines, buildCodexTmTheme, customStem, codexApplyBlock,
+  PICKER_VIEWS, RESUME_CWDS, ALT_SCREENS, NOTIF_MODES, NOTIF_EVENTS, NOTIF_METHODS,
+  NOTIF_CONDITIONS, REASONING_SUMMARIES, CODEX_DEFAULTS, MANAGED_KEYS, MANAGED_ROOT_KEYS,
+  sanitizeCodex, buildCodexTomlLines, buildCodexRootLines, buildCodexTmTheme, customStem,
+  codexApplyBlock,
 };

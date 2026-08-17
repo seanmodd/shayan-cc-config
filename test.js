@@ -1457,7 +1457,12 @@ function bashCheck(src, label) {
     '# precious comment', 'model = "gpt-5.6-sol"', '',
     '[tui]', 'theme = "zenburn"', 'unmanaged_key = 7',
     'inline_thing = { style = "compact", n = 2 }', '',
+    // notifications is a MANAGED key: a stale [tui.notifications] table (which codex
+    // itself cannot deserialize) must be swept and replaced by the managed bool.
     '[tui.notifications]', 'notifications = true', '',
+    // keymap is NOT managed, and only a DEEP header exists — the rebuild must leave
+    // it in place, not re-serialize the parent inline (that declared the table twice).
+    '[tui.keymap.global]', 'open_transcript = "ctrl-s"', '',
     '[mcp_servers.foo]', 'url = "https://x"', ''].join('\n'));
   const cxFile = path.join(TMP, 'codex.sh');
   fs.writeFileSync(cxFile, '#!/bin/bash\nset -euo pipefail\n' + CX.codexApplyBlock(cxOn) + '\n');
@@ -1473,11 +1478,12 @@ function bashCheck(src, label) {
     'import tomllib,json,sys',
     `d = tomllib.load(open(${JSON.stringify(cxCfg)}, "rb"))`,
     'print(json.dumps([d["model"], d["tui"]["theme"], d["tui"]["unmanaged_key"],',
-    '  d["tui"]["inline_thing"]["n"], d["tui"]["notifications"]["notifications"],',
+    '  d["tui"]["inline_thing"]["n"], d["tui"]["notifications"],',
+    '  d["tui"]["keymap"]["global"]["open_transcript"],',
     '  d["mcp_servers"]["foo"]["url"], d["tui"]["pet"]]))'].join('\n')], { encoding: 'utf8' });
   ok(cxCheck.status === 0
-    && cxCheck.stdout.trim() === '["gpt-5.6-sol", "dracula", 7, 2, true, "https://x", "dewey"]',
-    'codex: managed keys replaced; unmanaged [tui] keys, inline tables, subsections and MCP servers all survive',
+    && cxCheck.stdout.trim() === '["gpt-5.6-sol", "dracula", 7, 2, true, "ctrl-s", "https://x", "dewey"]',
+    'codex: managed keys (and their stale subsections) replaced; unmanaged keys, deep keymap sections and MCP servers survive',
     cxCheck.stdout.trim() || (cxCheck.stderr || '').slice(0, 160));
   // Idempotent: a second run must not change a byte.
   const cxSnap = fs.readFileSync(cxCfg, 'utf8');
@@ -1643,6 +1649,51 @@ print(json.dumps([d['tui']['notes'].strip().split('\\n')[0], d['tui']['extra'], 
   ok(tmOnDisk.status === 0 && tmOnDisk.stdout.trim() === '["neon-nights", "neon-nights"]',
     'codex: theme file written and config.toml points at its stem',
     tmOnDisk.stdout.trim() || (tmOnDisk.stderr || '').slice(0, 120));
+
+  // ── the advanced keys ─────────────────────────────────────────
+  const cxAdv = CX.sanitizeCodex({ on: true, notifMode: 'custom',
+    notifEvents: ['approval-requested', 'made-up-event'], notifMethod: 'bel',
+    reflowRows: 0, vimMode: true, altScreen: 'never',
+    updateBanner: false, pasteBurst: false, rawReasoning: true, reasoningSummary: 'none' });
+  const advLines = Object.fromEntries(CX.buildCodexTomlLines(cxAdv));
+  ok(advLines.notifications === '["approval-requested"]'
+    && advLines.notification_method === '"bel"' && advLines.alternate_screen === '"never"'
+    && advLines.vim_mode_default === 'true' && advLines.terminal_resize_reflow_max_rows === '0',
+    'codex: advanced [tui] lines — custom notifications keep only real events; 0 reflow = keep all',
+    JSON.stringify(advLines));
+  ok(Object.fromEntries(CX.buildCodexTomlLines(CX.sanitizeCodex({ on: true }))).notifications === 'true'
+    && !('terminal_resize_reflow_max_rows' in Object.fromEntries(CX.buildCodexTomlLines(CX.sanitizeCodex({ on: true })))),
+    'codex: stock emits notifications = true and no reflow line (auto)');
+  const advRoot = Object.fromEntries(CX.buildCodexRootLines(cxAdv));
+  ok(advRoot.check_for_update_on_startup === 'false' && advRoot.disable_paste_burst === 'true'
+    && advRoot.show_raw_agent_reasoning === 'true' && advRoot.model_reasoning_summary === '"none"',
+    'codex: root lines emit only when non-stock — and all four here are');
+  ok(CX.buildCodexRootLines(CX.sanitizeCodex({ on: true })).length === 0,
+    'codex: stock emits no root lines at all');
+  // Root surgery: replace an existing managed root key without touching neighbours
+  // (a multi-line notify array among them), and remove it again on the way back.
+  const cxRootHome = path.join(TMP, 'codexroot');
+  fs.mkdirSync(path.join(cxRootHome, '.codex'), { recursive: true });
+  const cxRootCfg = path.join(cxRootHome, '.codex', 'config.toml');
+  fs.writeFileSync(cxRootCfg, [
+    '# top comment', 'model = "gpt-5.6-sol"', 'check_for_update_on_startup = true',
+    'notify = [', '  "some-command",', '  "turn-ended",', ']', '',
+    '[features]', 'hooks = true', ''].join('\n'));
+  const cxAdvSh = path.join(TMP, 'codex-adv.sh');
+  fs.writeFileSync(cxAdvSh, '#!/bin/bash\nset -euo pipefail\n' + CX.codexApplyBlock(cxAdv) + '\n');
+  ok(bash(cxAdvSh, cxRootHome).status === 0, 'codex: root-key install runs clean');
+  const rootChk = py(`import tomllib,json
+d = tomllib.load(open(${JSON.stringify(cxRootCfg)}, 'rb'))
+print(json.dumps([d['check_for_update_on_startup'], d['model_reasoning_summary'],
+  d['notify'], d['model'], d['features']['hooks'], d['tui']['vim_mode_default']]))`);
+  ok(rootChk.status === 0
+    && rootChk.stdout.trim() === '[false, "none", ["some-command", "turn-ended"], "gpt-5.6-sol", true, true]',
+    'codex: root key replaced in place; multi-line notify, model and [features] untouched',
+    rootChk.stdout.trim() || (rootChk.stderr || '').slice(0, 140));
+  ok(/# top comment/.test(fs.readFileSync(cxRootCfg, 'utf8')), 'codex: root comments survive');
+  ok(bash(cxNoPet, cxRootHome).status === 0
+    && !/model_reasoning_summary|show_raw_agent_reasoning|disable_paste_burst|check_for_update/.test(fs.readFileSync(cxRootCfg, 'utf8')),
+    'codex: back to stock removes every managed root key');
 
   // The page's own installer: codex only — no tweakcc, no Claude Code half.
   const cxOnlyPayload = Buffer.from(JSON.stringify({ cx: { on: true, pet: 'rocky' } })).toString('base64url');

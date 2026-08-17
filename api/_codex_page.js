@@ -23,7 +23,8 @@ const { topBar, navPayload } = require('./_nav.js');
 const { compareBlock, COMPARE_CSS } = require('./_compare.js');
 const {
   CODEX_THEMES, CODEX_SYNTAX, STATUS_ITEMS, TITLE_ITEMS, CODEX_PETS,
-  PET_ANCHORS, PICKER_VIEWS, RESUME_CWDS, CODEX_DEFAULTS,
+  PET_ANCHORS, PICKER_VIEWS, RESUME_CWDS, ALT_SCREENS, NOTIF_MODES, NOTIF_EVENTS,
+  NOTIF_METHODS, NOTIF_CONDITIONS, REASONING_SUMMARIES, CODEX_DEFAULTS,
 } = require('./_codex.js');
 
 const CODEX_CSS = `
@@ -217,6 +218,12 @@ function renderCodex(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
     anchors: PET_ANCHORS,
     pickerViews: PICKER_VIEWS,
     resumeCwds: RESUME_CWDS,
+    altScreens: ALT_SCREENS,
+    notifModes: NOTIF_MODES,
+    notifEvents: NOTIF_EVENTS,
+    notifMethods: NOTIF_METHODS,
+    notifConditions: NOTIF_CONDITIONS,
+    reasoningSummaries: REASONING_SUMMARIES,
   });
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -370,6 +377,19 @@ function saneCodex(o){
     pickerView:xPick(o.pickerView,CX_OPTS.pickerViews,d.pickerView),
     rawOutput:xBool(o.rawOutput,d.rawOutput),
     resumeCwd:xPick(o.resumeCwd,CX_OPTS.resumeCwds,d.resumeCwd),
+    vimMode:xBool(o.vimMode,d.vimMode),
+    altScreen:xPick(o.altScreen,CX_OPTS.altScreens,d.altScreen),
+    notifMode:xPick(o.notifMode,CX_OPTS.notifModes,d.notifMode),
+    notifEvents:xList(o.notifEvents,CX_OPTS.notifEvents,d.notifEvents),
+    notifMethod:xPick(o.notifMethod,CX_OPTS.notifMethods,d.notifMethod),
+    notifCondition:xPick(o.notifCondition,CX_OPTS.notifConditions,d.notifCondition),
+    reflowRows:(typeof o.reflowRows==='number'&&isFinite(o.reflowRows)
+      &&o.reflowRows===Math.round(o.reflowRows)&&o.reflowRows>=-1&&o.reflowRows<=50000)
+      ?o.reflowRows:d.reflowRows,
+    updateBanner:xBool(o.updateBanner,d.updateBanner),
+    pasteBurst:xBool(o.pasteBurst,d.pasteBurst),
+    rawReasoning:xBool(o.rawReasoning,d.rawReasoning),
+    reasoningSummary:xPick(o.reasoningSummary,CX_OPTS.reasoningSummaries,d.reasoningSummary),
     custom:{
       on:xBool(cu.on,false),
       name:xName(cu.name,d.custom.name),
@@ -492,6 +512,10 @@ function winHTML(s,mode){
     +'<div class="l cxgreet"><span class="acc">/status</span><span class="dim"> - show current session configuration</span></div>'
     +'<div class="l cxgreet"></div>'
     +'<div class="l cxuser">fix the failing checkout test</div>'
+    +(s.reasoningSummary!=='none'
+      ?'<div class="l dim" style="font-style:italic">Weighing whether the retry helper or the test itself is at fault\u2026</div>':'')
+    +(s.rawReasoning
+      ?'<div class="l dim" style="font-style:italic;opacity:.75">raw: cart.ok false \u2192 retry path \u2192 attempt() never rebinds cart\u2026</div>':'')
     +'<div class="l cxwork"><span class="sp acc">\\u2736</span> <span class="shimmer">Working</span>'
       +'<span class="dim"> (3s \\u00b7 Esc to interrupt)</span></div>'
     +'<div class="l dim cxgreet">\\u2022 Started npm test \\u2014 2 passing, 1 failing</div>'
@@ -522,6 +546,17 @@ function drawWindows(){
 var TIPS={
  custom:{t:'Your colours',d:'Builds a real .tmTheme \\u2014 the same format the 27 built-ins use \\u2014 writes it to ~/.codex/themes/, and points tui.theme at it. Codex loads custom theme files from that directory (the /theme picker says so itself). Because status_line_use_colors takes its colours from the ACTIVE theme, these pickers are also how you recolour the status line.'},
  cuName:{t:'Theme name',d:'Names the file: \\u201cNeon Nights\\u201d becomes ~/.codex/themes/neon-nights.tmTheme, and tui.theme is set to neon-nights. Letters, numbers, spaces, dashes.'},
+ vimMode:{t:'Vim mode',d:'Starts the composer in vim mode (tui.vim_mode_default, a real [tui] bool \\u2014 source-verified at types.rs:706). The in-session toggle still works; this sets where it starts.'},
+ altScreen:{t:'Alternate screen',d:'auto (stock) lets codex decide; always forces the alternate screen; never keeps codex inline in your scrollback \\u2014 the same thing the --no-alt-screen flag forces. Enum AltScreenMode, source-verified.'},
+ pasteBurst:{t:'Paste handling',d:'Stock (on) collapses a fast paste into a compact \\u201c[Pasted Content N chars]\\u201d placeholder in the composer. Off writes every character through. The config key is disable_paste_burst at the ROOT of config.toml \\u2014 written only if you turn this off.'},
+ updateBanner:{t:'Update banner',d:'The \\u201cUpdate available!\\u201d banner at startup. Turning it off writes check_for_update_on_startup = false at the root of config.toml (and also skips the version check entirely \\u2014 source-verified in tui/src/updates.rs).'},
+ reflowRows:{t:'Resize reflow cap',d:'How many rendered transcript rows codex re-wraps when you resize the terminal. Auto picks a cap per terminal (1000 in VS Code, 10000 in Alacritty, 1000 elsewhere); 0 means keep EVERY row; a number caps it. Only matters on resize \\u2014 no preview here.'},
+ notifications:{t:'Notifications',d:'tui.notifications accepts exactly two shapes (source-verified untagged enum): true/false, or a list of event names matched by EXACT string. The full vocabulary is the three below \\u2014 approval-requested also covers edit approvals and elicitations. An empty list means off.'},
+ notifMethod:{t:'Notification method',d:'auto lets codex pick; osc9 uses the OSC 9 terminal notification protocol; bel rings the terminal bell (that is \\u201cbel\\u201d, the BEL control character \\u2014 not a typo).'},
+ notifCondition:{t:'When to notify',d:'unfocused (stock) only notifies when the terminal is not focused; always notifies regardless.'},
+ reasoning:{t:'Reasoning display',d:'What of the model\\u2019s thinking shows in the transcript. Both keys live at the ROOT of config.toml, not [tui].'},
+ reasoningSummary:{t:'Reasoning summaries',d:'model_reasoning_summary: auto (stock), concise, detailed, or none \\u2014 none removes reasoning text from the transcript entirely (it is also sent to the API as the summary setting).'},
+ rawReasoning:{t:'Raw chain-of-thought',d:'show_raw_agent_reasoning = true additionally renders the model\\u2019s raw reasoning deltas in the transcript \\u2014 the unpolished stream, not the summary. Off is stock.'},
  rawOutput:{t:'Raw output mode',d:'Renders the transcript as plain scrollback \\u2014 copy-friendly, fewer redraws. The same thing the in-session toggle switches; this sets the default. Verified as a [tui] key in the 0.147.0 binary.'},
  resumeCwd:{t:'Resume directory',d:'When codex resume opens a session whose directory differs from where you are now: stock ASKS every time; \\u201ccurrent\\u201d always stays where you are; \\u201csession\\u201d always jumps to the session\\u2019s directory. Enum verified in the binary (ResumeCwdMode).'},
  theme:{t:'Syntax theme',d:'What tui.theme actually is: a syntax-highlighting theme (a .tmTheme name) for the code codex prints \\u2014 NOT a UI colour scheme. The TUI chrome keeps your terminal\\u2019s colours. Left on Adaptive, codex picks catppuccin-latte on a light terminal and catppuccin-mocha on a dark one, at startup, by measuring the background.'},
@@ -632,11 +667,55 @@ function buildControls(){
     +CX_OPTS.resumeCwds.filter(function(v){return v;}).map(function(v){
       return '<option value="'+esc(v)+'"'+(s.resumeCwd===v?' selected':'')+'>'+esc(v)+'</option>';
     }).join('')+'</select></label>'
+    +'<label class="ctl2"><input type="checkbox" id="x_vim"'+(s.vimMode?' checked':'')
+    +'> vim mode in the composer'+'<span class="nov">no visual change</span>'+ihtml('vimMode')+'</label>'
+    +'<label class="ctl2"><input type="checkbox" id="x_paste"'+(s.pasteBurst?' checked':'')
+    +'> collapse big pastes to a placeholder'+'<span class="nov">no visual change</span>'+ihtml('pasteBurst')+'</label>'
+    +'<label class="ctl2"><input type="checkbox" id="x_upd"'+(s.updateBanner?' checked':'')
+    +'> show the update-available banner'+'<span class="nov">no visual change</span>'+ihtml('updateBanner')+'</label>'
+    +'<label class="ctl"><span class="cap">Alternate screen'
+    +'<span class="nov">no visual change</span>'+ihtml('altScreen')+'</span>'
+    +'<select id="x_alt">'+CX_OPTS.altScreens.map(function(v){
+      return '<option value="'+esc(v)+'"'+(s.altScreen===v?' selected':'')+'>'+esc(v)+'</option>';
+    }).join('')+'</select></label>'
     +'<label class="ctl"><span class="cap">Session picker view'
     +'<span class="nov">no visual change</span>'+ihtml('pickerView')+'</span>'
     +'<select id="x_spv">'+CX_OPTS.pickerViews.map(function(v){
       return '<option value="'+esc(v)+'"'+(s.pickerView===v?' selected':'')+'>'+esc(v)+'</option>';
-    }).join('')+'</select></label></div>';
+    }).join('')+'</select></label>'
+    +'<label class="ctl"><span class="cap">Resize reflow cap <span class="hint" id="x_rfl"></span>'
+    +'<span class="nov">no visual change</span>'+ihtml('reflowRows')+'</span>'
+    +'<input type="range" id="x_rf" min="-1" max="20000" step="1" value="'+s.reflowRows+'"></label>'
+    +'</div>'
+   +'<div class="panel"><h3>\u{1F514} Notifications'+ihtml('notifications')+'</h3>'
+    +'<div class="cumode" id="nfMode">'
+    +[['all','All events'],['off','Off'],['custom','Pick events']].map(function(m){
+      return '<button type="button" class="stychip'+(s.notifMode===m[0]?' on':'')
+        +'" data-nf="'+m[0]+'">'+m[1]+'</button>';
+    }).join('')+'</div>'
+    +'<div id="nfEvents" style="margin-top:9px;'+(s.notifMode==='custom'?'':'display:none')+'">'
+    +CX_OPTS.notifEvents.map(function(ev){
+      return '<label class="ctl2"><input type="checkbox" data-ev="'+esc(ev)+'"'
+        +(s.notifEvents.indexOf(ev)>=0?' checked':'')+'> '+esc(ev)+'</label>';
+    }).join('')+'</div>'
+    +'<label class="ctl" style="margin-top:9px"><span class="cap">Method'+ihtml('notifMethod')+'</span>'
+    +'<select id="x_nfm">'+CX_OPTS.notifMethods.map(function(v){
+      return '<option value="'+esc(v)+'"'+(s.notifMethod===v?' selected':'')+'>'+esc(v)+'</option>';
+    }).join('')+'</select></label>'
+    +'<label class="ctl"><span class="cap">When'+ihtml('notifCondition')+'</span>'
+    +'<select id="x_nfc">'+CX_OPTS.notifConditions.map(function(v){
+      return '<option value="'+esc(v)+'"'+(s.notifCondition===v?' selected':'')+'>'+esc(v)+'</option>';
+    }).join('')+'</select></label>'
+    +'<span class="hint">Nothing to preview here \u2014 notifications happen in your terminal, not on this mock.</span></div>'
+   +'<div class="panel"><h3>\u{1F9E0} Reasoning display'+ihtml('reasoning')+'</h3>'
+    +'<label class="ctl"><span class="cap">Reasoning summaries'+ihtml('reasoningSummary')+'</span>'
+    +'<select id="x_rs">'+CX_OPTS.reasoningSummaries.map(function(v){
+      return '<option value="'+esc(v)+'"'+(s.reasoningSummary===v?' selected':'')+'>'+esc(v)+'</option>';
+    }).join('')+'</select></label>'
+    +'<label class="ctl2"><input type="checkbox" id="x_rr"'+(s.rawReasoning?' checked':'')
+    +'> also show RAW chain-of-thought'+ihtml('rawReasoning')+'</label>'
+    +'<span class="hint">Both are root-level config.toml keys \u2014 written only when you change them,'
+    +' removed when you set them back.</span></div>';
 
   // theme chips
   Array.prototype.forEach.call(host.querySelectorAll('.thchip'),function(ch){
@@ -682,6 +761,34 @@ function buildControls(){
 
   $('#x_raw').addEventListener('change',function(){state.rawOutput=this.checked;refresh();});
   $('#x_rcwd').addEventListener('change',function(){state.resumeCwd=this.value;refresh();});
+  $('#x_vim').addEventListener('change',function(){state.vimMode=this.checked;refresh();});
+  $('#x_paste').addEventListener('change',function(){state.pasteBurst=this.checked;refresh();});
+  $('#x_upd').addEventListener('change',function(){state.updateBanner=this.checked;refresh();});
+  $('#x_alt').addEventListener('change',function(){state.altScreen=this.value;refresh();});
+  var rf=$('#x_rf'), rfl=$('#x_rfl');
+  function showRf(){rfl.textContent=state.reflowRows<0?'auto (per terminal)'
+    :(state.reflowRows===0?'keep every row':state.reflowRows+' rows');}
+  showRf();
+  rf.addEventListener('input',function(){state.reflowRows=parseInt(this.value,10);showRf();refresh();});
+  Array.prototype.forEach.call(host.querySelectorAll('#nfMode .stychip'),function(ch){
+    ch.addEventListener('click',function(){
+      state.notifMode=this.getAttribute('data-nf');
+      buildControls();refresh();
+    });
+  });
+  Array.prototype.forEach.call(host.querySelectorAll('#nfEvents input'),function(cb){
+    cb.addEventListener('change',function(){
+      var ev=this.getAttribute('data-ev');
+      var at=state.notifEvents.indexOf(ev);
+      if(this.checked&&at<0)state.notifEvents.push(ev);
+      if(!this.checked&&at>=0)state.notifEvents.splice(at,1);
+      refresh();
+    });
+  });
+  $('#x_nfm').addEventListener('change',function(){state.notifMethod=this.value;refresh();});
+  $('#x_nfc').addEventListener('change',function(){state.notifCondition=this.value;refresh();});
+  $('#x_rs').addEventListener('change',function(){state.reasoningSummary=this.value;refresh();});
+  $('#x_rr').addEventListener('change',function(){state.rawReasoning=this.checked;refresh();});
   $('#x_anchor').addEventListener('change',function(){state.petAnchor=this.value;refresh();});
   $('#x_slc').addEventListener('change',function(){state.slColors=this.checked;refresh();});
   $('#x_anim').addEventListener('change',function(){state.animations=this.checked;refresh();});
@@ -773,12 +880,21 @@ function refresh(){
     if(seq!==refresh._seq)return;
     var box=$('#fileToml'); if(!box)return;
     var parts=t.split('@@TMTHEME@@');
+    var halves=parts[0].split('@@ROOT@@');
     box.innerHTML='<h4>[tui] \\u2014 merged into your config.toml</h4>'
-      +parts[0].replace(/\\n$/,'').split('\\n').map(function(ln){
+      +halves[0].replace(/\\n$/,'').split('\\n').map(function(ln){
         var eq=ln.indexOf(' = ');
         if(eq<0)return esc(ln);
         return '<span class="fk">'+esc(ln.slice(0,eq))+'</span> ='+esc(ln.slice(eq+2));
       }).join('\\n');
+    if(halves[1]){
+      box.innerHTML+='\\n<h4 style="margin-top:9px">root keys \\u2014 same file, above the tables</h4>'
+        +halves[1].replace(/\\n$/,'').split('\\n').map(function(ln){
+          var eq=ln.indexOf(' = ');
+          if(eq<0)return esc(ln);
+          return '<span class="fk">'+esc(ln.slice(0,eq))+'</span> ='+esc(ln.slice(eq+2));
+        }).join('\\n');
+    }
     var tbox=$('#fileTheme');
     if(tbox){
       if(parts[1]){
