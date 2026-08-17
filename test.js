@@ -1763,6 +1763,9 @@ print(json.dumps([d['check_for_update_on_startup'], d['model_reasoning_summary']
     ['data-ground="light"', 'the preview ground toggle'],
     ['id="fileTheme"', 'the theme-file preview box'],
     ['standalone editor', 'the header says what the page is'],
+    ["'scc_codex_saved'", 'saved setups have a storage key'],
+    ['Save this setup', 'the save card'],
+    ['paintSaved', 'the saved-setups renderer'],
   ]) ok(cxPage.includes(needle), '/codex: has ' + label);
   ok(!cxPage.includes('id="ccTheme"'), '/codex: the palette picker is gone');
   ok(!cxPage.includes('/apply.sh?c='), '/codex: nothing points at the combined installer');

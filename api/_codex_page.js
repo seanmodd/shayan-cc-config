@@ -111,6 +111,23 @@ const CODEX_CSS = `
   .cxpet .petcap{display:block;font-size:7.5px;color:var(--cx-dim);margin-top:2px;
     font-family:-apple-system,BlinkMacSystemFont,sans-serif;}
 
+  /* ── saved setups ─────────────────────────────────────────────────────────── */
+  .svrow{display:flex;flex-direction:column;gap:7px;}
+  .svchip{display:flex;align-items:center;gap:10px;cursor:pointer;text-align:left;
+    font-family:inherit;border:1px solid var(--border);background:#10141b;
+    border-radius:10px;padding:8px 11px;color:var(--dim);width:100%;}
+  .svchip:hover{border-color:var(--accent);}
+  .svchip.savecard{border-style:dashed;}
+  .svsw{display:flex;gap:4px;flex:none;}
+  .svsw i{width:10px;height:10px;border-radius:50%;}
+  .svbody{flex:1;min-width:0;}
+  .svname{font-size:12.5px;font-weight:600;color:var(--text);overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;}
+  .svmeta{font-size:10.5px;color:var(--faint);margin-top:1px;}
+  .svacts{display:flex;gap:9px;flex:none;font-size:10.5px;}
+  .svact{color:var(--faint);text-decoration:underline;text-underline-offset:2px;padding:6px 2px;}
+  .svact:hover{color:var(--accent);}
+
   /* ── the custom colour builder ────────────────────────────────────────────── */
   .cumode{display:flex;gap:6px;flex-wrap:wrap;}
   .stychip{cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:600;
@@ -544,6 +561,7 @@ function drawWindows(){
 
 // ── controls ──────────────────────────────────────────────────────────────────
 var TIPS={
+ saved:{t:'Saved setups',d:'The whole page under one name: colours, theme, status line, terminal title, pet, behaviour, notifications, reasoning. Saved in THIS browser (localStorage \\u2014 this site has no server storage). Share copies a link that opens the setup here; the install command on that link applies it.'},
  custom:{t:'Your colours',d:'Builds a real .tmTheme \\u2014 the same format the 27 built-ins use \\u2014 writes it to ~/.codex/themes/, and points tui.theme at it. Codex loads custom theme files from that directory (the /theme picker says so itself). Because status_line_use_colors takes its colours from the ACTIVE theme, these pickers are also how you recolour the status line.'},
  cuName:{t:'Theme name',d:'Names the file: \\u201cNeon Nights\\u201d becomes ~/.codex/themes/neon-nights.tmTheme, and tui.theme is set to neon-nights. Letters, numbers, spaces, dashes.'},
  vimMode:{t:'Vim mode',d:'Starts the composer in vim mode (tui.vim_mode_default, a real [tui] bool \\u2014 source-verified at types.rs:706). The in-session toggle still works; this sets where it starts.'},
@@ -582,6 +600,85 @@ function themeChip(id){
     +'<span class="thsw" style="background:'+esc(bg)+'">'+dots
     +'<span style="color:'+esc(pal.fg||'#aaa')+';font-size:9px;margin-left:2px">text</span></span>'
     +'</button>';
+}
+
+// ── saved setups ──────────────────────────────────────────────────────────────
+// Same convention as every other saved thing on this site: this browser's
+// localStorage, an array of named payloads, nothing on a server. A setup leaves
+// this machine only when its share link is copied.
+function svGet(){
+  try{
+    var a=JSON.parse(localStorage.getItem('scc_codex_saved')||'[]');
+    return Object.prototype.toString.call(a)==='[object Array]'?a:[];
+  }catch(e){return [];}
+}
+function svSet(a){try{localStorage.setItem('scc_codex_saved',JSON.stringify(a.slice(0,40)));}catch(e){}}
+
+function saveCodexSetup(){
+  var fallback=state.custom.on?state.custom.name:'My Codex setup';
+  var name=(prompt('Name this setup:',fallback)||'').replace(/^ +| +$/g,'').slice(0,40);
+  if(!name)return;
+  var all=svGet().filter(function(x){return x.name!==name;});
+  all.push({name:name,savedAt:new Date().toISOString().slice(0,10),payload:payload()});
+  svSet(all);
+  paintSaved();
+  toast('Saved \u201c'+name+'\u201d');
+}
+
+// The swatch shows the colours the setup would actually render with: its custom set
+// when it has one, its built-in theme's tokens otherwise, mocha as the adaptive stand-in.
+function svPalOf(cx){
+  if(cx&&cx.custom&&cx.custom.on)return cx.custom;
+  if(cx&&cx.theme&&ownKey(CX_OPTS.syntax,cx.theme))return CX_OPTS.syntax[cx.theme];
+  return CX_OPTS.syntax['catppuccin-mocha'];
+}
+function paintSaved(){
+  var row=$('#svRow'); if(!row)return;
+  row.innerHTML='';
+  var save=document.createElement('button');
+  save.type='button';save.className='svchip savecard';
+  save.innerHTML='<span class="svsw"><i style="background:var(--accent)"></i></span>'
+    +'<span class="svbody"><span class="svname">\uFF0B Save this setup</span>'
+    +'<span class="svmeta" style="display:block">keeps every control on this page</span></span>';
+  save.addEventListener('click',saveCodexSetup);
+  row.appendChild(save);
+  svGet().forEach(function(item){
+    var cx=(item.payload&&item.payload.cx)||{};
+    var pal=svPalOf(cx);
+    var b=document.createElement('button');
+    b.type='button';b.className='svchip';
+    var sw=document.createElement('span');sw.className='svsw';
+    ['kw','str','fn','num'].forEach(function(k){
+      var d=document.createElement('i');d.style.background=pal[k]||'#888';sw.appendChild(d);
+    });
+    var body=document.createElement('span');body.className='svbody';
+    var nm=document.createElement('span');nm.className='svname';nm.textContent=item.name;
+    var mt=document.createElement('span');mt.className='svmeta';
+    mt.textContent=(cx.custom&&cx.custom.on?'your colours':(cx.theme||'adaptive theme'))
+      +' \u00b7 saved '+(item.savedAt||'');
+    body.appendChild(nm);body.appendChild(mt);
+    var acts=document.createElement('span');acts.className='svacts';
+    function act(label,fn){
+      var a=document.createElement('span');a.className='svact';a.textContent=label;
+      a.addEventListener('click',function(e){e.stopPropagation();fn();});
+      return a;
+    }
+    acts.appendChild(act('share',function(){
+      copyText(ORIGIN+'/codex?c='+encodeURIComponent(b64e(item.payload)));
+      toast('Link to \u201c'+item.name+'\u201d copied');
+    }));
+    acts.appendChild(act('delete',function(){
+      svSet(svGet().filter(function(x){return x.name!==item.name;}));
+      paintSaved();toast('Removed \u201c'+item.name+'\u201d');
+    }));
+    b.appendChild(sw);b.appendChild(body);b.appendChild(acts);
+    b.addEventListener('click',function(){
+      state=saneCodex(copyObj(cx));
+      buildControls();refresh();
+      toast('Loaded \u201c'+item.name+'\u201d');
+    });
+    row.appendChild(b);
+  });
 }
 
 function buildControls(){
@@ -625,6 +722,11 @@ function buildControls(){
     +'</div>';
 
   host.innerHTML=''
+   +'<div class="panel"><h3>\u{1F4BE} Saved setups'+ihtml('saved')+'</h3>'
+    +'<p class="phint">Everything on this page under one name \u2014 colours, status line, title,'
+    +' pet, behaviour, notifications. Saved in this browser; the share link on each one is how'
+    +' a setup travels.</p>'
+    +'<div class="svrow" id="svRow"></div></div>'
    +'<div class="panel"><h3>\u{1F39B} Your colours'+ihtml('custom')+'</h3>'
     +'<p class="phint">Pick colours per token role and the installer writes a real .tmTheme into'
     +' <span class="mono">~/.codex/themes/</span>, then points codex at it. Code blocks AND the'
@@ -789,6 +891,7 @@ function buildControls(){
   $('#x_nfc').addEventListener('change',function(){state.notifCondition=this.value;refresh();});
   $('#x_rs').addEventListener('change',function(){state.reasoningSummary=this.value;refresh();});
   $('#x_rr').addEventListener('change',function(){state.rawReasoning=this.checked;refresh();});
+  paintSaved();
   $('#x_anchor').addEventListener('change',function(){state.petAnchor=this.value;refresh();});
   $('#x_slc').addEventListener('change',function(){state.slColors=this.checked;refresh();});
   $('#x_anim').addEventListener('change',function(){state.animations=this.checked;refresh();});
