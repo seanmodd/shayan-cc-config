@@ -1614,6 +1614,32 @@ print(json.dumps([d['tui']['notes'].strip().split('\\n')[0], d['tui']['extra'], 
     ['id="compare"', 'has the comparison block'],
   ]) ok(cxPage.includes(needle), '/codex: ' + label);
   ok(/class="cmpcard here"[\s\S]{0,400}Codex/.test(cxPage), '/codex: comparison marks Codex');
+  // The review's honesty fixes, pinned individually — a batch of them once silently
+  // failed to apply and a combined grep hid it.
+  for (const [needle, label] of [
+    ['refresh._seq', 'the files preview cannot be overwritten by a stale response'],
+    ['backs your file up, parses it', 'the panel states the real backup-then-parse order'],
+    ["comments inside that one table don't survive", 'the [tui]-comments caveat is disclosed'],
+    ["syntect's built-ins", 'the verified panel splits bat renders from tmTheme parses'],
+    ['resume_cwd</span>', 'resume_cwd is listed among the unmanaged keys'],
+    ['animated sprite the terminal draws', 'the pet tip claims no more than was verified'],
+    ['renders its own separators', 'the title tip does not vouch for the separator'],
+    ["no setting for", 'prompt recolouring is honestly called impossible'],
+    ['cxstatus.flash', 'a status-line change flashes the row'],
+    ['class="cxscroll"', 'the transcript clips from the top, keeping the status line visible'],
+  ]) ok(cxPage.includes(needle), '/codex: ' + label);
+  // The pairing is gone: codex and Claude Code are separate agents, neither hosts the
+  // other, so no "+ Claude Code" pane, no recipe save, and no codex entry in recipes.
+  for (const [needle, label] of [
+    ['id="winClaude"', 'the "+ Claude Code" pane'],
+    ['data-pane="claude"', 'the + Claude switch button'],
+    // RECIPE_JS still defines the function (the palette picker lives there);
+    // what must be gone is the CALL and its save card.
+    ['installRecipeSave(payload', 'the recipe save call'],
+    ['id="recsave"', 'the recipe save card'],
+  ]) ok(!cxPage.includes(needle), '/codex: no ' + label + ' (either/or, not a pairing)');
+  ok(!require(path.join(ROOT, 'api/_recipes.js')).TERMINALS.some(t => t.id === 'codex'),
+    'recipes: codex is not a recipe terminal');
   // Every theme the picker offers has an extracted palette — a chip with no colours
   // would mean the generated table and the enum drifted apart.
   ok(CX.CODEX_THEMES.every(t => CX.CODEX_SYNTAX[t] && /^#[0-9a-f]{6}$/.test(CX.CODEX_SYNTAX[t].fg)),

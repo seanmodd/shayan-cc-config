@@ -22,7 +22,7 @@ const { STUDIO_CSS } = require('./_customize.js');
 const { topBar, navPayload } = require('./_nav.js');
 const { compareBlock, COMPARE_CSS } = require('./_compare.js');
 const { STARTERS } = require('./_theme.js');
-const { RECIPE_CSS, RECIPE_JS, recipeSaveBlock } = require('./_recipes.js');
+const { RECIPE_CSS, RECIPE_JS } = require('./_recipes.js');
 const {
   CODEX_THEMES, CODEX_SYNTAX, STATUS_ITEMS, TITLE_ITEMS, CODEX_PETS,
   PET_ANCHORS, PICKER_VIEWS, CODEX_DEFAULTS,
@@ -33,9 +33,7 @@ const CODEX_CSS = `
   .cxhead{padding-bottom:2px;}
   .cxhead h1{font-size:32px;}
 
-  .cxpair{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;}
-  @media(max-width:1100px){.cxpair{grid-template-columns:1fr 1fr;}
-    .cxpair .cxcol-claude{grid-column:1/-1;}}
+  .cxpair{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;}
   .cxcol{min-width:0;}
   .cxbadge{display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:.12em;
     text-transform:uppercase;color:var(--faint);margin-bottom:7px;}
@@ -62,6 +60,12 @@ const CODEX_CSS = `
   .cxterm{flex:1;padding:11px 13px 9px;font-size:11.5px;line-height:1.62;
     color:var(--cx-text);overflow:hidden;display:flex;flex-direction:column;}
   .cxterm > *{flex:none;}
+  /* The transcript. Bottom-anchored and the only shrinkable child, so a short pinned
+     dock eats lines off the TOP - the composer and the status line, which the controls
+     change, are always the visible part. Exactly what a real terminal does. */
+  .cxscroll{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;
+    flex-direction:column;justify-content:flex-end;}
+  .cxscroll > *{flex:none;}
   .cxterm .l{white-space:pre-wrap;word-break:break-word;min-height:1.62em;}
   .cxterm .dim{color:var(--cx-dim);}
   .cxterm .acc{color:var(--cx-accent);}
@@ -85,7 +89,7 @@ const CODEX_CSS = `
      terminal background — there is no block background of its own. */
   .cxcode{margin:5px 0 5px 14px;padding:2px 0;}
 
-  .cxcomposer{margin-top:auto;border:1px solid var(--cx-dim);border-radius:8px;
+  .cxcomposer{margin-top:6px;border:1px solid var(--cx-dim);border-radius:8px;
     padding:5px 10px;display:flex;align-items:center;gap:7px;}
   .cxcomposer .caret{color:var(--cx-accent);}
   .cxcomposer .ph{color:var(--cx-dim);flex:1;}
@@ -95,8 +99,11 @@ const CODEX_CSS = `
     font-size:9px;opacity:.85;}
 
   .cxstatus{display:flex;gap:12px;flex-wrap:wrap;padding:6px 2px 0;font-size:10.5px;
-    color:var(--cx-dim);}
+    color:var(--cx-dim);border-radius:6px;}
   .cxstatus .si{white-space:nowrap;}
+  .cxstatus.flash{animation:cxflash 1.1s ease-out 1;}
+  @keyframes cxflash{0%{background:rgba(122,162,247,.28);box-shadow:0 0 0 3px rgba(122,162,247,.28);}
+    100%{background:transparent;box-shadow:none;}}
 
   .cxpet{position:absolute;font-size:15px;line-height:1;filter:saturate(.9);
     text-align:right;}
@@ -169,9 +176,8 @@ const CODEX_CSS = `
   @media(max-width:700px),(max-height:520px){
     .cxwrap{padding:0 12px 40px;}
     .cxpair{grid-template-columns:1fr;gap:0;}
-    .cxpair[data-pane="before"] .cxcol-after,.cxpair[data-pane="before"] .cxcol-claude{display:none;}
-    .cxpair[data-pane="after"] .cxcol-before,.cxpair[data-pane="after"] .cxcol-claude{display:none;}
-    .cxpair[data-pane="claude"] .cxcol-before,.cxpair[data-pane="claude"] .cxcol-after{display:none;}
+    .cxpair[data-pane="before"] .cxcol-after{display:none;}
+    .cxpair[data-pane="after"] .cxcol-before{display:none;}
     .cxhead h1{font-size:25px;margin-bottom:2px;}
     .cxpanels{grid-template-columns:1fr;}
     .cxbadge span:last-child{display:none;}
@@ -211,13 +217,12 @@ Every key below was verified against the 0.147.0 binary, and the installer merge
     <div class="paneswitch" data-pane-toggle role="tablist" aria-label="Which window to show">
       <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
       <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
-      <button type="button" class="pswbtn" data-pane="claude" role="tab" aria-selected="false">+ Claude</button>
     </div>
     <button type="button" id="pinbtn" class="pinbtn" aria-pressed="false"
       title="Keep the preview on screen while you scroll through the controls">
       <span class="pico">\u{1F4CC}</span><span class="ptxt">Pin preview</span></button>
-    <label class="ccpick"><span>Claude Code side</span><select id="ccTheme"
-      title="Your own saved setups, or one of the starters. Sets the terminal palette the preview sits on."></select></label>
+    <label class="ccpick"><span>Terminal palette</span><select id="ccTheme"
+      title="Preview context only: the colours your terminal gives codex — from one of your saved setups or a starter."></select></label>
   </div>
   <div class="cxpair" data-pane="after" id="pair">
     <div class="cxcol cxcol-before">
@@ -225,12 +230,8 @@ Every key below was verified against the 0.147.0 binary, and the installer merge
       <div id="winBefore"></div>
     </div>
     <div class="cxcol cxcol-after">
-      <div class="cxbadge"><span class="pill aft">after</span><b>Your Codex</b><span>— on your Claude Code palette</span></div>
+      <div class="cxbadge"><span class="pill aft">after</span><b>Your Codex</b><span>— on your terminal palette</span></div>
       <div id="winAfter"></div>
-    </div>
-    <div class="cxcol cxcol-claude">
-      <div class="cxbadge"><span class="pill aft">recipe</span><b>+ Claude Code</b><span id="ccname">— the other half, same terminal</span></div>
-      <div id="winClaude"></div>
     </div>
     <div class="dockgrip" id="dockgrip" role="separator" aria-orientation="horizontal" tabindex="0"
       aria-label="Resize the preview. Arrow keys adjust the height, Home resets it."
@@ -244,9 +245,10 @@ Every key below was verified against the 0.147.0 binary, and the installer merge
   <div class="cxpanels" style="margin-top:16px">
     <div class="panel"><h3>\u{1F4C4} ~/.codex/config.toml — the [tui] block</h3>
       <p class="phint">This file also holds your model, MCP servers and plugins, so the installer never
-      replaces it: it parses your file first (and <b>aborts if it doesn't parse</b>), backs it up, rebuilds
-      only the <span class="mono">[tui]</span> table — keeping any [tui] keys this page doesn't manage —
-      and validates the result before writing a byte. Codex reads it on startup.</p>
+      replaces it: it backs your file up, parses it (and <b>aborts if it doesn't parse</b>), rebuilds
+      only the <span class="mono">[tui]</span> table — keeping any [tui] keys this page doesn't manage,
+      though comments inside that one table don't survive the rebuild — and validates the result before
+      writing a byte. Codex reads it on startup.</p>
       <div class="cxfiles" id="fileToml"></div>
     </div>
     <div class="panel"><h3>\u{1F9EA} How this was verified</h3>
@@ -254,17 +256,23 @@ Every key below was verified against the 0.147.0 binary, and the installer merge
       unknown value can make the config fail to load — so nothing here is guessed. The nine managed keys, every
       enum value, and the stock defaults were read from the serde tables inside the 0.147.0 binary, cross-checked
       against live <span class="mono">config/read</span> probes under a throwaway CODEX_HOME, and against the
-      openai/codex source at that exact tag. The 27 theme palettes in the preview were extracted from the same
-      theme files codex embeds — rendered through <span class="mono">bat</span>, which ships the identical set —
-      not typed in by hand.</p>
+      openai/codex source at that exact tag. The 27 theme palettes in the preview were not typed in by hand:
+      22 were rendered through <span class="mono">bat</span> (which embeds the identical theme set) and the
+      colours parsed off its truecolor output; the other 5 are syntect's built-ins, parsed from the exact
+      upstream .tmTheme files syntect pins.</p>
       <p class="phint">Keys whose semantics could not be pinned three ways
       (<span class="mono">notifications</span>, <span class="mono">keymap</span>,
-      <span class="mono">raw_output_mode</span>) are deliberately not managed: a config this page writes must
-      never be the reason codex fails to start.</p>
+      <span class="mono">raw_output_mode</span>, <span class="mono">resume_cwd</span>) are deliberately not
+      managed: a config this page writes must never be the reason codex fails to start.</p>
+      <p class="phint"><b>Your prompts can't be recoloured — on purpose.</b> Codex 0.147.0 has no setting for
+      the text or background of the messages you send it: no such key exists anywhere in the binary, and no
+      theme scope reaches it (the syntax theme paints code blocks only). Codex is a compiled binary, so unlike
+      Claude Code there is nothing to patch. If a future release adds a key, this page's verified pipeline
+      will pick it up. Until then, the one agent whose prompts you can style — any colours, yellow strip and
+      black text included — is Claude Code, in <a href="/customize" style="color:var(--accent)">the Studio</a>
+      under <b>Your messages</b>.</p>
     </div>
   </div>
-
-${recipeSaveBlock()}
 
 ${compareBlock('codex')}
 </div>
@@ -347,12 +355,6 @@ function palHex(t,fb){
     return (n<16?'0':'')+n.toString(16);
   }).join('');
 }
-function hexOf(c){
-  // um colours arrive as rgb(r,g,b) strings from the Studio, or as #hex.
-  var m=/^rgb\\((\\d+),\\s*(\\d+),\\s*(\\d+)\\)$/.exec(String(c));
-  if(m)return palHex([+m[1],+m[2],+m[3]],'#c0caf5');
-  return /^#[0-9a-fA-F]{6}$/.test(String(c))?String(c):'#c0caf5';
-}
 function relLum(hex){
   var h=String(hex).replace('#','');
   var c=[0,2,4].map(function(i){
@@ -379,8 +381,7 @@ function itemMeta(id){
 
 // ── the mock ──────────────────────────────────────────────────────────────────
 // mode: 'before' = stock defaults on a stock dark terminal; 'after' = your codex on
-// your Claude Code palette; 'claude' = the OTHER half of the recipe — the same
-// terminal running Claude Code, so the pair is visible side by side.
+// your terminal palette.
 function winHTML(s,mode){
   var stock=mode==='before';
   var p=stock?null:(ccPayload.p||{});
@@ -389,7 +390,6 @@ function winHTML(s,mode){
   var dim=stock?'#767e8c':palHex(p.comment,'#565f89');
   var accent=stock?'#89b4fa':palHex(p.accent,'#7aa2f7');
   var pal=themePal(s,bg);
-  if(mode==='claude')return claudePaneHTML(s,bg,text,dim,accent);
 
   var title=s.terminalTitle.map(function(id){return itemMeta(id).sample;}).join(' ');
   if(!s.terminalTitle.length)title='terminal';
@@ -438,6 +438,7 @@ function winHTML(s,mode){
     +'<div class="cxtitle"><div class="cxdots"><span></span><span></span><span></span></div>'
     +'<div class="cxtitletext">'+esc(title)+'</div></div>'
     +'<div class="cxterm">'
+    +'<div class="cxscroll">'
     +'<div class="l cxbanner">&gt;_ OpenAI Codex</div>'
     +'<div class="l cxrow"><span class="k">directory:</span><span>~/my-project</span></div>'
     +'<div class="l cxrow"><span class="k">permissions:</span><span>workspace</span>'
@@ -455,6 +456,7 @@ function winHTML(s,mode){
     +'<div class="l dim cxgreet">\\u2022 Started npm test \\u2014 2 passing, 1 failing</div>'
     +'<div class="cxcode">'+code+'</div>'
     +'<div class="l dim cxgreet">\\u2022 Updated 2 file(s) \\u00b7 Worked for 12s</div>'
+    +'</div>'
     +'<div class="cxcomposer"><span class="caret">\\u258C</span>'
       +'<span class="ph">Ask Codex to do anything</span></div>'
     +hints
@@ -462,42 +464,17 @@ function winHTML(s,mode){
     +'</div>'+petHTML+'</div>';
 }
 
-// The recipe's other half: Claude Code in the same terminal. Verbs, spinner glyphs
-// and the prompt strip come from the actual payload, the same fields the installer
-// patches in — not a generic stand-in.
-function claudePaneHTML(s,bg,text,dim,accent){
-  var vv=(ccPayload.vv&&ccPayload.vv.length?ccPayload.vv:['Working']);
-  var ph=(ccPayload.ph&&ccPayload.ph.length?ccPayload.ph:['\u00b7']);
-  var green=palHex((ccPayload.p||{}).green,'#9ece6a');
-  var um=(ccPayload.um&&typeof ccPayload.um==='object')?ccPayload.um:{};
-  var promptCss='color:'+esc(um.fg?hexOf(um.fg):text)+';';
-  if(um.bg)promptCss+='background:'+esc(hexOf(um.bg))+';';
-  if((um.st||[]).indexOf('bold')>=0)promptCss+='font-weight:700;';
-  return '<div class="cxwin'+(s.animations?' anim':'')+'" style="--cx-bg:'+esc(bg)
-    +';--cx-text:'+esc(text)+';--cx-dim:'+esc(dim)+';--cx-accent:'+esc(accent)+'">'
-    +'<div class="cxtitle"><div class="cxdots"><span></span><span></span><span></span></div>'
-    +'<div class="cxtitletext">'+esc(ccPayload.n||'Claude Code')+'</div></div>'
-    +'<div class="cxterm">'
-    +'<div class="l"><span class="dim">\u276F</span> claude</div>'
-    +'<div class="l"></div>'
-    +'<div class="l"><span style="color:'+esc(accent)+'">\u273B</span> Welcome back to <span style="color:'
-      +esc(accent)+';font-weight:700">Claude Code</span></div>'
-    +'<div class="l"></div>'
-    +'<div class="l"><span style="'+promptCss+'"> &gt; fix the failing checkout test </span></div>'
-    +'<div class="l cxwork"><span class="sp acc">'+esc(ph[0])+'</span> <span class="shimmer">'
-      +esc(vv[0])+'\u2026</span><span class="dim"> (esc to interrupt)</span></div>'
-    +'<div class="l dim">\u23BF Read checkout.test.js</div>'
-    +'<div class="l"><span style="color:'+esc(green)+'">\u23FA</span> The retry helper drops the cart \u2014 patching it now.</div>'
-    +'<div class="l dim">\u23BF Update retry.js</div>'
-    +'<div class="cxcomposer"><span class="caret">\u258C</span>'
-      +'<span class="ph">Try &quot;run the tests again&quot;</span></div>'
-    +'</div></div>';
-}
-
 function drawWindows(){
   $('#winBefore').innerHTML=winHTML(defaultCodex(),'before');
   $('#winAfter').innerHTML=winHTML(state,'after');
-  $('#winClaude').innerHTML=winHTML(state,'claude');
+  // A status-line change lands at the bottom of the window while the eye is on the
+  // controls - flash the row so the edit visibly arrives.
+  var sig=JSON.stringify([state.statusLine,state.slColors]);
+  if(drawWindows._sig&&drawWindows._sig!==sig){
+    var row=$('#winAfter .cxstatus');
+    if(row)row.classList.add('flash');
+  }
+  drawWindows._sig=sig;
 }
 
 // ── controls ──────────────────────────────────────────────────────────────────
@@ -506,7 +483,7 @@ var TIPS={
  statusLine:{t:'Status line',d:'The row under the composer. Pick items in the order you want them \\u2014 the number on each chip is its position. The same thing /statusline configures inside codex; stock is model + effort, then the directory. Empty is allowed and simply hides the line.'},
  slColors:{t:'Status line colours',d:'The picker calls this \\u201cApply colors from the active /theme\\u201d: on, items take token colours from the syntax theme above; off, the whole line renders dim.'},
  terminalTitle:{t:'Terminal title',d:'What codex writes into the terminal tab / window title, from the same item list plus \\u201cactivity\\u201d (the working/attention indicator) and \\u201capp-name\\u201d. Stock is activity + project name. The preview\\u2019s title bar shows the items in your order; codex renders its own separators.'},
- pet:{t:'Terminal pets',d:'Yes, really \\u2014 an animated sprite that lives above the composer. Eight ship with codex 0.147; the picker inside codex is /pets. The preview shows a stand-in glyph: the real one is an animated webp drawn with sixel graphics, which a static mock cannot do honestly.'},
+ pet:{t:'Terminal pets',d:'Yes, really \\u2014 an animated sprite that lives above the composer. Eight ship with codex 0.147; the picker inside codex is /pets. The preview shows a stand-in glyph: the real one is an animated sprite the terminal draws, which a static mock cannot do honestly.'},
  petAnchor:{t:'Pet position',d:'composer keeps the pet next to the input box; screen-bottom pins it to the bottom of the window.'},
  animations:{t:'Animations',d:'The shimmer on \\u201cWorking\\u2026\\u201d and other small movements. Off, the same text just sits still \\u2014 useful over SSH or for reduced motion.'},
  tooltips:{t:'Tooltips',d:'The contextual hint popups and shortcut reminders (the keycap row under the composer stands in for them here). Turning this off declutters, at the cost of discoverability.'},
@@ -683,8 +660,11 @@ function refresh(){
   $('#cmdtext').textContent='curl -fsSL "'+ORIGIN+'/apply.sh?c='+c+'" | bash';
   window.__sccPayloadC=c;
   // Server-rendered, so the preview is the installer's own output rather than a second
-  // TOML builder that could drift from it.
+  // TOML builder that could drift from it. The sequence counter keeps a slow older
+  // response from landing on top of a newer one.
+  var seq=(refresh._seq=(refresh._seq||0)+1);
   fetch('/codex-files.txt?c='+c).then(function(r){return r.text();}).then(function(t){
+    if(seq!==refresh._seq)return;
     var box=$('#fileToml'); if(!box)return;
     box.innerHTML='<h4>[tui] \\u2014 merged into your config.toml</h4>'
       +t.split('\\n').map(function(ln){
@@ -773,7 +753,6 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();})
 installCcPicker(function(){return ccPayload;},
                 function(pl){ccPayload=pl;},
                 function(){buildControls();refresh();});
-installRecipeSave(payload,'Codex + Claude Code');
 
 installPreviewDock({dock:'#pair',grip:'#dockgrip',pin:'#pinbtn',term:'.cxterm',key:'codex',pinDefault:true});
 installNav();
