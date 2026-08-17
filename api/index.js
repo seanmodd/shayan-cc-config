@@ -14,6 +14,8 @@ const { renderZellij } = require('./_zellij_page.js');
 const { sanitizeWarp, buildWarpTheme, buildWarpTabConfig, buildWarpSettingsSnippet, warpApplyBlock } = require('./_warp.js');
 const { renderWarp } = require('./_warp_page.js');
 const { sanitizeCodex, buildCodexTomlLines, buildCodexRootLines, buildCodexTmTheme, customStem, codexApplyBlock } = require('./_codex.js');
+const { sanitizeMoshi, buildMoshiThemeJson, moshiDeepLink, moshiClipboard, moshiApplyScript } = require('./_moshi.js');
+const { renderMoshi } = require('./_moshi_page.js');
 const { renderCodex } = require('./_codex_page.js');
 const {
   sanitizeSL, buildUMD, buildInputBox, buildStatuslineScript,
@@ -325,6 +327,50 @@ function route(req, res) {
   }
   if (path === '/codex' || path === '/codex/') {
     return sendHTML(renderCodex(DATA, CSS, CLIENT_LIB, FAVICON, GH_SVG, GITHUB_URL));
+  }
+  if (path === '/moshi' || path === '/moshi/') {
+    return sendHTML(renderMoshi(DATA, CSS, CLIENT_LIB, FAVICON, GH_SVG, GITHUB_URL));
+  }
+  // Moshi has no host-side theme file: the app imports the theme itself. These routes
+  // hand the theme over in the app's own wire formats (all verified against the app
+  // bundle and the live gallery — see _moshi.js).
+  if (path === '/moshi-theme.json') {
+    const c = u.searchParams.get('c');
+    if (!c) return sendText('missing ?c= payload', 'text/plain; charset=utf-8', 400);
+    try {
+      const ms = sanitizeMoshi(decodeCustom(c).ms);
+      if (!ms) return sendText('this link has no Moshi theme in it', 'text/plain; charset=utf-8', 404);
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      // The filename lands in the phone's Files app; the name is sanitizer-restricted
+      // to [A-Za-z0-9 _-] so it is header-safe as-is.
+      res.setHeader('Content-Disposition', 'attachment; filename="' + ms.name.replace(/ /g, '-') + '.moshi-theme.json"');
+      return res.end(buildMoshiThemeJson(ms));
+    } catch (e) { return sendText('bad payload: ' + cleanText(e.message, 120), 'text/plain; charset=utf-8', 400); }
+  }
+  if (path === '/moshi-qr.svg') {
+    const c = u.searchParams.get('c');
+    if (!c) return sendText('missing ?c= payload', 'text/plain; charset=utf-8', 400);
+    try {
+      const ms = sanitizeMoshi(decodeCustom(c).ms);
+      if (!ms) return sendText('this link has no Moshi theme in it', 'text/plain; charset=utf-8', 404);
+      const { qrSvg } = require('./_qr.js');
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.end(qrSvg(moshiDeepLink(ms), { dark: '#111318', light: '#ffffff', scale: 8 }));
+    } catch (e) { return sendText('bad payload: ' + cleanText(e.message, 120), 'text/plain; charset=utf-8', 400); }
+  }
+  if (path === '/moshi-apply.sh') {
+    const c = u.searchParams.get('c');
+    if (!c) return sendText('echo "missing ?c= payload"; exit 1', 'text/x-shellscript; charset=utf-8', 400);
+    try {
+      const ms = sanitizeMoshi(decodeCustom(c).ms);
+      if (!ms) return sendText('echo "this link has no Moshi layer enabled"; exit 1', 'text/x-shellscript; charset=utf-8', 404);
+      const body = moshiApplyScript(origin, ms)
+        || '#!/bin/bash\necho "Nothing to change: every moshi-hook setting in this link is stock."\necho "The theme itself installs on the phone — see ' + origin + '/moshi"\n';
+      return sendText(body, 'text/x-shellscript; charset=utf-8');
+    } catch (e) { return sendText(`echo "bad payload: ${cleanText(e.message, 120)}"; exit 1`, 'text/x-shellscript; charset=utf-8', 400); }
   }
   // Standalone per-terminal installers. Every terminal page is its own editor now —
   // fully separated from the Claude Code side — so each page's command applies its

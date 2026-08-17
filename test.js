@@ -1742,6 +1742,104 @@ print(json.dumps([d['check_for_update_on_startup'], d['model_reasoning_summary']
     'codex: all 27 themes have extracted palettes with well-formed colours');
   ok(CX.CODEX_THEMES.length === 27, 'codex: exactly the 27 themes the binary picker offers');
 
+  // ── the moshi layer ───────────────────────────────────────────
+  // No host file to install: the app imports the theme via a deep link / QR /
+  // clipboard string / .json file, all verified against the app bundle and the live
+  // gallery. What CAN corrupt is the wire format — so it is pinned hard here.
+  console.log('— moshi —');
+  const MO = require(path.join(ROOT, 'api/_moshi.js'));
+  ok(MO.sanitizeMoshi(null) === null && MO.sanitizeMoshi({ on: false }) === null,
+    'moshi: off yields no layer');
+  const moEvil = MO.sanitizeMoshi({ on: true,
+    name: ' <script>alert(1)</script> "Neon" ', mode: 'blue',
+    colors: { background: 'red', foreground: '#ABC', cursor: '#12345g' },
+    gw: { scanPorts: '3000;rm -rf ~', usage: 'yes' } });
+  ok(moEvil.name === 'scriptalert1script Neon' && moEvil.mode === 'dark'
+    && moEvil.colors.foreground === '#aabbcc'
+    && moEvil.colors.background === MO.MOSHI_DEFAULTS.colors.background
+    && moEvil.gw.scanPorts === '' && moEvil.gw.usage === true,
+    'moshi: hostile name/mode/colours/ports all sanitize', JSON.stringify(moEvil.name));
+  // The wire format: byte-identical to the gallery's own encoding, and provably
+  // URL-safe. Standard base64 emits '+' or '/' only from specific 3-byte windows;
+  // this walks EVERY 3-byte window our sanitized JSON alphabet can produce and
+  // asserts none of them can. Not a sample — the whole input space.
+  {
+    const ALPH = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-#,:"{}[]'.split('').map(c => c.charCodeAt(0));
+    let bad = 0;
+    for (const a of ALPH) for (const b of ALPH) for (const c of ALPH) {
+      const e = Buffer.from([a, b, c]).toString('base64');
+      if (e.includes('+') || e.includes('/')) bad++;
+    }
+    ok(bad === 0, 'moshi: base64 of the sanitized JSON alphabet can NEVER need URL-escaping'
+      + ' (all ' + ALPH.length ** 3 + ' windows checked)', bad + ' bad windows');
+  }
+  const moSan = MO.sanitizeMoshi({ on: true, name: 'Neon Nights', mode: 'light',
+    colors: { background: '#111318', red: '#ff5555' } });
+  const moLink = MO.moshiDeepLink(moSan);
+  ok(/^moshi:\/\/theme\?d=[A-Za-z0-9]+$/.test(moLink),
+    'moshi: the deep link matches the bundle’s own matcher and needs no escaping');
+  const moBack = JSON.parse(Buffer.from(
+    moLink.split('d=')[1] + '='.repeat((4 - moLink.split('d=')[1].length % 4) % 4), 'base64').toString());
+  ok(moBack.v === 1 && moBack.name === 'Neon Nights' && moBack.mode === 'light'
+    && moBack.colors.background === '#111318' && moBack.colors.red === '#ff5555',
+    'moshi: the deep link round-trips to the exact theme JSON');
+  ok(MO.moshiClipboard(moSan).startsWith('moshi-theme:'),
+    'moshi: the clipboard string carries the importer’s prefix');
+  // The gallery starters are the app's own files — shape-check every one.
+  const { MOSHI_STARTERS } = require(path.join(ROOT, 'api/_moshi_starters.js'));
+  ok(Object.keys(MOSHI_STARTERS).length >= 8, 'moshi: the starter set is vendored');
+  for (const [slug, t] of Object.entries(MOSHI_STARTERS)) {
+    ok(t.v === 1 && ['dark', 'light'].includes(t.mode)
+      && /^#[0-9a-f]{6}$/i.test(t.colors.background) && /^#[0-9a-f]{6}$/i.test(t.colors.foreground),
+      'moshi starter ' + slug + ': gallery shape intact');
+  }
+  // The gw script: CLI-only, exact commands, nothing when stock.
+  ok(MO.moshiApplyScript('https://x', MO.sanitizeMoshi({ on: true })) === null,
+    'moshi: a stock gw emits no script at all');
+  const moGw = MO.sanitizeMoshi({ on: true, gw: { usage: false, scanPorts: '3000,5173' } });
+  ok(MO.moshiGwCommands(moGw).join('|') ===
+    'moshi-hook set usage-collection off|moshi-hook set scan-ports 3000,5173',
+    'moshi: gw commands are exactly the CLI’s own verbs');
+  const moShF = path.join(TMP, 'moshi.sh');
+  fs.writeFileSync(moShF, MO.moshiApplyScript('https://x', moGw));
+  ok(cp.spawnSync('bash', ['-n', moShF], { encoding: 'utf8' }).status === 0,
+    'moshi: the gw script parses as bash');
+  // The QR module: structural pins + a frozen vector. The full Vision-decode gate
+  // lives in tools/verify-qr.swift and ran against 16 payloads incl. v40 max.
+  const QR = require(path.join(ROOT, 'api/_qr.js'));
+  const moQ = QR.qrMatrix(moLink);
+  ok(moQ.size === moQ.modules.length && (moQ.size - 17) % 4 === 0,
+    'moshi: the QR matrix is a legal size', moQ.size + '');
+  const finder = m => m.modules[0].slice(0, 7).join('') === '1111111';
+  ok(finder(moQ), 'moshi: finder pattern present');
+  ok(/^<svg[^>]*viewBox/.test(QR.qrSvg('moshi://theme?d=abc')),
+    'moshi: qrSvg emits a standalone SVG');
+  const crypto = require('crypto');
+  // Frozen when the encoder was Vision-verified: if this hash moves, the encoder's
+  // output changed and the Vision gate (tools/verify-qr.swift) must be rerun.
+  const frozen = crypto.createHash('sha256')
+    .update(QR.qrMatrix('moshi://theme?d=eyJ2IjoxfQ').modules.map(r => r.join('')).join('\n'))
+    .digest('hex').slice(0, 16);
+  ok(frozen === '2362c23e1ca4dc59',
+    'moshi: QR output matches the Vision-verified vector', frozen);
+  // Routes.
+  const moPayload = Buffer.from(JSON.stringify({ ms: { on: true, name: 'Route T', gw: { usage: false } } })).toString('base64url');
+  r = await call('/moshi');
+  ok(r.status === 200 && r.body.includes('id="qrimg"') && r.body.includes('scc_moshi_saved'),
+    '/moshi renders with the QR image and saved setups');
+  ok(!/\bccPayload\b/.test(r.body) && !r.body.includes("'/apply.sh?c="),
+    '/moshi: standalone — no Claude Code payload, no combined installer');
+  r = await call('/moshi-theme.json?c=' + moPayload);
+  ok(r.status === 200 && JSON.parse(r.body).v === 1,
+    '/moshi-theme.json serves the importable file');
+  r = await call('/moshi-qr.svg?c=' + moPayload);
+  ok(r.status === 200 && /^<svg/.test(r.body), '/moshi-qr.svg serves the code');
+  r = await call('/moshi-apply.sh?c=' + moPayload);
+  ok(r.status === 200 && /moshi-hook set usage-collection off/.test(r.body)
+    && !/tweakcc/.test(r.body), '/moshi-apply.sh drives moshi-hook set and nothing else');
+  r = await call('/moshi-apply.sh?c=' + Buffer.from(JSON.stringify({ n: 'x' })).toString('base64url'));
+  ok(r.status === 404, '/moshi-apply.sh refuses a payload without the layer');
+
   console.log('— misc —');
   r = await call('/nope');
   ok(r.status === 404, '404 fallback');

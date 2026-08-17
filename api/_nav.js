@@ -38,6 +38,10 @@ const PAGES = [
     id: 'warp', path: '/warp', icon: '\u{1F300}', label: 'Warp', short: 'Warp',
     sub: 'blocks, themes and launch configurations',
   },
+  {
+    id: 'moshi', path: '/moshi', icon: '\u{1F4F1}', label: 'Moshi', short: 'Moshi',
+    sub: 'a theme for the agent app on your phone',
+  },
 ];
 
 const GITHUB_URL = 'https://github.com/seanmodd/shayan-cc-config';
