@@ -297,6 +297,12 @@ function drawPhone(){
   // visible consequence. esc() everything — colours are sanitized but the habit holds.
   var t=document.getElementById('pterm');
   t.innerHTML=''
+   +'<div class="l"><span style="color:'+esc(c.brightBlack)+'">$ cd ~/senpex-frontend</span></div>'
+   +'<div class="l"><span style="color:'+esc(c.brightBlue)+'">~/senpex-frontend</span><span style="color:'+esc(c.brightBlack)+'"> on </span><span style="color:'+esc(c.brightMagenta)+'">main</span></div>'
+   +'<div class="l"><span style="color:'+esc(c.brightBlack)+'">$ git status</span></div>'
+   +'<div class="l"><span style="color:'+esc(c.white)+'">modified: </span><span style="color:'+esc(c.brightYellow)+'">retry.js</span></div>'
+   +'<div class="l"><span style="color:'+esc(c.brightCyan)+'">2 files</span><span style="color:'+esc(c.brightBlack)+'"> changed</span></div>'
+   +'<div class="l"></div>'
    +'<div class="l"><span style="color:'+esc(c.brightBlack)+'">$ claude</span></div>'
    +'<div class="l"><span style="color:'+esc(c.blue)+';font-weight:700">✻ Claude Code</span><span style="color:'+esc(c.brightBlack)+'"> · opus</span></div>'
    +'<div class="l"><span class="sel" style="color:'+esc(c.foreground)+'"> &gt; fix the failing checkout test </span></div>'
