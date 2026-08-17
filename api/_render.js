@@ -777,7 +777,7 @@ function paintRecipes(){
     var e=document.createElement('div');e.className='recempty';
     e.innerHTML=all.length
       ? 'No favorites yet. Star a recipe and it shows up here.'
-      : 'Nothing saved yet. Open <b>cmux</b>, <b>herdr</b>, <b>Zellij</b> or <b>Warp</b>, '
+      : 'Nothing saved yet. Open <b>cmux</b>, <b>Codex</b>, <b>herdr</b>, <b>Zellij</b> or <b>Warp</b>, '
         +'pick a Claude Code setup to layer on top \\u2014 one of yours or a starter \\u2014 '
         +'and press <b>Save as recipe</b>. '
         +'They live in this browser \\u2014 share the link to pass one on.';
@@ -833,7 +833,7 @@ ${topBar('home', GH_SVG)}
     <span class="reccount" id="reccount"></span>
   </div>
   <p class="rechint">A <b>recipe</b> is a Claude Code config and a terminal theme kept together \u2014
-  the palette, verbs and status line on one side, cmux, herdr, Zellij or Warp on the other.
+  the palette, verbs and status line on one side, cmux, Codex, herdr, Zellij or Warp on the other.
   One curl installs both halves. Build one on any terminal page and save it there.</p>
   <div id="recgrid" class="recgrid"></div>
 </div></div>

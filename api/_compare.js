@@ -34,6 +34,25 @@ const TOOLS = [
     docs: 'https://code.claude.com/docs/en/overview',
   },
   {
+    id: 'codex',
+    name: 'Codex CLI',
+    kind: 'the other agent',
+    icon: '▸',
+    what: 'OpenAI’s command-line coding agent — the same job as Claude Code, from the other lab. A Rust TUI with themes, a configurable status line and, yes, terminal pets.',
+    bestFor: [
+      'Teams already on ChatGPT plans — it signs in with the account you have.',
+      'A second opinion: many people run both agents and hand work between them.',
+      'A TUI you can reshape — <span class="mono">/theme</span>, <span class="mono">/statusline</span> and the terminal title are all configurable, which is what the page above is for.',
+      'Sandboxed-by-default execution with per-command approval modes.',
+    ],
+    notFor: [
+      'Replacing your terminal — like Claude Code, it runs inside one (and inside cmux, Zellij or Warp just fine).',
+      'Claude models — it talks to OpenAI’s. The two agents coexist; they do not interchange.',
+      'Configuration by GUI. Everything lives in <span class="mono">~/.codex/config.toml</span>, which is why an installer that merges carefully matters.',
+    ],
+    docs: 'https://developers.openai.com/codex/cli/',
+  },
+  {
     id: 'cmux',
     name: 'cmux',
     kind: 'macOS terminal app',
@@ -116,16 +135,16 @@ const TOOLS = [
 // Rows are only worth a table when every tool has a real answer. "unclear from docs" is
 // a legitimate answer and appears verbatim where that is the honest one.
 const MATRIX = {
-  cols: ['Claude Code', 'cmux (app)', 'Warp', 'cmux TUI', 'Zellij', 'herdr'],
+  cols: ['Claude Code', 'Codex CLI', 'cmux (app)', 'Warp', 'cmux TUI', 'Zellij', 'herdr'],
   rows: [
-    ['Platforms', 'macOS, Linux, WSL, Windows', 'macOS 14+ only', 'macOS, Linux, Windows', 'macOS, Linux, Windows', 'Linux, macOS, Windows', 'Linux + macOS stable; Windows beta'],
-    ['Survives disconnect', 'background sessions only', 'no — layout and agent ids only', 'no — run a multiplexer inside it', 'yes, headless server', 'yes, plus crash resurrection', 'yes — processes never stop'],
-    ['Restores the conversation', 'yes, <span class="mono">--resume</span>', 'yes, via integration hooks', 'its own agent, in the cloud', 'unclear from docs', 'no — reruns the command', 'yes, on by default'],
-    ['Knows the agent is blocked', 'n/a', 'notification rings', 'for its own agent', 'unclear from docs', 'no agent concept', 'yes — a first-class state'],
-    ['Mouse', 'fullscreen mode only', 'native macOS GUI', 'native GUI', 'unclear from docs', 'yes, on by default', 'yes — the headline feature'],
-    ['Config format', 'JSON + <span class="mono">CLAUDE.md</span>', 'JSONC + Ghostty config', 'TOML + YAML, app-owned', 'JSON', 'KDL', 'TOML'],
-    ['Plugins', 'plugins, skills, hooks, MCP', 'none — socket API instead', 'none — themes and workflows', 'none — socket API instead', 'WASM (Rust today)', 'any executable + manifest'],
-    ['Account / telemetry', 'account; no telemetry setting', 'none', 'account, sync and telemetry settings', 'none', 'none', 'none'],
+    ['Platforms', 'macOS, Linux, WSL, Windows', 'macOS, Linux, Windows', 'macOS 14+ only', 'macOS, Linux, Windows', 'macOS, Linux, Windows', 'Linux, macOS, Windows', 'Linux + macOS stable; Windows beta'],
+    ['Survives disconnect', 'background sessions only', 'background terminals only', 'no — layout and agent ids only', 'no — run a multiplexer inside it', 'yes, headless server', 'yes, plus crash resurrection', 'yes — processes never stop'],
+    ['Restores the conversation', 'yes, <span class="mono">--resume</span>', 'yes, <span class="mono">codex resume</span>', 'yes, via integration hooks', 'its own agent, in the cloud', 'unclear from docs', 'no — reruns the command', 'yes, on by default'],
+    ['Knows the agent is blocked', 'n/a', 'n/a', 'notification rings', 'for its own agent', 'unclear from docs', 'no agent concept', 'yes — a first-class state'],
+    ['Mouse', 'fullscreen mode only', 'no — keyboard TUI', 'native macOS GUI', 'native GUI', 'unclear from docs', 'yes, on by default', 'yes — the headline feature'],
+    ['Config format', 'JSON + <span class="mono">CLAUDE.md</span>', 'TOML + <span class="mono">AGENTS.md</span>', 'JSONC + Ghostty config', 'TOML + YAML, app-owned', 'JSON', 'KDL', 'TOML'],
+    ['Plugins', 'plugins, skills, hooks, MCP', 'plugins, skills, hooks, MCP', 'none — socket API instead', 'none — themes and workflows', 'none — socket API instead', 'WASM (Rust today)', 'any executable + manifest'],
+    ['Account / telemetry', 'account; no telemetry setting', 'ChatGPT account or API key', 'none', 'account, sync and telemetry settings', 'none', 'none', 'none'],
   ],
 };
 
@@ -156,7 +175,7 @@ function card(t, currentId) {
 function compareBlock(currentId) {
   return `<section class="cmpwrap" id="compare">
   <h3 class="cmphead">\u{1F9ED} Which one do you actually want?</h3>
-  <p class="cmpintro">These are not five versions of the same thing. <b>Claude Code</b> is the agent.
+  <p class="cmpintro">These are not seven versions of the same thing. <b>Claude Code</b> and <b>Codex CLI</b> are agents.
   <b>cmux</b> and <b>Warp</b> are terminals you run it in. <b>Zellij</b> and <b>herdr</b> are
   multiplexers that run <i>inside</i> a terminal and keep sessions alive when you disconnect — so a
   terminal and a multiplexer are a pair, not a choice. Everything below comes from each project's own

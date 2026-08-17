@@ -23,6 +23,10 @@ const PAGES = [
     sub: 'the macOS terminal around Claude Code',
   },
   {
+    id: 'codex', path: '/codex', icon: '\u{25B8}', label: 'Codex CLI', short: 'Codex',
+    sub: 'themes, status line and pets for the other agent',
+  },
+  {
     id: 'herdr', path: '/herdr', icon: '\u{1F9AC}', label: 'herdr', short: 'herdr',
     sub: 'the multiplexer that tracks agent state',
   },

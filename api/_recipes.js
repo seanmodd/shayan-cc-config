@@ -20,6 +20,7 @@ const RECIPE_FAV_KEY = 'scc_recipe_favs';
 // Which terminal layer a payload carries. Order matters only for display.
 const TERMINALS = [
   { id: 'cmux', key: 'cm', label: 'cmux', icon: '\u{1FA9F}', path: '/cmux' },
+  { id: 'codex', key: 'cx', label: 'Codex', icon: '▸', path: '/codex' },
   { id: 'herdr', key: 'hd', label: 'herdr', icon: '\u{1F9AC}', path: '/herdr' },
   { id: 'zellij', key: 'zj', label: 'Zellij', icon: '\u{1F9E9}', path: '/zellij' },
   { id: 'warp', key: 'wp', label: 'Warp', icon: '\u{1F300}', path: '/warp' },

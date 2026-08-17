@@ -13,6 +13,8 @@ const { sanitizeZellij, buildZellijKdl, buildAgentLayout, zellijApplyBlock } = r
 const { renderZellij } = require('./_zellij_page.js');
 const { sanitizeWarp, buildWarpTheme, buildWarpTabConfig, buildWarpSettingsSnippet, warpApplyBlock } = require('./_warp.js');
 const { renderWarp } = require('./_warp_page.js');
+const { sanitizeCodex, buildCodexTomlLines, codexApplyBlock } = require('./_codex.js');
+const { renderCodex } = require('./_codex_page.js');
 const {
   sanitizeSL, buildUMD, buildInputBox, buildStatuslineScript,
   cleanText, cleanTerm, cleanName, cleanFormat, sanePalette, clampInt,
@@ -137,9 +139,11 @@ function customApplyScript(origin, rawC, pl) {
   const hdSan = sanitizeHerdr(pl.hd);
   const zjSan = sanitizeZellij(pl.zj);
   const wpSan = sanitizeWarp(pl.wp);
+  const cxSan = sanitizeCodex(pl.cx);
   // Each terminal layer is independent and additive: a payload can carry none, one, or
   // both, and the summary line names whichever actually ran.
   const layers = ['Claude Code'].concat(cmSan ? ['cmux'] : [])
+    .concat(cxSan ? ['Codex CLI'] : [])
     .concat(hdSan ? ['herdr'] : []).concat(zjSan ? ['Zellij'] : [])
     .concat(wpSan ? ['Warp'] : []);
   return `#!/bin/bash
@@ -154,6 +158,7 @@ ${cmSan ? cmuxApplyBlock(cmSan, pl.p) : ''}
 ${hdSan ? herdrApplyBlock(hdSan) : ''}
 ${zjSan ? zellijApplyBlock(zjSan) : ''}
 ${wpSan ? warpApplyBlock(wpSan, pl.p) : ''}
+${cxSan ? codexApplyBlock(cxSan) : ''}
 echo ""
 echo "✓ '${name}' applied — ${layers.join(' + ')}. Start a new claude session to see it."
 echo "  Build another at ${origin}/customize"
@@ -317,6 +322,23 @@ function route(req, res) {
   }
   if (path === '/warp' || path === '/warp/') {
     return sendHTML(renderWarp(DATA, CSS, CLIENT_LIB, FAVICON, GH_SVG, GITHUB_URL));
+  }
+  if (path === '/codex' || path === '/codex/') {
+    return sendHTML(renderCodex(DATA, CSS, CLIENT_LIB, FAVICON, GH_SVG, GITHUB_URL));
+  }
+  // The [tui] block the Codex layer merges, verbatim. The page fetches this rather than
+  // building TOML in the browser — one builder, so the preview cannot drift from what
+  // the installer actually writes.
+  if (path === '/codex-files.txt') {
+    const c = u.searchParams.get('c');
+    if (!c) return sendText('missing ?c= payload', 'text/plain; charset=utf-8', 400);
+    try {
+      const pl = decodeCustom(c);
+      const cxSan = sanitizeCodex(pl.cx);
+      if (!cxSan) return sendText('this setup has no Codex layer enabled', 'text/plain; charset=utf-8', 404);
+      const lines = buildCodexTomlLines(cxSan).map(([k, v]) => `${k} = ${v}`).join('\n');
+      return sendText(lines + '\n', 'text/plain; charset=utf-8');
+    } catch (e) { return sendText('bad payload: ' + cleanText(e.message, 120), 'text/plain; charset=utf-8', 400); }
   }
   // The theme, the launch configuration, and the settings snippet the installer will NOT
   // write. Split on a marker so the page makes one request; built here so there is one

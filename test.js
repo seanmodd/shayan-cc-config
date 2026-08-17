@@ -1402,6 +1402,224 @@ function bashCheck(src, label) {
     && cmPage.indexOf("'Our Community'") < cmPage.indexOf("'Popular in the community'"),
     '/cmux: Our Community is ordered above Popular in the community');
 
+  // ── the Codex CLI layer ────────────────────────────────────────
+  // /codex merges a [tui] table into ~/.codex/config.toml — a file that also holds the
+  // user's model, MCP servers and plugins. The contract mirrors the cmux layer: parse
+  // first and abort if the file doesn't parse, back up, rebuild only [tui] keeping its
+  // unmanaged keys, validate before writing, idempotent.
+  console.log('— codex —');
+  const CX = require('./api/_codex.js');
+
+  // The sanitizer against a hostile payload: every field is enum-or-boolean, so a
+  // stranger's link can pick from known lists and nothing else.
+  const cxEvil = CX.sanitizeCodex({
+    on: true,
+    theme: '"; rm -rf ~ #',
+    statusLine: ['model', 'model', '../etc', 'git-branch', { x: 1 }],
+    terminalTitle: 'not-an-array',
+    pet: 'custom-<script>',
+    petAnchor: 'yolo',
+    slColors: 'yes',
+    animations: 1,
+    pickerView: 'gigantic',
+  });
+  ok(cxEvil.theme === '', 'codex: a hostile theme name falls back to adaptive');
+  ok(JSON.stringify(cxEvil.statusLine) === '["model","git-branch"]',
+    'codex: status line keeps only known ids, deduped, in order', JSON.stringify(cxEvil.statusLine));
+  ok(JSON.stringify(cxEvil.terminalTitle) === JSON.stringify(CX.CODEX_DEFAULTS.terminalTitle),
+    'codex: a non-array terminal title falls back to stock');
+  ok(cxEvil.pet === '' && cxEvil.petAnchor === 'composer' && cxEvil.slColors === true
+    && cxEvil.animations === true && cxEvil.pickerView === 'dense',
+    'codex: hostile enums and non-booleans all fall back');
+  ok(CX.sanitizeCodex({ on: false }) === null && CX.sanitizeCodex(null) === null,
+    'codex: off or absent yields no layer');
+
+  // The generated lines: '' theme and '' pet emit no line at all (adaptive / no pet),
+  // and every emitted line parses as TOML.
+  const cxOff = CX.sanitizeCodex({ on: true });
+  const cxOffLines = CX.buildCodexTomlLines(cxOff).map(kv => kv[0]);
+  ok(!cxOffLines.includes('theme') && !cxOffLines.includes('pet'),
+    'codex: adaptive theme and no-pet emit no line', cxOffLines.join(','));
+  const cxOn = CX.sanitizeCodex({ on: true, theme: 'dracula', pet: 'dewey' });
+  const cxOnLines = CX.buildCodexTomlLines(cxOn).map(kv => kv[0]);
+  ok(cxOnLines.includes('theme') && cxOnLines.includes('pet') && cxOnLines.includes('pet_anchor'),
+    'codex: a chosen theme and pet do emit lines');
+  ok(cxOnLines.every(k => CX.MANAGED_KEYS.includes(k)),
+    'codex: every emitted key is in the managed set (the merge can always remove it)');
+
+  // The merge against a lived-in config.toml: comments, an existing [tui] with keys we
+  // do not manage (an inline table among them), a [tui.notifications] subsection, and
+  // MCP servers that must survive byte-for-byte.
+  const cxHome = path.join(TMP, 'codexhome');
+  fs.mkdirSync(path.join(cxHome, '.codex'), { recursive: true });
+  const cxCfg = path.join(cxHome, '.codex', 'config.toml');
+  fs.writeFileSync(cxCfg, [
+    '# precious comment', 'model = "gpt-5.6-sol"', '',
+    '[tui]', 'theme = "zenburn"', 'unmanaged_key = 7',
+    'inline_thing = { style = "compact", n = 2 }', '',
+    '[tui.notifications]', 'notifications = true', '',
+    '[mcp_servers.foo]', 'url = "https://x"', ''].join('\n'));
+  const cxFile = path.join(TMP, 'codex.sh');
+  fs.writeFileSync(cxFile, '#!/bin/bash\nset -euo pipefail\n' + CX.codexApplyBlock(cxOn) + '\n');
+  ok(cp.spawnSync('bash', ['-n', cxFile], { encoding: 'utf8' }).status === 0, 'bash -n: codex layer');
+  const cxRun = bash(cxFile, cxHome);
+  ok(cxRun.status === 0, 'codex layer applies cleanly', (cxRun.stderr || '').trim().slice(0, 120));
+  const cxAfterText = fs.readFileSync(cxCfg, 'utf8');
+  ok(cxAfterText.includes('# precious comment'), 'codex: comments outside [tui] survive');
+  ok(fs.readdirSync(path.dirname(cxCfg)).some(f => /config[.]toml[.]backup-/.test(f)),
+    'codex: the old config is backed up first');
+  // node has no TOML parser; python3 (already required by the layer) verifies shape.
+  const cxCheck = cp.spawnSync('python3', ['-c', [
+    'import tomllib,json,sys',
+    `d = tomllib.load(open(${JSON.stringify(cxCfg)}, "rb"))`,
+    'print(json.dumps([d["model"], d["tui"]["theme"], d["tui"]["unmanaged_key"],',
+    '  d["tui"]["inline_thing"]["n"], d["tui"]["notifications"]["notifications"],',
+    '  d["mcp_servers"]["foo"]["url"], d["tui"]["pet"]]))'].join('\n')], { encoding: 'utf8' });
+  ok(cxCheck.status === 0
+    && cxCheck.stdout.trim() === '["gpt-5.6-sol", "dracula", 7, 2, true, "https://x", "dewey"]',
+    'codex: managed keys replaced; unmanaged [tui] keys, inline tables, subsections and MCP servers all survive',
+    cxCheck.stdout.trim() || (cxCheck.stderr || '').slice(0, 160));
+  // Idempotent: a second run must not change a byte.
+  const cxSnap = fs.readFileSync(cxCfg, 'utf8');
+  ok(bash(cxFile, cxHome).status === 0 && fs.readFileSync(cxCfg, 'utf8') === cxSnap,
+    'codex: rerunning changes nothing');
+  // Turning the pet off must REMOVE the key a previous run wrote, not leave it stale.
+  const cxNoPet = path.join(TMP, 'codex-nopet.sh');
+  fs.writeFileSync(cxNoPet, '#!/bin/bash\nset -euo pipefail\n' + CX.codexApplyBlock(cxOff) + '\n');
+  ok(bash(cxNoPet, cxHome).status === 0
+    && !/^pet /m.test(fs.readFileSync(cxCfg, 'utf8')) && !/^theme /m.test(fs.readFileSync(cxCfg, 'utf8')),
+    'codex: turning the pet and theme off removes the keys a previous run wrote');
+  // An unparseable config.toml aborts rather than guessing.
+  const cxBad = path.join(TMP, 'codexbad');
+  fs.mkdirSync(path.join(cxBad, '.codex'), { recursive: true });
+  fs.writeFileSync(path.join(cxBad, '.codex', 'config.toml'), '[broken\nmodel = ');
+  const cxBadRun = bash(cxFile, cxBad);
+  ok(cxBadRun.status === 1, 'codex: an unparseable config.toml aborts rather than guessing',
+    'exit ' + cxBadRun.status);
+  ok(fs.readFileSync(path.join(cxBad, '.codex', 'config.toml'), 'utf8') === '[broken\nmodel = ',
+    'codex: the unparseable file is left byte-identical');
+  // A machine with no ~/.codex at all.
+  const cxNew = path.join(TMP, 'codexnew');
+  fs.mkdirSync(cxNew, { recursive: true });
+  ok(bash(cxFile, cxNew).status === 0
+    && fs.readFileSync(path.join(cxNew, '.codex', 'config.toml'), 'utf8').includes('[tui]'),
+    'codex: works on a machine with no config yet');
+  // macOS's own /usr/bin/python3 is 3.9 — no tomllib. The block must go LOOKING for a
+  // capable python (the E2E on a stripped PATH found this the hard way: the layer
+  // "skipped" and still printed the success hint), and when none exists it must say
+  // nothing was changed rather than reading like success.
+  const cxBlockText = fs.readFileSync(cxFile, 'utf8');
+  ok(/for CODEX_CAND in python3 .*python3\.11/.test(cxBlockText)
+    && cxBlockText.includes("-c 'import tomllib'")
+    && cxBlockText.includes('/opt/homebrew/bin/python3'),
+    'codex: the installer hunts for a tomllib-capable python, not just any python3');
+  ok(cxBlockText.includes('Nothing was changed. Install one and rerun'),
+    'codex: no capable python reads as a skip, not a success');
+  ok(cxBlockText.indexOf('import tomllib\npath, managed_path') > 0,
+    'codex: the python script assumes tomllib — capability is decided in shell, so its exit 0 means merged');
+
+  // ── regression fixes: the adversarial review's confirmed merge bugs ──────────
+  // All five were reproduced against the first merge, which detected section headers
+  // with a line regex. A line that LOOKS like [tui] can sit inside a multi-line string
+  // or array, where it is data; the fix asks tomllib whether the file-prefix up to a
+  // candidate parses as complete TOML, and refuses [[tui]] outright.
+  const cxRT = (name, content, expectStatus) => {
+    const home = path.join(TMP, 'codexrt-' + name);
+    fs.mkdirSync(path.join(home, '.codex'), { recursive: true });
+    const f = path.join(home, '.codex', 'config.toml');
+    fs.writeFileSync(f, content);
+    const run = bash(cxFile, home);
+    return { home, f, run, after: fs.readFileSync(f, 'utf8') };
+  };
+  const py = (code) => cp.spawnSync('python3', ['-c', code], { encoding: 'utf8' });
+
+  // 1. a fake [tui.keep]-looking line inside a multi-line string must not delete the
+  //    real dotted-key subtable or hijack the boundary.
+  let rt = cxRT('fakehdr', [
+    '[tui]', 'keep = { a = 1 }',
+    'note = """', 'this mentions', '[tui.keep]', 'inside a string', '"""', '',
+    '[features]', 'x = 1', ''].join('\n'));
+  let chk = py(`import tomllib,json
+d = tomllib.load(open(${JSON.stringify(rt.f)}, 'rb'))
+print(json.dumps([d['tui']['keep']['a'], '[tui.keep]' in d['tui']['note'], d['features']['x'], d['tui']['theme']]))`);
+  ok(rt.run.status === 0 && chk.stdout.trim() === '[1, true, 1, "dracula"]',
+    'codex: a [tui.x]-looking line inside a string is data, not a boundary',
+    chk.stdout.trim() || (rt.run.stderr || '').slice(0, 120));
+
+  // 2. a fake [tui] line inside a multi-line string elsewhere must not start a section.
+  rt = cxRT('fakestart', [
+    'banner = """', '[tui]', 'is mentioned here', '"""',
+    'model = "keep-me"', ''].join('\n'));
+  chk = py(`import tomllib,json
+d = tomllib.load(open(${JSON.stringify(rt.f)}, 'rb'))
+print(json.dumps([d['model'], '[tui]' in d['banner'], d['tui']['pet']]))`);
+  ok(rt.run.status === 0 && chk.stdout.trim() === '["keep-me", true, "dewey"]',
+    'codex: a [tui]-looking line inside a string does not hijack the splice',
+    chk.stdout.trim() || (rt.run.stderr || '').slice(0, 120));
+
+  // 3. multi-line values under [tui] survive.
+  rt = cxRT('multiline', [
+    '[tui]', 'notes = """', 'line one', 'line two', '"""',
+    'extra = [', '  "a",', '  "b",', ']', ''].join('\n'));
+  chk = py(`import tomllib,json
+d = tomllib.load(open(${JSON.stringify(rt.f)}, 'rb'))
+print(json.dumps([d['tui']['notes'].strip().split('\\n')[0], d['tui']['extra'], d['tui']['theme']]))`);
+  ok(rt.run.status === 0 && chk.stdout.trim() === '["line one", ["a", "b"], "dracula"]',
+    'codex: multi-line strings and arrays under [tui] survive the rebuild',
+    chk.stdout.trim() || (rt.run.stderr || '').slice(0, 120));
+
+  // 4. [[tui]] array-of-tables refuses politely instead of crashing.
+  rt = cxRT('aot', '[[tui]]\ntheme = "zenburn"\n');
+  ok(rt.run.status === 1 && /array of tables/.test(rt.run.stdout)
+    && rt.after === '[[tui]]\ntheme = "zenburn"\n',
+    'codex: [[tui]] aborts with a message and the file untouched',
+    'exit ' + rt.run.status);
+
+  // 5. a CRLF file stays CRLF, untouched sections included.
+  rt = cxRT('crlf', '# top\r\nmodel = "keep"\r\n\r\n[features]\r\nx = 1\r\n');
+  ok(rt.run.status === 0 && /# top\r\n/.test(rt.after) && /x = 1\r\n/.test(rt.after)
+    && /theme = "dracula"\r\n/.test(rt.after),
+    'codex: a CRLF config keeps its line endings through the merge');
+
+  // Preview/install parity: /codex-files.txt IS the installer's [tui] block.
+  const cxPayload = Buffer.from(JSON.stringify({
+    n: 'T', p: { bg: [46, 52, 64], text: [216, 222, 233], comment: [97, 110, 136], accent: [136, 192, 208] },
+    cx: { on: true, theme: 'nope', statusLine: ['git-branch'], pet: 'rocky' },
+  })).toString('base64url');
+  r = await call('/codex-files.txt?c=' + cxPayload);
+  const cxSan2 = CX.sanitizeCodex({ on: true, theme: 'nope', statusLine: ['git-branch'], pet: 'rocky' });
+  const cxExpect = CX.buildCodexTomlLines(cxSan2).map(kv => kv[0] + ' = ' + kv[1]).join('\n') + '\n';
+  ok(r.status === 200 && r.body === cxExpect,
+    '/codex-files.txt is byte-identical to what the installer merges');
+  const cxShown = fs.readFileSync(path.join(TMP, 'codex.sh'), 'utf8');
+  ok(cxShown.includes(CX.buildCodexTomlLines(cxOn).map(kv => kv[0] + ' = ' + kv[1]).join('\n')),
+    'codex: the installer heredoc carries the same lines the preview shows');
+  r = await call('/apply.sh?c=' + cxPayload);
+  ok(r.status === 200 && /Codex CLI/.test(r.body) && /SCC_CODEX_PY/.test(r.body),
+    'one install command carries the Claude Code and Codex halves');
+
+  // The page itself.
+  r = await call('/codex');
+  const cxPage = r.body;
+  for (const [needle, label] of [
+    ['id="winBefore"', 'has the BEFORE window'],
+    ['id="controls"', 'has the controls host (nav sections read from it)'],
+    ['saneCodex', 'sanitizes the payload before rendering it'],
+    ['id="fileToml"', 'previews the merged [tui] block'],
+    // The chips are built client-side; the server ships the data they're built from.
+    ['"dracula"', 'ships the real theme list'],
+    ['"null-signal"', 'ships the real pet catalog'],
+    ['A tidy duck for calm workspace days', 'pet blurbs are the binary’s own'],
+    ['aborts if it doesn', 'says the merge aborts on an unparseable file'],
+    ['id="compare"', 'has the comparison block'],
+  ]) ok(cxPage.includes(needle), '/codex: ' + label);
+  ok(/class="cmpcard here"[\s\S]{0,400}Codex/.test(cxPage), '/codex: comparison marks Codex');
+  // Every theme the picker offers has an extracted palette — a chip with no colours
+  // would mean the generated table and the enum drifted apart.
+  ok(CX.CODEX_THEMES.every(t => CX.CODEX_SYNTAX[t] && /^#[0-9a-f]{6}$/.test(CX.CODEX_SYNTAX[t].fg)),
+    'codex: all 27 themes have extracted palettes with well-formed colours');
+  ok(CX.CODEX_THEMES.length === 27, 'codex: exactly the 27 themes the binary picker offers');
+
   console.log('— misc —');
   r = await call('/nope');
   ok(r.status === 404, '404 fallback');
