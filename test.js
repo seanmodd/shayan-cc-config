@@ -1596,7 +1596,71 @@ print(json.dumps([d['tui']['notes'].strip().split('\\n')[0], d['tui']['extra'], 
     'codex: the installer heredoc carries the same lines the preview shows');
   r = await call('/apply.sh?c=' + cxPayload);
   ok(r.status === 200 && /Codex CLI/.test(r.body) && /SCC_CODEX_PY/.test(r.body),
-    'one install command carries the Claude Code and Codex halves');
+    'a studio payload that carries a cx layer still applies it through the combined apply.sh');
+
+  // ── the standalone editor: custom colours, new keys, its own installer ────────
+  // The custom set becomes a REAL .tmTheme keyed by FILE STEM — verified in
+  // codex-rs/tui/src/render/highlight.rs at tag rust-v0.147.0: custom_theme_path()
+  // joins $CODEX_HOME/themes/<name>.tmTheme from the tui.theme value directly.
+  const cxCust = CX.sanitizeCodex({
+    on: true,
+    custom: { on: true, name: '  Neon <Nights>!! ', fg: '#E0DEF4', com: '#6e6a86',
+      kw: '#c4a7e7', kw2: 'rm -rf', str: '#f6c177', fn: '#9ccfd8', num: '#ebbcba' },
+    rawOutput: true, resumeCwd: 'nonsense',
+  });
+  ok(cxCust.custom.name === 'Neon Nights' && cxCust.custom.fg === '#e0def4'
+    && cxCust.custom.kw2 === CX.CODEX_DEFAULTS.custom.kw2 && cxCust.resumeCwd === '',
+    'codex: hostile custom name/colours/enums all sanitize', JSON.stringify(cxCust.custom));
+  ok(CX.customStem(cxCust) === 'neon-nights', 'codex: the stem is derived from the name');
+  const cxCustLines = Object.fromEntries(CX.buildCodexTomlLines(cxCust));
+  ok(cxCustLines.theme === '"neon-nights"' && cxCustLines.raw_output_mode === 'true'
+    && !('resume_cwd' in cxCustLines),
+    'codex: custom mode pins theme to the stem; unset resume_cwd emits no line');
+  ok(Object.fromEntries(CX.buildCodexTomlLines(CX.sanitizeCodex({ on: true, resumeCwd: 'session' }))).resume_cwd === '"session"',
+    'codex: a chosen resume_cwd emits its line');
+  // The generated theme file is a real plist with the right rules — python is already
+  // a dependency of the layer, so it is also the validator.
+  const tmCheck = cp.spawnSync('python3', ['-c', [
+    'import plistlib,sys,json',
+    `t = plistlib.loads(${JSON.stringify(CX.buildCodexTmTheme(cxCust))}.encode())`,
+    'rules = {x["name"]: x["settings"]["foreground"] for x in t["settings"] if "scope" in x}',
+    'print(json.dumps([t["name"], t["settings"][0]["settings"]["foreground"], rules["Strings"], len(rules)]))',
+  ].join('\n')], { encoding: 'utf8' });
+  ok(tmCheck.status === 0 && tmCheck.stdout.trim() === '["neon-nights", "#e0def4", "#f6c177", 6]',
+    'codex: the generated .tmTheme is a valid plist with the six rules',
+    tmCheck.stdout.trim() || (tmCheck.stderr || '').slice(0, 120));
+  // The installer writes the theme file next to the merge, and the config points at it.
+  const cxCustHome = path.join(TMP, 'codexcust');
+  fs.mkdirSync(cxCustHome, { recursive: true });
+  const cxCustSh = path.join(TMP, 'codex-custom.sh');
+  fs.writeFileSync(cxCustSh, '#!/bin/bash\nset -euo pipefail\n' + CX.codexApplyBlock(cxCust) + '\n');
+  ok(bash(cxCustSh, cxCustHome).status === 0, 'codex: the custom-colour install runs clean');
+  const tmOnDisk = cp.spawnSync('python3', ['-c', [
+    'import plistlib,tomllib,json',
+    `t = plistlib.load(open(${JSON.stringify(path.join(cxCustHome, '.codex', 'themes', 'neon-nights.tmTheme'))}, "rb"))`,
+    `d = tomllib.load(open(${JSON.stringify(path.join(cxCustHome, '.codex', 'config.toml'))}, "rb"))`,
+    'print(json.dumps([t["name"], d["tui"]["theme"]]))'].join('\n')], { encoding: 'utf8' });
+  ok(tmOnDisk.status === 0 && tmOnDisk.stdout.trim() === '["neon-nights", "neon-nights"]',
+    'codex: theme file written and config.toml points at its stem',
+    tmOnDisk.stdout.trim() || (tmOnDisk.stderr || '').slice(0, 120));
+
+  // The page's own installer: codex only — no tweakcc, no Claude Code half.
+  const cxOnlyPayload = Buffer.from(JSON.stringify({ cx: { on: true, pet: 'rocky' } })).toString('base64url');
+  r = await call('/codex-apply.sh?c=' + cxOnlyPayload);
+  ok(r.status === 200 && /SCC_CODEX_PY/.test(r.body) && !/tweakcc/.test(r.body) && !/claude/i.test(r.body.replace(/Claude Code are separate/, '')),
+    '/codex-apply.sh applies codex and nothing else');
+  ok(cp.spawnSync('bash', ['-n', (() => { const f = path.join(TMP, 'cxonly.sh'); fs.writeFileSync(f, r.body); return f; })()],
+    { encoding: 'utf8' }).status === 0, '/codex-apply.sh parses as bash');
+  r = await call('/codex-apply.sh?c=' + Buffer.from(JSON.stringify({ n: 'x' })).toString('base64url'));
+  ok(r.status === 404, '/codex-apply.sh without a codex layer refuses');
+  // files.txt carries the theme file for the preview, split on the marker.
+  const cxCustPayload = Buffer.from(JSON.stringify({ cx: { on: true,
+    custom: { on: true, name: 'Neon Nights', fg: '#e0def4', com: '#6e6a86', kw: '#c4a7e7',
+      kw2: '#eb6f92', str: '#f6c177', fn: '#9ccfd8', num: '#ebbcba' } } })).toString('base64url');
+  r = await call('/codex-files.txt?c=' + cxCustPayload);
+  ok(r.status === 200 && r.body.includes('@@TMTHEME@@neon-nights.tmTheme@@')
+    && r.body.split('@@TMTHEME@@')[1].includes('#f6c177'),
+    '/codex-files.txt carries the generated theme file behind the marker');
 
   // The page itself.
   r = await call('/codex');
@@ -1621,7 +1685,7 @@ print(json.dumps([d['tui']['notes'].strip().split('\\n')[0], d['tui']['extra'], 
     ['backs your file up, parses it', 'the panel states the real backup-then-parse order'],
     ["comments inside that one table don't survive", 'the [tui]-comments caveat is disclosed'],
     ["syntect's built-ins", 'the verified panel splits bat renders from tmTheme parses'],
-    ['resume_cwd</span>', 'resume_cwd is listed among the unmanaged keys'],
+    ['by file stem', 'the custom-theme resolution rule is stated with its source'],
     ['animated sprite the terminal draws', 'the pet tip claims no more than was verified'],
     ['renders its own separators', 'the title tip does not vouch for the separator'],
     ["no setting for", 'prompt recolouring is honestly called impossible'],
@@ -1640,6 +1704,17 @@ print(json.dumps([d['tui']['notes'].strip().split('\\n')[0], d['tui']['extra'], 
   ]) ok(!cxPage.includes(needle), '/codex: no ' + label + ' (either/or, not a pairing)');
   ok(!require(path.join(ROOT, 'api/_recipes.js')).TERMINALS.some(t => t.id === 'codex'),
     'recipes: codex is not a recipe terminal');
+  // The standalone editor's page contract.
+  for (const [needle, label] of [
+    ['codex-apply.sh?c=', 'the command is the codex-only installer'],
+    ['id="cuMode"', 'the custom-colour mode switch'],
+    ['id="cu_', 'the token colour pickers (built per role)'],
+    ['data-ground="light"', 'the preview ground toggle'],
+    ['id="fileTheme"', 'the theme-file preview box'],
+    ['standalone editor', 'the header says what the page is'],
+  ]) ok(cxPage.includes(needle), '/codex: has ' + label);
+  ok(!cxPage.includes('id="ccTheme"'), '/codex: the palette picker is gone');
+  ok(!cxPage.includes('/apply.sh?c='), '/codex: nothing points at the combined installer');
   // Every theme the picker offers has an extracted palette — a chip with no colours
   // would mean the generated table and the enum drifted apart.
   ok(CX.CODEX_THEMES.every(t => CX.CODEX_SYNTAX[t] && /^#[0-9a-f]{6}$/.test(CX.CODEX_SYNTAX[t].fg)),

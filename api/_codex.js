@@ -10,10 +10,9 @@
 // app-server config/read` under a throwaway CODEX_HOME, and the openai/codex source
 // at tag rust-v0.147.0 — because there is no schema to validate against and no
 // `codex config` subcommand to write through. Keys the binary lists but whose
-// semantics could not be pinned (raw_output_mode, resume_cwd, keymap, notifications —
-// the last is an untagged serde enum that hard-errors on a wrong shape) are NOT
-// managed here: a config this page writes must never be the reason codex fails to
-// start.
+// semantics could not be pinned (keymap, notifications — the latter an untagged
+// serde enum that hard-errors on a wrong shape) are NOT managed here: a config this
+// page writes must never be the reason codex fails to start.
 //
 // tui.theme is a SYNTAX-highlighting theme (a .tmTheme name), not a UI palette: the
 // Codex TUI inherits the terminal's colours and the theme paints code blocks. Unset,
@@ -98,6 +97,10 @@ const PICKER_VIEWS = ['dense', 'comfortable'];
 // Stock codex 0.147.0, from live config/read probes: status line and title have
 // effective defaults even though the keys are unset, theme adapts to the terminal,
 // no pet.
+// resume_cwd: '' = unset (codex prompts when the session's directory differs from the
+// current one); the enum ResumeCwdMode is verified in the binary.
+const RESUME_CWDS = ['', 'current', 'session'];
+
 const CODEX_DEFAULTS = {
   theme: '',
   statusLine: ['model-with-reasoning', 'current-dir'],
@@ -108,6 +111,19 @@ const CODEX_DEFAULTS = {
   animations: true,
   tooltips: true,
   pickerView: 'dense',
+  rawOutput: false,
+  resumeCwd: '',
+  // The custom colour set. When on, the installer writes a real .tmTheme into
+  // $CODEX_HOME/themes/ and points tui.theme at it — which is also how you recolour
+  // the STATUS LINE, because status_line_use_colors takes its colours from the
+  // active theme. Defaults are a readable dark set so switching Custom on shows
+  // something sane before a single picker is touched.
+  custom: {
+    on: false,
+    name: 'My Codex Colors',
+    fg: '#c0caf5', com: '#565f89', kw: '#bb9af7', kw2: '#f7768e',
+    str: '#9ece6a', fn: '#7aa2f7', num: '#ff9e64',
+  },
 };
 
 const STATUS_IDS = STATUS_ITEMS.map(i => i.id);
@@ -131,6 +147,15 @@ function sanitizeCodex(cx) {
     }
     return seen;                       // empty is legal: it clears the line/title
   };
+  // The custom name reaches a FILENAME and the theme value; the colours reach an XML
+  // file and style attributes. Name: strict character allowlist; colours: hex or bust.
+  const hex = (v, fb) => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : fb);
+  const name = (v, fb) => {
+    if (typeof v !== 'string') return fb;
+    const t = v.replace(/[^A-Za-z0-9 _-]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    return t || fb;
+  };
+  const cu = (cx.custom && typeof cx.custom === 'object') ? cx.custom : {};
   return {
     theme: cx.theme === '' ? '' : pick(cx.theme, CODEX_THEMES, d.theme),
     statusLine: idList(cx.statusLine, STATUS_IDS, d.statusLine),
@@ -141,8 +166,59 @@ function sanitizeCodex(cx) {
     animations: bool(cx.animations, d.animations),
     tooltips: bool(cx.tooltips, d.tooltips),
     pickerView: pick(cx.pickerView, PICKER_VIEWS, d.pickerView),
+    rawOutput: bool(cx.rawOutput, d.rawOutput),
+    resumeCwd: pick(cx.resumeCwd, RESUME_CWDS, d.resumeCwd),
+    custom: {
+      on: bool(cu.on, false),
+      name: name(cu.name, d.custom.name),
+      fg: hex(cu.fg, d.custom.fg), com: hex(cu.com, d.custom.com),
+      kw: hex(cu.kw, d.custom.kw), kw2: hex(cu.kw2, d.custom.kw2),
+      str: hex(cu.str, d.custom.str), fn: hex(cu.fn, d.custom.fn),
+      num: hex(cu.num, d.custom.num),
+    },
     on: true,
   };
+}
+
+// The identifier a custom theme is known by: the file stem. Derived from the display
+// name so the two can never disagree.
+function customStem(s) {
+  return s.custom.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'my-codex-colors';
+}
+
+// A real .tmTheme (XML plist) for the custom colour set — the same format the 27
+// built-ins use, covering the scopes the highlighter actually reads: comments,
+// strings, keywords (storage + control), function names, numbers, plus the global
+// foreground. Every value here has been through the sanitizer: the name is
+// [A-Za-z0-9 _-] and the colours are #rrggbb, so no XML escaping can be needed.
+function buildCodexTmTheme(s) {
+  const c = s.custom;
+  const stem = customStem(s);
+  const rule = (label, scope, color) => `    <dict>
+      <key>name</key><string>${label}</string>
+      <key>scope</key><string>${scope}</string>
+      <key>settings</key><dict><key>foreground</key><string>${color}</string></dict>
+    </dict>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>name</key><string>${stem}</string>
+  <key>settings</key>
+  <array>
+    <dict>
+      <key>settings</key><dict><key>foreground</key><string>${c.fg}</string></dict>
+    </dict>
+${rule('Comments', 'comment, punctuation.definition.comment', c.com)}
+${rule('Strings', 'string', c.str)}
+${rule('Storage keywords', 'storage, storage.type, keyword.other', c.kw)}
+${rule('Control keywords', 'keyword, keyword.control, keyword.operator', c.kw2)}
+${rule('Functions', 'entity.name.function, support.function', c.fn)}
+${rule('Numbers and constants', 'constant.numeric, constant.language, constant', c.num)}
+  </array>
+</dict>
+</plist>
+`;
 }
 
 // ── the generated [tui] lines ────────────────────────────────────────────────
@@ -153,9 +229,12 @@ function buildCodexTomlLines(s) {
   const str = v => '"' + String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
   const arr = v => '[' + v.map(str).join(', ') + ']';
   const lines = [];
-  // '' means adaptive: codex picks catppuccin-latte or -mocha from the terminal
-  // background, and writing either name would pin it. So no line at all.
-  if (s.theme) lines.push(['theme', str(s.theme)]);
+  // Custom colours win: the theme value is the stem of the generated .tmTheme the
+  // installer writes alongside. Otherwise '' means adaptive: codex picks
+  // catppuccin-latte or -mocha from the terminal background, and writing either
+  // name would pin it — so no line at all.
+  if (s.custom.on) lines.push(['theme', str(customStem(s))]);
+  else if (s.theme) lines.push(['theme', str(s.theme)]);
   lines.push(['status_line', arr(s.statusLine)]);
   lines.push(['status_line_use_colors', s.slColors ? 'true' : 'false']);
   lines.push(['terminal_title', arr(s.terminalTitle)]);
@@ -166,6 +245,9 @@ function buildCodexTomlLines(s) {
   lines.push(['animations', s.animations ? 'true' : 'false']);
   lines.push(['show_tooltips', s.tooltips ? 'true' : 'false']);
   lines.push(['session_picker_view', str(s.pickerView)]);
+  lines.push(['raw_output_mode', s.rawOutput ? 'true' : 'false']);
+  // '' = unset: codex asks which directory to resume into when they differ.
+  if (s.resumeCwd) lines.push(['resume_cwd', str(s.resumeCwd)]);
   return lines;
 }
 
@@ -174,7 +256,7 @@ function buildCodexTomlLines(s) {
 // actually removes the key a previous run wrote.
 const MANAGED_KEYS = ['theme', 'status_line', 'status_line_use_colors',
   'terminal_title', 'pet', 'pet_anchor', 'animations', 'show_tooltips',
-  'session_picker_view'];
+  'session_picker_view', 'raw_output_mode', 'resume_cwd'];
 
 // ── the installer block ──────────────────────────────────────────────────────
 // Contract, same as the cmux layer: parse first and ABORT if the user's file does not
@@ -182,6 +264,19 @@ const MANAGED_KEYS = ['theme', 'status_line', 'status_line_use_colors',
 // and every other byte of the file; validate the result before writing; idempotent.
 function codexApplyBlock(s) {
   const lines = buildCodexTomlLines(s).map(kv => kv[0] + ' = ' + kv[1]).join('\n');
+  // The custom theme file, written before the config merge so the theme value never
+  // points at a file that does not exist yet. Content is fully sanitized upstream
+  // (see buildCodexTmTheme) and carries no shell-active characters beyond the XML.
+  const themeFile = s.custom.on ? `
+CODEX_THEMES_DIR="$CODEX_DIR/themes"
+mkdir -p "$CODEX_THEMES_DIR"
+CODEX_THEME_FILE="$CODEX_THEMES_DIR/${customStem(s)}.tmTheme"
+if [ -f "$CODEX_THEME_FILE" ]; then
+  cp "$CODEX_THEME_FILE" "$CODEX_THEME_FILE.backup-$CODEX_STAMP"
+fi
+cat > "$CODEX_THEME_FILE" <<'SCC_CODEX_TMTHEME'
+${buildCodexTmTheme(s)}SCC_CODEX_TMTHEME
+echo "  wrote your colour theme → $CODEX_THEME_FILE"` : '';
   return `
 echo ""
 echo "▸ Applying the Codex CLI layer…"
@@ -194,6 +289,7 @@ if [ -f "$CODEX_CFG" ]; then
   cp "$CODEX_CFG" "$CODEX_CFG.backup-$CODEX_STAMP"
   echo "  backed up your old config → $CODEX_CFG.backup-$CODEX_STAMP"
 fi
+${themeFile}
 CODEX_TUI="$(mktemp)"
 cat > "$CODEX_TUI" <<'SCC_CODEX_TUI'
 ${lines}
@@ -349,6 +445,6 @@ fi`;
 
 module.exports = {
   CODEX_THEMES, CODEX_SYNTAX, STATUS_ITEMS, TITLE_ITEMS, CODEX_PETS, PET_ANCHORS,
-  PICKER_VIEWS, CODEX_DEFAULTS, MANAGED_KEYS,
-  sanitizeCodex, buildCodexTomlLines, codexApplyBlock,
+  PICKER_VIEWS, RESUME_CWDS, CODEX_DEFAULTS, MANAGED_KEYS,
+  sanitizeCodex, buildCodexTomlLines, buildCodexTmTheme, customStem, codexApplyBlock,
 };

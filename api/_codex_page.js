@@ -21,11 +21,9 @@
 const { STUDIO_CSS } = require('./_customize.js');
 const { topBar, navPayload } = require('./_nav.js');
 const { compareBlock, COMPARE_CSS } = require('./_compare.js');
-const { STARTERS } = require('./_theme.js');
-const { RECIPE_CSS, RECIPE_JS } = require('./_recipes.js');
 const {
   CODEX_THEMES, CODEX_SYNTAX, STATUS_ITEMS, TITLE_ITEMS, CODEX_PETS,
-  PET_ANCHORS, PICKER_VIEWS, CODEX_DEFAULTS,
+  PET_ANCHORS, PICKER_VIEWS, RESUME_CWDS, CODEX_DEFAULTS,
 } = require('./_codex.js');
 
 const CODEX_CSS = `
@@ -112,6 +110,20 @@ const CODEX_CSS = `
   .cxpet .petcap{display:block;font-size:7.5px;color:var(--cx-dim);margin-top:2px;
     font-family:-apple-system,BlinkMacSystemFont,sans-serif;}
 
+  /* ── the custom colour builder ────────────────────────────────────────────── */
+  .cumode{display:flex;gap:6px;flex-wrap:wrap;}
+  .stychip{cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:600;
+    border:1px solid var(--border);background:#10141b;color:var(--dim);border-radius:20px;
+    padding:6px 13px;min-height:32px;}
+  .stychip:hover{border-color:var(--accent);}
+  .stychip.on{border-color:var(--accent);color:var(--text);background:rgba(122,162,247,.10);}
+  .cugrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px;
+    margin-top:9px;}
+  .curow{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);
+    border:1px solid var(--border);border-radius:9px;padding:6px 9px;cursor:pointer;}
+  .curow input[type=color]{width:30px;height:30px;border:none;background:none;padding:0;
+    cursor:pointer;flex:none;}
+
   /* ── the theme picker ─────────────────────────────────────────────────────── */
   .thgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:7px;}
   .thhead{grid-column:1/-1;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
@@ -161,10 +173,13 @@ const CODEX_CSS = `
   .cxfiles h4{margin:0 0 6px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;
     font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--gold);}
 
-  .ccpick{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);
+  .groundpick{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--dim);
     white-space:nowrap;}
-  .ccpick select{background:#0b0e14;border:1px solid var(--border);border-radius:8px;
-    color:var(--text);font-family:inherit;font-size:12.5px;padding:7px 9px;min-height:38px;}
+  .gchip{cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;
+    border:1px solid var(--border);background:#10141b;color:var(--dim);border-radius:9px;
+    padding:0 13px;min-height:38px;}
+  .gchip:hover{border-color:var(--accent);}
+  .gchip.on{border-color:var(--accent);color:var(--accent);background:rgba(122,162,247,.10);}
 
   body.pinned .cxpair{position:sticky;top:var(--switch-h,46px);z-index:45;background:var(--bg);
     padding-bottom:12px;box-shadow:0 16px 20px -14px rgba(0,0,0,.75);}
@@ -183,8 +198,8 @@ const CODEX_CSS = `
     .cxbadge span:last-child{display:none;}
     .cxterm{font-size:10.5px;}
     .thgrid{grid-template-columns:repeat(auto-fill,minmax(128px,1fr));}
-    .ccpick{flex:1 1 100%;}
-    .ccpick select{flex:1;min-height:44px;font-size:16px;}
+    .groundpick{flex:1 1 100%;}
+    .gchip{flex:1;min-height:44px;}
     /* The greeting is flavour; the composer and status line are what the controls
        change. On a phone the height budget goes to the second. */
     .cxgreet{display:none;}
@@ -201,15 +216,17 @@ function renderCodex(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
     pets: CODEX_PETS,
     anchors: PET_ANCHORS,
     pickerViews: PICKER_VIEWS,
+    resumeCwds: RESUME_CWDS,
   });
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Codex CLI · shayan-cc-config</title>${favicon}<style>${baseCss}${STUDIO_CSS}${COMPARE_CSS}${RECIPE_CSS}${CODEX_CSS}</style></head><body class="pinned">
+<title>Codex CLI · shayan-cc-config</title>${favicon}<style>${baseCss}${STUDIO_CSS}${COMPARE_CSS}${CODEX_CSS}</style></head><body class="pinned">
 ${topBar('codex', ghSvg)}
 <header class="cxhead"><h1>▸ Codex CLI</h1>
-<p class="sub" style="margin-top:8px">The other agent. Codex inherits your terminal's colours — what it draws itself is the
-<b>syntax theme</b> its code blocks use, the <b>status line</b>, the <b>terminal title</b>, and (really) a <b>terminal pet</b>.
-Every key below was verified against the 0.147.0 binary, and the installer merges into
+<p class="sub" style="margin-top:8px">A standalone editor for how Codex looks — nothing here depends on any other page.
+Build <b>your own colours</b> (a real theme file, which also recolours the <b>status line</b>), or pick from the 27 built-in
+<b>syntax themes</b>; arrange the <b>status line</b> and <b>terminal title</b>; adopt a <b>terminal pet</b>; set the behaviour
+defaults. Every key was verified against the 0.147.0 binary, and one command merges it all into
 <span class="mono">~/.codex/config.toml</span> without touching your model, MCP servers or anything else in it.</p></header>
 
 <div class="cxwrap">
@@ -221,8 +238,11 @@ Every key below was verified against the 0.147.0 binary, and the installer merge
     <button type="button" id="pinbtn" class="pinbtn" aria-pressed="false"
       title="Keep the preview on screen while you scroll through the controls">
       <span class="pico">\u{1F4CC}</span><span class="ptxt">Pin preview</span></button>
-    <label class="ccpick"><span>Terminal palette</span><select id="ccTheme"
-      title="Preview context only: the colours your terminal gives codex — from one of your saved setups or a starter."></select></label>
+    <div class="groundpick" role="group" aria-label="Preview terminal background">
+      <span>Preview on</span>
+      <button type="button" class="gchip on" data-ground="dark" title="Preview on a dark terminal">dark</button>
+      <button type="button" class="gchip" data-ground="light" title="Preview on a light terminal">light</button>
+    </div>
   </div>
   <div class="cxpair" data-pane="after" id="pair">
     <div class="cxcol cxcol-before">
@@ -250,20 +270,24 @@ Every key below was verified against the 0.147.0 binary, and the installer merge
       though comments inside that one table don't survive the rebuild — and validates the result before
       writing a byte. Codex reads it on startup.</p>
       <div class="cxfiles" id="fileToml"></div>
+      <div class="cxfiles" id="fileTheme" style="display:none;margin-top:10px;max-height:260px"></div>
     </div>
     <div class="panel"><h3>\u{1F9EA} How this was verified</h3>
       <p class="phint">Codex has no config schema and no <span class="mono">codex config</span> command, and an
-      unknown value can make the config fail to load — so nothing here is guessed. The nine managed keys, every
+      unknown value can make the config fail to load — so nothing here is guessed. The eleven managed keys, every
       enum value, and the stock defaults were read from the serde tables inside the 0.147.0 binary, cross-checked
       against live <span class="mono">config/read</span> probes under a throwaway CODEX_HOME, and against the
-      openai/codex source at that exact tag. The 27 theme palettes in the preview were not typed in by hand:
+      openai/codex source at that exact tag. Custom colours ride the same rails: codex resolves
+      <span class="mono">tui.theme</span> against <span class="mono">~/.codex/themes/&lt;name&gt;.tmTheme</span>
+      by file stem — that resolution was read from the highlighter's own source
+      (<span class="mono">tui/src/render/highlight.rs</span>), not assumed. The 27 theme palettes in the preview were not typed in by hand:
       22 were rendered through <span class="mono">bat</span> (which embeds the identical theme set) and the
       colours parsed off its truecolor output; the other 5 are syntect's built-ins, parsed from the exact
       upstream .tmTheme files syntect pins.</p>
       <p class="phint">Keys whose semantics could not be pinned three ways
-      (<span class="mono">notifications</span>, <span class="mono">keymap</span>,
-      <span class="mono">raw_output_mode</span>, <span class="mono">resume_cwd</span>) are deliberately not
-      managed: a config this page writes must never be the reason codex fails to start.</p>
+      (<span class="mono">notifications</span> — an untagged enum that hard-errors on a wrong shape — and
+      <span class="mono">keymap</span>) are deliberately not managed: a config this page writes must never
+      be the reason codex fails to start.</p>
       <p class="phint"><b>Your prompts can't be recoloured — on purpose.</b> Codex 0.147.0 has no setting for
       the text or background of the messages you send it: no such key exists anywhere in the binary, and no
       theme scope reaches it (the syntax theme paints code blocks only). Codex is a compiled binary, so unlike
@@ -290,31 +314,24 @@ ${compareBlock('codex')}
 <div id="toast"></div>
 <script>
 var NAV=${navPayload('codex')};
-var STARTERS=${JSON.stringify(STARTERS)};
 var CX_DEFAULTS=${JSON.stringify(CODEX_DEFAULTS)};
 var CX_OPTS=${opts};
 ${clientLib}
-${RECIPE_JS}
 ${CODEX_JS}
 </script></body></html>`;
 }
 
 const CODEX_JS = `
 var ORIGIN=location.origin;
-var state=null, ccPayload=null;
+var state=null;
+// Page-only: which terminal ground the preview sits on. Not part of the config -
+// codex inherits whatever terminal it runs in; this just lets you see both cases
+// (and it drives the adaptive-theme resolution the same way a real terminal would).
+var previewLight=false;
 
 function ownKey(o,k){return Object.prototype.hasOwnProperty.call(o,k);}
 function copyObj(o){return JSON.parse(JSON.stringify(o));}
 function defaultCodex(){var d=copyObj(CX_DEFAULTS);d.on=true;return d;}
-function defaultCC(){
-  return {n:'My Setup',s:'blue',p:{bg:[26,27,38],raised:[41,46,66],text:[192,202,245],
-    comment:[86,95,137],subtle:[48,52,70],accent:[122,162,247],accent2:[187,154,247],
-    cyan:[125,207,255],green:[158,206,106],red:[247,118,142],orange:[255,158,100],
-    yellow:[224,175,104],pink:[187,154,247],blue:[122,162,247]},
-    vf:'{}\\u2026 ',vv:['Cooking','Vibing'],ph:['\\u00b7','\\u2736','\\u2733','\\u2736','\\u273b','\\u273d'],
-    rm:true,iv:120,ub:'none',uc:'rgb(122,162,247)',id:'codex',author:'you'};
-}
-
 // Client mirror of sanitizeCodex. A ?c= link is a stranger's; everything is enum-or-
 // boolean by design, so sanitizing is picking from known lists.
 function xPick(v,l,d){return l.indexOf(v)>=0?v:d;}
@@ -330,9 +347,17 @@ function xList(v,valid,d){
 var STATUS_IDS=CX_OPTS.statusItems.map(function(i){return i.id;});
 var TITLE_IDS=CX_OPTS.titleItems.map(function(i){return i.id;});
 var PET_IDS=CX_OPTS.pets.map(function(p){return p.id;});
+function xHex(v,d){return (typeof v==='string'&&/^#[0-9a-fA-F]{6}$/.test(v))?v.toLowerCase():d;}
+function xName(v,d){
+  if(typeof v!=='string')return d;
+  var t=v.replace(/[^A-Za-z0-9 _-]/g,'').replace(/\\s+/g,' ');
+  t=t.replace(/^ +| +$/g,'').slice(0,40);
+  return t||d;
+}
 function saneCodex(o){
   var d=defaultCodex();
   if(!o||typeof o!=='object')return d;
+  var cu=(o.custom&&typeof o.custom==='object')?o.custom:{};
   return {
     theme:o.theme===''?'':xPick(o.theme,CX_OPTS.themes,d.theme),
     statusLine:xList(o.statusLine,STATUS_IDS,d.statusLine),
@@ -343,6 +368,16 @@ function saneCodex(o){
     animations:xBool(o.animations,d.animations),
     tooltips:xBool(o.tooltips,d.tooltips),
     pickerView:xPick(o.pickerView,CX_OPTS.pickerViews,d.pickerView),
+    rawOutput:xBool(o.rawOutput,d.rawOutput),
+    resumeCwd:xPick(o.resumeCwd,CX_OPTS.resumeCwds,d.resumeCwd),
+    custom:{
+      on:xBool(cu.on,false),
+      name:xName(cu.name,d.custom.name),
+      fg:xHex(cu.fg,d.custom.fg), com:xHex(cu.com,d.custom.com),
+      kw:xHex(cu.kw,d.custom.kw), kw2:xHex(cu.kw2,d.custom.kw2),
+      str:xHex(cu.str,d.custom.str), fn:xHex(cu.fn,d.custom.fn),
+      num:xHex(cu.num,d.custom.num)
+    },
     on:true
   };
 }
@@ -366,6 +401,7 @@ function relLum(hex){
 // The palette the mock's code block uses. '' = adaptive, which is exactly what codex
 // does with the key unset: catppuccin-latte on a light terminal, -mocha on a dark one.
 function themePal(s,bgHex){
+  if(s.custom&&s.custom.on)return s.custom;
   if(s.theme&&ownKey(CX_OPTS.syntax,s.theme))return CX_OPTS.syntax[s.theme];
   return relLum(bgHex)>0.4?CX_OPTS.syntax['catppuccin-latte']:CX_OPTS.syntax['catppuccin-mocha'];
 }
@@ -382,13 +418,18 @@ function itemMeta(id){
 // ── the mock ──────────────────────────────────────────────────────────────────
 // mode: 'before' = stock defaults on a stock dark terminal; 'after' = your codex on
 // your terminal palette.
+// The preview grounds. BEFORE always sits on the dark one; AFTER follows the
+// dark/light toggle. Neutral terminal defaults, not any theme's palette - codex
+// takes whatever your real terminal gives it.
+function groundOf(light){
+  return light
+    ? {bg:'#f4f4f2',text:'#2b2f36',dim:'#8a919e',accent:'#2f6fbe'}
+    : {bg:'#1e222a',text:'#d5d9e0',dim:'#767e8c',accent:'#89b4fa'};
+}
 function winHTML(s,mode){
   var stock=mode==='before';
-  var p=stock?null:(ccPayload.p||{});
-  var bg=stock?'#1e222a':palHex(p.bg,'#1a1b26');
-  var text=stock?'#d5d9e0':palHex(p.text,'#c0caf5');
-  var dim=stock?'#767e8c':palHex(p.comment,'#565f89');
-  var accent=stock?'#89b4fa':palHex(p.accent,'#7aa2f7');
+  var g=groundOf(stock?false:previewLight);
+  var bg=g.bg, text=g.text, dim=g.dim, accent=g.accent;
   var pal=themePal(s,bg);
 
   var title=s.terminalTitle.map(function(id){return itemMeta(id).sample;}).join(' ');
@@ -479,6 +520,10 @@ function drawWindows(){
 
 // ── controls ──────────────────────────────────────────────────────────────────
 var TIPS={
+ custom:{t:'Your colours',d:'Builds a real .tmTheme \\u2014 the same format the 27 built-ins use \\u2014 writes it to ~/.codex/themes/, and points tui.theme at it. Codex loads custom theme files from that directory (the /theme picker says so itself). Because status_line_use_colors takes its colours from the ACTIVE theme, these pickers are also how you recolour the status line.'},
+ cuName:{t:'Theme name',d:'Names the file: \\u201cNeon Nights\\u201d becomes ~/.codex/themes/neon-nights.tmTheme, and tui.theme is set to neon-nights. Letters, numbers, spaces, dashes.'},
+ rawOutput:{t:'Raw output mode',d:'Renders the transcript as plain scrollback \\u2014 copy-friendly, fewer redraws. The same thing the in-session toggle switches; this sets the default. Verified as a [tui] key in the 0.147.0 binary.'},
+ resumeCwd:{t:'Resume directory',d:'When codex resume opens a session whose directory differs from where you are now: stock ASKS every time; \\u201ccurrent\\u201d always stays where you are; \\u201csession\\u201d always jumps to the session\\u2019s directory. Enum verified in the binary (ResumeCwdMode).'},
  theme:{t:'Syntax theme',d:'What tui.theme actually is: a syntax-highlighting theme (a .tmTheme name) for the code codex prints \\u2014 NOT a UI colour scheme. The TUI chrome keeps your terminal\\u2019s colours. Left on Adaptive, codex picks catppuccin-latte on a light terminal and catppuccin-mocha on a dark one, at startup, by measuring the background.'},
  statusLine:{t:'Status line',d:'The row under the composer. Pick items in the order you want them \\u2014 the number on each chip is its position. The same thing /statusline configures inside codex; stock is model + effort, then the directory. Empty is allowed and simply hides the line.'},
  slColors:{t:'Status line colours',d:'The picker calls this \\u201cApply colors from the active /theme\\u201d: on, items take token colours from the syntax theme above; off, the whole line renders dim.'},
@@ -493,7 +538,7 @@ function ihtml(k){return TIPS[k]?'<button type="button" class="i" data-tip="'+k+
 
 function themeChip(id){
   var pal=CX_OPTS.syntax[id]||{};
-  var bg=palHex((ccPayload.p||{}).bg,'#1a1b26');
+  var bg=groundOf(previewLight).bg;
   var dots=['kw','str','fn','num'].map(function(k){
     return '<i style="background:'+esc(pal[k]||'#888')+'"></i>';
   }).join('');
@@ -524,10 +569,34 @@ function buildControls(){
     }).join('')+'</div>';
   }
 
+  var CU=[['fg','Plain text'],['com','Comments'],['kw','Keywords'],['kw2','Control keywords'],
+    ['str','Strings'],['fn','Function names'],['num','Numbers']];
+  var customHTML='<div class="cumode" id="cuMode">'
+    +'<button type="button" class="stychip'+(s.custom.on?'':' on')+'" data-cu="off">Built-in themes</button>'
+    +'<button type="button" class="stychip'+(s.custom.on?' on':'')+'" data-cu="on">My colours</button>'
+    +'</div>'
+    +'<div id="cuBody" style="'+(s.custom.on?'':'display:none')+'">'
+    +'<label class="ctl" style="margin-top:9px"><span class="cap">Theme name'+ihtml('cuName')+'</span>'
+    +'<input type="text" id="cu_name" maxlength="40" value="'+esc(s.custom.name)+'"></label>'
+    +'<div class="cugrid">'
+    +CU.map(function(r){
+      return '<label class="curow"><input type="color" id="cu_'+r[0]+'" value="'+esc(s.custom[r[0]])
+        +'"><span>'+esc(r[1])+'</span></label>';
+    }).join('')
+    +'</div>'
+    +'<span class="hint" style="display:block;margin-top:7px">These colours become a real theme file'
+    +' \\u2014 and with \\u201capply colours from the theme\\u201d on, they are your STATUS LINE'
+    +' colours too.</span>'
+    +'</div>';
+
   host.innerHTML=''
+   +'<div class="panel"><h3>\u{1F39B} Your colours'+ihtml('custom')+'</h3>'
+    +'<p class="phint">Pick colours per token role and the installer writes a real .tmTheme into'
+    +' <span class="mono">~/.codex/themes/</span>, then points codex at it. Code blocks AND the'
+    +' status line follow it.</p>'+customHTML+'</div>'
    +'<div class="panel"><h3>\u{1F3A8} Syntax theme'+ihtml('theme')+'</h3>'
     +'<p class="phint">Colours below are each theme\\u2019s real token colours \\u2014 extracted from the'
-    +' theme files codex embeds, shown on your terminal background.</p>'+themeHTML+'</div>'
+    +' theme files codex embeds, shown on the preview background.</p>'+themeHTML+'</div>'
    +'<div class="panel"><h3>\u{1F4CA} Status line'+ihtml('statusLine')+'</h3>'
     +'<p class="phint">Click to add in order; click again to remove. Hover a chip for its sample.</p>'
     +itemChips('slPick',CX_OPTS.statusItems)
@@ -554,6 +623,15 @@ function buildControls(){
     +'> animations (the working shimmer)'+ihtml('animations')+'</label>'
     +'<label class="ctl2"><input type="checkbox" id="x_tips"'+(s.tooltips?' checked':'')
     +'> tooltips &amp; hint popups'+ihtml('tooltips')+'</label>'
+    +'<label class="ctl2"><input type="checkbox" id="x_raw"'+(s.rawOutput?' checked':'')
+    +'> raw output mode (plain scrollback)'+ihtml('rawOutput')+'</label>'
+    +'<label class="ctl"><span class="cap">Resume directory'
+    +'<span class="nov">no visual change</span>'+ihtml('resumeCwd')+'</span>'
+    +'<select id="x_rcwd">'
+    +'<option value=""'+(s.resumeCwd===''?' selected':'')+'>ask (stock)</option>'
+    +CX_OPTS.resumeCwds.filter(function(v){return v;}).map(function(v){
+      return '<option value="'+esc(v)+'"'+(s.resumeCwd===v?' selected':'')+'>'+esc(v)+'</option>';
+    }).join('')+'</select></label>'
     +'<label class="ctl"><span class="cap">Session picker view'
     +'<span class="nov">no visual change</span>'+ihtml('pickerView')+'</span>'
     +'<select id="x_spv">'+CX_OPTS.pickerViews.map(function(v){
@@ -564,6 +642,8 @@ function buildControls(){
   Array.prototype.forEach.call(host.querySelectorAll('.thchip'),function(ch){
     ch.addEventListener('click',function(){
       state.theme=this.getAttribute('data-theme')||'';
+      // Picking a built-in is an explicit choice against the custom set.
+      if(state.custom.on){state.custom.on=false;buildControls();refresh();return;}
       syncThemeChips();refresh();
     });
   });
@@ -584,6 +664,24 @@ function buildControls(){
   });
   syncPetChips();
 
+  // custom colours
+  Array.prototype.forEach.call(host.querySelectorAll('#cuMode .stychip'),function(ch){
+    ch.addEventListener('click',function(){
+      state.custom.on=this.getAttribute('data-cu')==='on';
+      buildControls();refresh();
+    });
+  });
+  CU.forEach(function(r){
+    var el=$('#cu_'+r[0]); if(!el)return;
+    el.addEventListener('input',function(){state.custom[r[0]]=this.value;refresh();});
+  });
+  var cn=$('#cu_name');
+  if(cn)cn.addEventListener('input',function(){
+    state.custom.name=xName(this.value,'My Codex Colors');refresh();
+  });
+
+  $('#x_raw').addEventListener('change',function(){state.rawOutput=this.checked;refresh();});
+  $('#x_rcwd').addEventListener('change',function(){state.resumeCwd=this.value;refresh();});
   $('#x_anchor').addEventListener('change',function(){state.petAnchor=this.value;refresh();});
   $('#x_slc').addEventListener('change',function(){state.slColors=this.checked;refresh();});
   $('#x_anim').addEventListener('change',function(){state.animations=this.checked;refresh();});
@@ -593,19 +691,25 @@ function buildControls(){
 
 function syncThemeChips(){
   Array.prototype.forEach.call(document.querySelectorAll('.thchip'),function(ch){
-    ch.classList.toggle('on',(ch.getAttribute('data-theme')||'')===state.theme);
+    ch.classList.toggle('on',!state.custom.on&&(ch.getAttribute('data-theme')||'')===state.theme);
+    ch.style.opacity=state.custom.on?'.45':'';
   });
   themeNote();
 }
 function themeNote(){
   var el=$('#thnote'); if(!el)return;
+  if(state.custom.on){
+    el.className='hint thnote ok';
+    el.textContent='Using YOUR colours (the panel above). Built-in themes are ignored until you switch back.';
+    return;
+  }
   if(!state.theme){
     el.className='hint thnote';
     el.textContent='Adaptive: codex measures your terminal background at startup and picks the latte or mocha flavour itself.';
     return;
   }
   var pal=CX_OPTS.syntax[state.theme]||{};
-  var bgIsLight=relLum(palHex((ccPayload.p||{}).bg,'#1a1b26'))>0.4;
+  var bgIsLight=previewLight;
   if(pal.light&&!bgIsLight){
     el.className='hint thnote warn';
     el.textContent='This theme is built for a LIGHT terminal \\u2014 on your dark background its colours will be hard to read. Codex will still apply it.';
@@ -653,11 +757,13 @@ function syncItemPicker(hostId,key){
 }
 
 // ── payload / refresh ─────────────────────────────────────────────────────────
-function payload(){var pl=copyObj(ccPayload);pl.cx=copyObj(state);pl.cx.on=true;return pl;}
+// The payload carries ONLY the codex layer: this page is a standalone editor, not a
+// recipe. The command is the codex-only installer.
+function payload(){var pl={cx:copyObj(state)};pl.cx.on=true;return pl;}
 function refresh(){
   drawWindows();
   var c=encodeURIComponent(b64e(payload()));
-  $('#cmdtext').textContent='curl -fsSL "'+ORIGIN+'/apply.sh?c='+c+'" | bash';
+  $('#cmdtext').textContent='curl -fsSL "'+ORIGIN+'/codex-apply.sh?c='+c+'" | bash';
   window.__sccPayloadC=c;
   // Server-rendered, so the preview is the installer's own output rather than a second
   // TOML builder that could drift from it. The sequence counter keeps a slow older
@@ -666,12 +772,25 @@ function refresh(){
   fetch('/codex-files.txt?c='+c).then(function(r){return r.text();}).then(function(t){
     if(seq!==refresh._seq)return;
     var box=$('#fileToml'); if(!box)return;
+    var parts=t.split('@@TMTHEME@@');
     box.innerHTML='<h4>[tui] \\u2014 merged into your config.toml</h4>'
-      +t.split('\\n').map(function(ln){
+      +parts[0].replace(/\\n$/,'').split('\\n').map(function(ln){
         var eq=ln.indexOf(' = ');
         if(eq<0)return esc(ln);
         return '<span class="fk">'+esc(ln.slice(0,eq))+'</span> ='+esc(ln.slice(eq+2));
       }).join('\\n');
+    var tbox=$('#fileTheme');
+    if(tbox){
+      if(parts[1]){
+        var at=parts[1].indexOf('@@');
+        tbox.style.display='';
+        tbox.innerHTML='<h4>themes/'+esc(parts[1].slice(0,at))
+          +' \\u2014 your colours, a real theme file</h4>'+esc(parts[1].slice(at+2));
+      }else{
+        tbox.style.display='none';
+        tbox.innerHTML='';
+      }
+    }
   }).catch(function(){});
   clearTimeout(refresh._t);
   refresh._t=setTimeout(function(){
@@ -681,20 +800,18 @@ function refresh(){
 }
 
 (function(){
-  ccPayload=defaultCC();state=defaultCodex();
+  state=defaultCodex();
   try{
     var q=new URLSearchParams(location.search),c=q.get('c');
     if(c){
       var pl=b64d(c);
-      if(pl&&typeof pl==='object'){
-        if(pl.p&&typeof pl.p==='object')ccPayload=pl;
-        if(pl.cx&&typeof pl.cx==='object')state=saneCodex(pl.cx);
-      }
+      if(pl&&typeof pl==='object'&&pl.cx&&typeof pl.cx==='object')state=saneCodex(pl.cx);
     }else{
       var draft=localStorage.getItem('scc_codex');
       if(draft)state=saneCodex(JSON.parse(draft));
     }
-  }catch(e){ccPayload=defaultCC();state=defaultCodex();}
+    previewLight=localStorage.getItem('scc_codex_ground')==='light';
+  }catch(e){state=defaultCodex();}
 })();
 buildControls();refresh();
 
@@ -750,9 +867,22 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();})
   });
 })();
 
-installCcPicker(function(){return ccPayload;},
-                function(pl){ccPayload=pl;},
-                function(){buildControls();refresh();});
+// The preview-ground toggle: dark/light terminal, page-only, remembered.
+(function(){
+  function sync(){
+    Array.prototype.forEach.call(document.querySelectorAll('.gchip'),function(ch){
+      ch.classList.toggle('on',(ch.getAttribute('data-ground')==='light')===previewLight);
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.gchip'),function(ch){
+    ch.addEventListener('click',function(){
+      previewLight=this.getAttribute('data-ground')==='light';
+      try{localStorage.setItem('scc_codex_ground',previewLight?'light':'dark');}catch(e){}
+      sync();buildControls();refresh();
+    });
+  });
+  sync();
+})();
 
 installPreviewDock({dock:'#pair',grip:'#dockgrip',pin:'#pinbtn',term:'.cxterm',key:'codex',pinDefault:true});
 installNav();

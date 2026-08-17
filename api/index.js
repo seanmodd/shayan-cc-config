@@ -13,7 +13,7 @@ const { sanitizeZellij, buildZellijKdl, buildAgentLayout, zellijApplyBlock } = r
 const { renderZellij } = require('./_zellij_page.js');
 const { sanitizeWarp, buildWarpTheme, buildWarpTabConfig, buildWarpSettingsSnippet, warpApplyBlock } = require('./_warp.js');
 const { renderWarp } = require('./_warp_page.js');
-const { sanitizeCodex, buildCodexTomlLines, codexApplyBlock } = require('./_codex.js');
+const { sanitizeCodex, buildCodexTomlLines, buildCodexTmTheme, customStem, codexApplyBlock } = require('./_codex.js');
 const { renderCodex } = require('./_codex_page.js');
 const {
   sanitizeSL, buildUMD, buildInputBox, buildStatuslineScript,
@@ -326,6 +326,29 @@ function route(req, res) {
   if (path === '/codex' || path === '/codex/') {
     return sendHTML(renderCodex(DATA, CSS, CLIENT_LIB, FAVICON, GH_SVG, GITHUB_URL));
   }
+  // The standalone Codex installer: ONLY the codex layer. The /codex page is not a
+  // recipe page — codex and Claude Code are separate agents — so its command applies
+  // codex and nothing else. (A studio payload carrying a cx layer still applies it
+  // through the combined /apply.sh; this route is the page's own.)
+  if (path === '/codex-apply.sh') {
+    const c = u.searchParams.get('c');
+    if (!c) return sendText('echo "missing ?c= payload"; exit 1', 'text/x-shellscript; charset=utf-8', 400);
+    try {
+      const pl = decodeCustom(c);
+      const cxSan = sanitizeCodex(pl.cx);
+      if (!cxSan) return sendText('echo "this link has no Codex layer enabled"; exit 1', 'text/x-shellscript; charset=utf-8', 404);
+      const body = `#!/bin/bash
+set -euo pipefail
+# shayan-cc-config — Codex CLI setup (standalone)
+echo "▸ Applying your Codex CLI setup…"
+${codexApplyBlock(cxSan)}
+echo ""
+echo "✓ Codex CLI configured. Start a new codex session to see it."
+echo "  Adjust anytime at ${origin}/codex"
+`;
+      return sendText(body, 'text/x-shellscript; charset=utf-8');
+    } catch (e) { return sendText(`echo "bad payload: ${cleanText(e.message, 120)}"; exit 1`, 'text/x-shellscript; charset=utf-8', 400); }
+  }
   // The [tui] block the Codex layer merges, verbatim. The page fetches this rather than
   // building TOML in the browser — one builder, so the preview cannot drift from what
   // the installer actually writes.
@@ -337,7 +360,9 @@ function route(req, res) {
       const cxSan = sanitizeCodex(pl.cx);
       if (!cxSan) return sendText('this setup has no Codex layer enabled', 'text/plain; charset=utf-8', 404);
       const lines = buildCodexTomlLines(cxSan).map(([k, v]) => `${k} = ${v}`).join('\n');
-      return sendText(lines + '\n', 'text/plain; charset=utf-8');
+      const body = lines + '\n'
+        + (cxSan.custom.on ? '@@TMTHEME@@' + customStem(cxSan) + '.tmTheme@@' + buildCodexTmTheme(cxSan) : '');
+      return sendText(body, 'text/plain; charset=utf-8');
     } catch (e) { return sendText('bad payload: ' + cleanText(e.message, 120), 'text/plain; charset=utf-8', 400); }
   }
   // The theme, the launch configuration, and the settings snippet the installer will NOT
