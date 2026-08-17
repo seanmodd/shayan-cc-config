@@ -1,22 +1,12 @@
-// The /cmux page — cmux's own looks, layered on top of a Claude Code theme.
+// The /cmux page — a standalone editor for cmux's own looks.
 //
-// The Studio (/customize) answers "what does Claude Code look like". This page
-// answers "what does the terminal AROUND Claude Code look like", and the two
-// compose: the mock below is a cmux window (sidebar, workspaces, split panes, a
-// surface tab bar) with the chosen Claude Code palette rendering inside the panes.
-// That is why the colour controls default to "from the Claude Code theme" — the
-// point is one coherent setup, not two colour schemes sharing a window.
-//
-// The window anatomy follows cmux's own vocabulary from https://cmux.com/docs/concepts:
-//   Window -> Workspace (sidebar entry) -> Pane (split region) -> Surface (tab) -> Panel
-//
-// As everywhere else in this repo, the browser JS lives inside a template literal:
-// no backticks, no ${...}, and every backslash doubled.
+// Fully separated from every other page: the payload carries only the cm layer,
+// the installer applies only cmux, and the preview derives from a neutral base
+// palette (or the selected cmux theme) rather than any other page's setup.
 
 const { TERM_CSS } = require('./_term.js');
 const { topBar, navPayload } = require('./_nav.js');
 const { compareBlock, COMPARE_CSS } = require('./_compare.js');
-const { RECIPE_CSS, RECIPE_JS, recipeSaveBlock } = require('./_recipes.js');
 const { STARTERS } = require('./_theme.js');
 const { STUDIO_CSS } = require('./_customize.js');
 const { presetsForClient } = require('./_cmux_presets.js');
@@ -27,7 +17,7 @@ const {
 
 const CMUX_CSS = `
   .cwrap{max-width:1440px;margin:0 auto;padding:0 24px 40px;}
-  .cmuxpair{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;}
+  .cmuxpair{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;}
   .cmuxcol{min-width:0;}
 
   /* The cmux window mock. Every colour here is a CSS custom property so the live
@@ -93,13 +83,8 @@ const CMUX_CSS = `
   .cbadge .pill{border:1px solid var(--border);border-radius:20px;padding:2px 9px;
     font-size:10.5px;letter-spacing:.04em;}
   .cbadge .pill.aft{border-color:var(--accent);color:var(--accent);}
-  .ccpick{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);
-    white-space:nowrap;}
-  .ccpick select{background:#0b0e14;border:1px solid var(--border);border-radius:8px;
-    color:var(--text);font-family:inherit;font-size:12.5px;padding:7px 9px;min-height:38px;}
+
   @media(max-width:700px),(max-height:520px){
-    .ccpick{flex:1 1 100%;}
-    .ccpick select{flex:1;min-height:44px;font-size:16px;}
   }
   .presetpanel{grid-column:1/-1;margin-bottom:14px;}
   .phint{margin:0 0 11px;font-size:12.5px;line-height:1.55;color:var(--dim);max-width:78ch;}
@@ -266,7 +251,7 @@ const CMUX_CSS = `
     #cmuxControls{grid-template-columns:repeat(auto-fit,minmax(380px,1fr));}
   }
   @media(max-width:1100px){.cmuxpair{grid-template-columns:1fr 1fr;}
-    .cmuxpair .cmuxcol-claude{grid-column:1/-1;}}
+}
   .cpanels{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;}
   .filebox{background:#0b0e14;border:1px solid var(--border);border-radius:10px;
     padding:10px 12px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;
@@ -286,9 +271,8 @@ const CMUX_CSS = `
   @media(max-width:700px),(max-height:520px){
     .cwrap{padding:0 12px 40px;}
     .cmuxpair{grid-template-columns:1fr;gap:0;}
-    .cmuxpair[data-pane="before"] .cmuxcol-after,.cmuxpair[data-pane="before"] .cmuxcol-claude{display:none;}
-    .cmuxpair[data-pane="after"] .cmuxcol-before,.cmuxpair[data-pane="after"] .cmuxcol-claude{display:none;}
-    .cmuxpair[data-pane="claude"] .cmuxcol-before,.cmuxpair[data-pane="claude"] .cmuxcol-after{display:none;}
+    .cmuxpair[data-pane="before"] .cmuxcol-after{display:none;}
+    .cmuxpair[data-pane="after"] .cmuxcol-before{display:none;}
     .chead h1{font-size:25px;margin-bottom:2px;}
     .chead .sub{font-size:12.5px;line-height:1.5;}
     .cside{width:96px;padding:6px 4px;}
@@ -316,8 +300,8 @@ const CMUX_CSS = `
   }
 `;
 
-// A short Claude Code transcript for the panes. Kept tiny on purpose: this page is
-// about the window around Claude Code, and the Studio is where the transcript itself
+// A short agent transcript for the AFTER pane — a fixed sample, because running a
+// coding agent is what cmux is for. The Studio is where the transcript itself
 // gets designed.
 const LINES = [
   ['prompt', ' > fix the failing checkout test '],
@@ -347,36 +331,29 @@ function renderCmux(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   const lines = JSON.stringify(LINES);
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>cmux · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${RECIPE_CSS}${CMUX_CSS}</style></head><body class="pinned">
+<title>cmux · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${CMUX_CSS}</style></head><body class="pinned">
 ${topBar('cmux', ghSvg)}
 <header class="chead"><h1>🪟 cmux</h1>
-<p class="sub" style="margin-top:8px">The terminal <b>around</b> Claude Code. cmux is a native macOS terminal built on Ghostty — sidebar workspaces, split panes, surface tabs. Style it here and it layers <b>on top of</b> the Claude Code theme you picked, so the whole window is one setup. One command applies both.</p></header>
+<p class="sub" style="margin-top:8px">A standalone editor for <b>cmux</b> — the native macOS terminal built on Ghostty: sidebar workspaces, split panes, surface tabs. Pick a theme or build your own colours, tune every pane and sidebar detail, and one command applies exactly this — nothing else.</p></header>
 
 <div class="cwrap">
   <div class="switchrow">
     <div class="paneswitch" data-pane-toggle role="tablist" aria-label="Which window to show">
       <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
-      <button type="button" class="pswbtn" data-pane="after" role="tab" aria-selected="false">After</button>
-      <button type="button" class="pswbtn on" data-pane="claude" role="tab" aria-selected="true">+ Claude</button>
+      <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
     </div>
     <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
       <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
-    <label class="ccpick"><span>Claude Code side</span><select id="ccTheme"
-      title="Your own saved setups, or one of the starters. A creation brings its verbs, spinner and status line too."></select></label>
   </div>
-  <div class="cmuxpair" data-pane="claude" id="pair">
+  <div class="cmuxpair" data-pane="after" id="pair">
     <div class="cmuxcol cmuxcol-before">
       <div class="cbadge"><span class="pill">before</span><b>Stock cmux</b><span>— every default, straight from the schema</span></div>
       <div id="winBefore"></div>
     </div>
     <div class="cmuxcol cmuxcol-after">
-      <div class="cbadge"><span class="pill aft">after</span><b>Your cmux</b><span>— an ordinary shell</span></div>
+      <div class="cbadge"><span class="pill aft">after</span><b>Your cmux</b><span>— running a coding agent</span></div>
       <div id="winAfter"></div>
-    </div>
-    <div class="cmuxcol cmuxcol-claude">
-      <div class="cbadge"><span class="pill aft">recipe</span><b>+ Claude Code</b><span id="ccname">— tokyo-night</span></div>
-      <div id="winClaude"></div>
     </div>
     <div class="dockgrip" id="dockgrip" role="separator" aria-orientation="horizontal" tabindex="0"
       aria-label="Resize the preview. Arrow keys adjust the height, Home resets it."
@@ -409,7 +386,6 @@ ${topBar('cmux', ghSvg)}
     </div>
   </div>
 
-${recipeSaveBlock()}
 
 ${compareBlock('cmux')}
 </div>
@@ -431,29 +407,22 @@ var CMUX_PRESETS=${JSON.stringify(presetsForClient())};
 var CMUX_OPTS=${opts};
 var CC_LINES=${lines};
 ${clientLib}
-${RECIPE_JS}
 ${CMUX_JS}
 </script></body></html>`;
 }
 
 const CMUX_JS = `
 var ORIGIN=location.origin;
-var state=null, ccPayload=null, allowDraft=false, _urlT=null;
+var state=null, allowDraft=false, _urlT=null;
 
 function defaultCmux(){var o={};for(var k in CMUX_DEFAULTS){if(ownKey(CMUX_DEFAULTS,k))o[k]=CMUX_DEFAULTS[k];}o.on=true;return o;}
 function ownKey(o,k){return typeof k==='string'&&Object.prototype.hasOwnProperty.call(o,k);}
 
-// The Claude Code half of the payload. Arriving with ?c= (from the Studio's Share or
-// its install command) means this page styles cmux around THAT setup; arriving bare
-// falls back to the first starter palette so the page still works on its own.
-function defaultCC(){
-  return {n:'My Setup', s:'blue', p:copyObj(STARTERS['tokyo-night']),
-    vf:'{}… ', vv:['Cooking','Vibing'], ph:['·','✶','✳','✶','✻','✽'], rm:true, iv:120,
-    ub:'none', uc:'rgb(122,162,247)',
-    um:{f:' > {} ', st:[], fg:'', bg:'', px:0, py:0, fit:false},
-    sl:{on:true, seg:['model','dir','git','ctx'], sep:' | ', em:true, bar:'blocks', ctxFmt:'pct-of', text:''},
-    id:'cmux', author:'you'};
-}
+// The neutral base palette the page derives colours from when no cmux theme is
+// selected. This page is a standalone editor: nothing arrives from any other page,
+// and 'No theme' means no colour lines are written at all — this base only paints
+// the preview and seeds the derived chrome colours.
+var DEFAULT_PAL=copyObj(STARTERS['tokyo-night']);
 function copyObj(o){return JSON.parse(JSON.stringify(o));}
 function hx(t){return '#'+t.map(function(v){return ('0'+v.toString(16)).slice(-2);}).join('');}
 function toRGBarr(hex){hex=String(hex).replace('#','');return [parseInt(hex.slice(0,2),16)||0,parseInt(hex.slice(2,4),16)||0,parseInt(hex.slice(4,6),16)||0];}
@@ -567,18 +536,11 @@ function winHTML(s,pal,label,mode){
     }
   });
 
-  // The prompt you send is the most visible Claude Code element inside a cmux window,
-  // so the mock renders it with its actual message styling rather than as plain text —
-  // otherwise the colour controls for it would have nothing to show.
-  var um=(ccPayload.um&&typeof ccPayload.um==='object')?ccPayload.um:{};
-  var promptFg=um.fg?hexOf(um.fg):text;
-  var promptBg=um.bg?hexOf(um.bg):'';
-  var promptCss='color:'+promptFg+';';
-  if(promptBg)promptCss+='background:'+promptBg+';';
-  if((um.st||[]).indexOf('bold')>=0)promptCss+='font-weight:700;';
-  if((um.st||[]).indexOf('italic')>=0)promptCss+='font-style:italic;';
-  var pb=String(ccPayload.ub||'none'), pbc=ccPayload.uc?hexOf(ccPayload.uc):dim;
-  var promptBox=BOX_FOR(pb);
+  // The agent pane shows a coding-agent session because that is what cmux is FOR —
+  // but its content is a fixed sample. Styling your agent's prompts is the Studio's
+  // job; this page owns cmux and only cmux.
+  var promptCss='color:'+text+';';
+  var promptBox=null,pbc=dim;
   var plainBody='<span style="color:'+dim+'">$ npm test</span></div><div class="l">'
     +'<span style="color:'+pv.success+'">12 passing</span>'
     +'<span style="color:'+dim+'"> (0.9s)</span></div><div class="l">'
@@ -664,7 +626,7 @@ function presetByThemeName(name){
 }
 function activePal(){
   var pre=presetById(state.preset)||presetByThemeName(state.theme);
-  return (pre&&pre.pal)?pre.pal:ccPayload.p;
+  return (pre&&pre.pal)?pre.pal:DEFAULT_PAL;
 }
 function themeNote(){
   var el=$('#themenote'); if(!el)return;
@@ -822,84 +784,15 @@ function syncDeps(){
   });
 }
 
-// Only the topBottom* border styles are drawn on the mock's prompt: those are two
-// full-width rules, which is exactly what a one-line prompt gets. The full-box styles
-// would need a width the mock does not have, so they show as no border here rather
-// than as a wrong one.
-function BOX_FOR(style){
-  if(style==='topBottomSingle')return {t:'\u2500',b:'\u2500'};
-  if(style==='topBottomDouble')return {t:'\u2550',b:'\u2550'};
-  if(style==='topBottomBold')return {t:'\u2501',b:'\u2501'};
-  return null;
-}
-
-// The Studio's border list, so both pages offer the same choices. Only the three
-// topBottom* styles are drawn on the mock (see BOX_FOR); the full-box styles still
-// install, they just need a width the one-line mock prompt does not have.
-var PROMPT_BORDERS=['none','single','round','double','bold','singleDouble','doubleSingle',
-  'classic','topBottomSingle','topBottomDouble','topBottomBold'];
-
-/** The payload stores message colours as rgb() strings, matching the Studio. */
-function hexToRgbStrC(hex){
-  var c=toRGBarr(hexOf(hex));
-  return 'rgb('+c[0]+','+c[1]+','+c[2]+')';
-}
-function promptColorRow(label,help,modeId,pickId){
-  return '<div class="ctl"><span class="cap">'+label+ihtml(help)+'</span>'
-   +'<div class="modrow"><span class="stychips" id="'+modeId+'"></span>'
-   +'<input type="color" id="'+pickId+'">'
-   +'<span class="hint" id="'+modeId+'h"></span></div></div>';
-}
-/**
- * Default/Custom for a prompt colour. "Default" means the key is absent from the
- * payload so Claude Code uses its own \u2014 and for the background that means no strip at
- * all, so these two options are genuinely different states rather than two colours.
- */
-var _umSyncs=[];
-// Picking a saved creation replaces the whole Claude Code payload, and these chips read
-// ccPayload.um directly — so they have to be rebuilt from the new one or they keep
-// reporting the colours of the setup you just switched away from.
-function umResync(){for(var i=0;i<_umSyncs.length;i++)_umSyncs[i]();}
-function promptColorMode(hostId,pickId,key,fallbackPalKey){
-  var host=$('#'+hostId), pick=$('#'+pickId), hint=$('#'+hostId+'h');
-  function cur(){
-    if(!ccPayload.um)ccPayload.um={};
-    return ccPayload.um[key]||'';
-  }
-  function chip(label,on,cb){
-    var el=document.createElement('span');
-    el.className='stychip'+(on?' on':'');el.textContent=label;
-    el.addEventListener('click',function(){if(!el.classList.contains('on'))cb();});
-    return el;
-  }
-  function sync(){
-    var custom=!!cur();
-    host.innerHTML='';
-    host.appendChild(chip('Default',!custom,function(){ccPayload.um[key]='';sync();edited();}));
-    host.appendChild(chip('Custom',custom,function(){
-      ccPayload.um[key]=pick.value||'#ffff00';sync();edited();
-    }));
-    var shown=cur()||(fallbackPalKey?palHex(activePal()[fallbackPalKey],'#c0caf5'):'#ffff00');
-    pick.value=hexOf(shown);
-    hint.textContent=custom?'custom'
-      :(fallbackPalKey?'the theme\u2019s text colour':'no background strip');
-  }
-  pick.addEventListener('input',function(){
-    if(!ccPayload.um)ccPayload.um={};
-    ccPayload.um[key]=this.value;sync();edited();
-  });
-  _umSyncs.push(sync);
-  sync();
-}
-
 function drawWindows(){
   // BEFORE is the machine as it is right now, so it keeps the colours the user already
   // has -- passing it the preset's palette would paint Dracula on both sides and hide
   // the single biggest thing a preset changes.
   var title=state.titleTemplate||'senpex-frontend \u2014 cmux';
-  $('#winBefore').innerHTML=winHTML(defaultCmux(),ccPayload.p,'senpex-frontend \u2014 cmux','plain');
-  $('#winAfter').innerHTML=winHTML(state,activePal(),title,'plain');
-  $('#winClaude').innerHTML=winHTML(state,activePal(),title,'claude');
+  $('#winBefore').innerHTML=winHTML(defaultCmux(),DEFAULT_PAL,'senpex-frontend \u2014 cmux','plain');
+  // AFTER shows the terminal doing what a cmux terminal does all day: running an
+  // agent. The transcript is a fixed sample — styling the agent is another page's job.
+  $('#winAfter').innerHTML=winHTML(state,activePal(),title,'agent');
   drawFiles();
   drawCmd();
 }
@@ -1007,14 +900,15 @@ function drawFiles(){
   if(ta&&!_jsonDirty)ta.value=JSON.stringify(cmuxJsonObj(state,pal),null,2);
 }
 
+// The payload carries ONLY the cmux layer: this page is a standalone editor.
 function payload(){
-  var pl=copyObj(ccPayload);
-  pl.cm=copyObj(state);
+  var pl={cm:copyObj(state)};
+  pl.cm.on=true;
   return pl;
 }
 function drawCmd(){
   var b=b64e(payload());
-  $('#cmdtext').textContent='curl -fsSL "'+ORIGIN+'/apply.sh?c='+encodeURIComponent(b)+'" | bash';
+  $('#cmdtext').textContent='curl -fsSL "'+ORIGIN+'/cmux-apply.sh?c='+encodeURIComponent(b)+'" | bash';
   clearTimeout(_urlT);
   _urlT=setTimeout(function(){
     try{history.replaceState(null,'','/cmux?c='+encodeURIComponent(b));}catch(e){}
@@ -1029,7 +923,7 @@ var HELP={
  fontSize:{t:'Font size',d:'Terminal text size in points (Ghostty font-size). Everything inside a pane scales with it; the sidebar and tab bar have their own sizes below.'},
  sidebarFontSize:{t:'Sidebar font size',d:'Size of the workspace names in the left sidebar (Ghostty sidebar-font-size). Independent of the terminal font, so you can keep a big terminal and a compact sidebar.'},
  tabBarFontSize:{t:'Tab bar font size',d:'Size of the surface tabs along the top of each pane (Ghostty surface-tab-bar-font-size). A surface is one tab inside a pane.'},
- theme:{t:'Ghostty theme',d:'An optional named Ghostty theme, e.g. \\u201cOne Dark\\u201d. Leave it BLANK unless you want it: a Ghostty theme sets the terminal\\u2019s own background and foreground, which will fight the Claude Code palette you picked. Blank means the preview you see here is what you get.'},
+ theme:{t:'Ghostty theme',d:'An optional named Ghostty theme, e.g. \\u201cOne Dark\\u201d. Leave it BLANK unless you want it: a Ghostty theme sets the terminal\\u2019s own background and foreground, which will fight the colours below. Blank means the preview you see here is what you get.'},
  scrollback:{t:'Scrollback limit',d:'How many bytes of history each terminal keeps (Ghostty scrollback-limit). cmux\\u2019s own example config uses 50,000,000 \\u2014 generous, because agent sessions are long.'},
  bgOpacity:{t:'Background opacity',d:'Terminal transparency, 1 being opaque (Ghostty background-opacity). Anything below 1 lets your desktop through. Only written when you move it off 1, so it cannot clobber a value you set yourself.'},
  bgBlur:{t:'Background blur',d:'Blurs whatever shows through a transparent background (Ghostty background-blur). Has no effect at full opacity.'},
@@ -1037,21 +931,17 @@ var HELP={
  minimalMode:{t:'Minimal mode',d:'Strips cmux down \\u2014 the surface tab bars go away and the pane divider thins. Good if you live in one pane per workspace and want nothing between you and the terminal.'},
  placement:{t:'New workspace position',d:'Where a new workspace lands in the sidebar: at the top, right after the current one, or at the end (cmux.json app.newWorkspacePlacement).'},
  titleTemplate:{t:'Window title',d:'What the macOS window title says (cmux.json app.windowTitleTemplate). Leave blank for cmux\\u2019s default. Only written when you type something.'},
- paneBorder:{t:'Pane border',d:'The outline around every split pane. Defaults to your Claude Code theme\\u2019s subtle colour so the window and the transcript match \\u2014 switch to Custom to pin a colour instead.'},
- activePaneBorder:{t:'Focused pane border',d:'The outline around the pane you are typing in \\u2014 this is how you tell at a glance where your keystrokes are going. Defaults to your Claude Code accent.'},
+ paneBorder:{t:'Pane border',d:'The outline around every split pane. Defaults to the active theme\\u2019s subtle colour so the chrome hangs together \\u2014 switch to Custom to pin a colour instead.'},
+ activePaneBorder:{t:'Focused pane border',d:'The outline around the pane you are typing in \\u2014 this is how you tell at a glance where your keystrokes are going. Defaults to the active theme\\u2019s accent.'},
  divider:{t:'Split divider',d:'The line between two panes (Ghostty split-divider-color). Distinct from the pane border: the divider is the seam, the border traces each pane.'},
- tint:{t:'Sidebar tint',d:'A wash of colour over the sidebar (cmux.json sidebarAppearance). Defaults to your Claude Code background so the sidebar reads as part of the same theme. Note this tints only the sidebar \\u2014 terminal transparency is Background opacity above.'},
+ tint:{t:'Sidebar tint',d:'A wash of colour over the sidebar (cmux.json sidebarAppearance). Defaults to the active theme\\u2019s background so the sidebar reads as part of it. Note this tints only the sidebar \\u2014 terminal transparency is Background opacity above.'},
  tintOpacity:{t:'Tint strength',d:'How strongly the sidebar tint applies, 0 to 1. cmux\\u2019s default is 0.03 \\u2014 a hint rather than a colour.'},
  matchTerminalBg:{t:'Match terminal background',d:'Makes the sidebar exactly the terminal background instead of a tinted version of it, so the window reads as one surface with no seam.'},
  indicatorStyle:{t:'Selected workspace style',d:'How cmux marks the workspace you are in \\u2014 all nine of its styles are here and the preview shows each one. leftRail is the default: a coloured bar down the left edge.'},
- selectionColor:{t:'Selection colour',d:'The colour that marking uses. Defaults to your Claude Code accent.'},
+ selectionColor:{t:'Selection colour',d:'The colour that marking uses. Defaults to the active theme\\u2019s accent.'},
  showScrollBar:{t:'Show scroll bar',d:'Whether a scroll bar appears inside terminal panes (cmux.json terminal.showScrollBar).'},
  copyOnSelect:{t:'Copy on select',d:'Selecting text copies it straight to the clipboard, no \\u2318C. Off by default, and when off cmux leaves the decision to your Ghostty config.'},
  scrollSpeed:{t:'Scroll speed',d:'Multiplier for mouse and trackpad scrolling in terminals, 0.25 to 3.'},
- umfg:{t:'Prompt text colour',d:'The colour of the text in the messages YOU send to Claude Code. Default leaves it as the theme\u2019s normal text colour. This is a Claude Code setting rather than a cmux one, but the same install command applies it.'},
- umbg:{t:'Prompt highlight',d:'A solid background strip behind your own messages \u2014 the thing that makes them stand out from Claude\u2019s replies as you scroll back. Default means no strip at all, so Default and Custom here are two different states rather than two colours.'},
- umb:{t:'Prompt border',d:'A border around your own messages. In the terminal this is drawn out of box-drawing CHARACTERS, so it costs a whole row above and below rather than being a thin line, and the preview draws it that way. The three topBottom styles are the ones the mock can show honestly at this width; the full-box styles still install.'},
- umbold:{t:'Bold prompts',d:'Renders your own messages in bold. Combines with the colours above.'},
  contentAlignment:{t:'Session content alignment',d:'Where a session\\u2019s content sits when the pane is wider than the content (cmux.json terminal.sessionContentAlignment).'},
  sidebarHideDetails:{t:'Hide sidebar details',d:'Collapses everything but the workspace names \\u2014 no branch, no PR, no counts. The fastest way to a quiet sidebar.'},
  sidebarDescription:{t:'Show workspace description',d:'Shows the branch and directory line under each workspace name.'},
@@ -1104,7 +994,7 @@ function paintPresets(){
 
     // The strip below the name IS the theme: its own background, its own foreground,
     // its own accents. Nothing here is a stand-in colour.
-    var pal=pre.pal||ccPayload.p;
+    var pal=pre.pal||DEFAULT_PAL;
     var sw=document.createElement('div');
     sw.className='pcswatch';
     sw.style.background=palHex(pal.bg,'#0b0e14');
@@ -1145,7 +1035,7 @@ function paintPresets(){
   var nn=document.createElement('div');nn.className='pcname';
   nn.textContent='Keep my colours';nb.appendChild(nn);
   var nbl=document.createElement('div');nbl.className='pcblurb';
-  nbl.textContent='cmux chrome follows your Claude Code theme; the terminal keeps whatever Ghostty theme you already set.';
+  nbl.textContent='writes no colour lines at all; the terminal keeps whatever Ghostty theme you already set.';
   nb.appendChild(nbl);
   none.appendChild(nb);
   none.addEventListener('click',function(){applyPreset('');});
@@ -1163,7 +1053,7 @@ function paintPresets(){
   mineSaved.forEach(function(item){
     var b=document.createElement('button');
     b.type='button';b.className='pchip';
-    var pal=item.pal||ccPayload.p;
+    var pal=item.pal||DEFAULT_PAL;
     var sw=document.createElement('div');
     sw.className='pcswatch';
     sw.style.background=palHex(pal.bg,'#0b0e14');
@@ -1205,8 +1095,8 @@ function paintPresets(){
 
     b.appendChild(sw);b.appendChild(body);
     b.addEventListener('click',function(){
-      // Load the whole saved setup, both halves.
-      ccPayload=copyObj(item.payload);
+      // Items saved before the separation carried a full payload; only the cm half
+      // was ever this page's to restore, so reading just .cm loads both eras.
       var d=defaultCmux(), src=item.payload.cm||{};
       for(var k in d){if(ownKey(d,k)&&ownKey(src,k))d[k]=src[k];}
       d.on=true;state=d;
@@ -1233,10 +1123,10 @@ function paintPresetNote(){
   var el=$('#presetNote'),pre=presetById(state.preset);
   if(!pre){
     el.innerHTML='<b>No theme selected.</b> The install leaves your Ghostty colours alone '
-      +'and derives the cmux chrome from your Claude Code palette.';
+      +'and leaves your terminal colours exactly as they are.';
     return;
   }
-  var pal=pre.pal||ccPayload.p;
+  var pal=pre.pal||DEFAULT_PAL;
   var ratio=contrastRatio(pal.text,pal.bg),cmt=contrastRatio(pal.comment,pal.bg);
   var how=pre.theme
     ? 'installs as <span class="mono">theme = '+esc(pre.theme)+'</span>, a scheme cmux already ships'
@@ -1343,20 +1233,6 @@ function buildControls(){
    +chk('show pull requests','sidebarPullRequests','m_spr',s.sidebarPullRequests)
    +chk('watch git status','sidebarGitStatus','m_sgs',s.sidebarGitStatus)
   +'</div>'
-  +'<div class="panel"><h3>\u{1F4AC} Your prompts</h3>'
-   +'<p class="phint" style="margin-bottom:9px">The messages you type to Claude Code. '
-   +'These live on the Claude Code side of the setup rather than in cmux \u2014 but they '
-   +'are the most visible thing inside the window, so they are here too, and the same '
-   +'install command applies them.</p>'
-   +promptColorRow('Text colour','umfg','pm_fgm','pm_fg')
-   +promptColorRow('Highlight / background strip','umbg','pm_bgm','pm_bg')
-   +row('Border','umb',selHTML('pm_ub',PROMPT_BORDERS,String(ccPayload.ub||'none')))
-   +'<div class="ctl"><span class="cap">Border colour</span>'
-   +'<div class="modrow"><input type="color" id="pm_uc" value="'+esc(hexOf(ccPayload.uc||'#7aa2f7'))+'"></div></div>'
-   +'<label class="ctl2"><input type="checkbox" id="pm_bold"'
-   +(((ccPayload.um&&ccPayload.um.st)||[]).indexOf('bold')>=0?' checked':'')+'> bold prompts'
-   +ihtml('umbold')+'</label>'
-  +'</div>'
   +'<div class="panel"><h3>\\u2328 Terminal behaviour</h3>'
    +chk('show scroll bar','showScrollBar','m_ssb',s.showScrollBar)
    +chk('copy on select<span class="nov">no visual change</span>','copyOnSelect','m_cos',s.copyOnSelect)
@@ -1401,20 +1277,6 @@ function buildControls(){
   onRange('m_ss','scrollSpeed','m_ssl',function(v){return v+'x';});
   onSel('m_align','contentAlignment');
 
-  // The prompt controls edit ccPayload, not state: they belong to the Claude Code half
-  // of the setup. Editing them still repaints the mock and rebuilds the install command,
-  // which is what edited() does either way.
-  promptColorMode('pm_fgm','pm_fg','fg','text');
-  promptColorMode('pm_bgm','pm_bg','bg','');
-  $('#pm_ub').addEventListener('change',function(){ccPayload.ub=this.value;edited();});
-  $('#pm_uc').addEventListener('input',function(){ccPayload.uc=hexToRgbStrC(this.value);edited();});
-  $('#pm_bold').addEventListener('change',function(){
-    if(!ccPayload.um)ccPayload.um={};
-    var st=(ccPayload.um.st||[]).filter(function(x){return x!=='bold';});
-    if(this.checked)st.push('bold');
-    ccPayload.um.st=st;edited();
-  });
-
   colorMode('m_pbm','m_pb','paneBorderFromPalette','paneBorder','subtle');
   colorMode('m_apbm','m_apb','activePaneBorderFromPalette','activePaneBorder','accent');
   colorMode('m_dvm','m_dv','dividerFromPalette','dividerColor','subtle');
@@ -1439,7 +1301,7 @@ function colorMode(hostId,pickId,flagKey,valKey,palKey){
     host.appendChild(chip('Theme',fromPal,function(){state[flagKey]=true;sync();edited();}));
     host.appendChild(chip('Custom',!fromPal,function(){state[flagKey]=false;state[valKey]=pick.value;sync();edited();}));
     pick.value=fromPal?themeHex():state[valKey];
-    hint.textContent=fromPal?'from the Claude Code theme':'custom';
+    hint.textContent=fromPal?'derived from the theme':'custom';
   }
   pick.addEventListener('input',function(){state[valKey]=this.value;state[flagKey]=false;sync();edited();});
   sync();
@@ -1514,21 +1376,15 @@ installPreviewDock({dock:'#pair',grip:'#dockgrip',pin:'#pinbtn',
 
 // ── boot ──────────────────────────────────────────────────────────────────────
 (function(){
-  ccPayload=defaultCC();
   state=defaultCmux();
   try{
     var q=new URLSearchParams(location.search),c=q.get('c');
     if(c){
       var pl=b64d(c);
-      if(pl&&typeof pl==='object'){
-        // The Claude Code half comes straight from the link so this page styles cmux
-        // around the setup the user actually built.
-        if(pl.p&&typeof pl.p==='object')ccPayload=pl;
-        if(pl.cm&&typeof pl.cm==='object'){
-          var d=defaultCmux();
-          for(var k in d){if(ownKey(d,k)&&ownKey(pl.cm,k))d[k]=pl.cm[k];}
-          d.on=true;state=d;
-        }
+      if(pl&&typeof pl==='object'&&pl.cm&&typeof pl.cm==='object'){
+        var d=defaultCmux();
+        for(var k in d){if(ownKey(d,k)&&ownKey(pl.cm,k))d[k]=pl.cm[k];}
+        d.on=true;state=d;
       }
     }else{
       var draft=localStorage.getItem('scc_cmux');
@@ -1536,7 +1392,7 @@ installPreviewDock({dock:'#pair',grip:'#dockgrip',pin:'#pinbtn',
         for(var k2 in dd){if(ownKey(dd,k2)&&ownKey(o,k2))dd[k2]=o[k2];}
         dd.on=true;state=dd;}
     }
-  }catch(e){ccPayload=defaultCC();state=defaultCmux();}
+  }catch(e){state=defaultCmux();}
 })();
 buildControls();
 paintPresets();
@@ -1635,7 +1491,7 @@ function saveCard(){
     b.type='button';b.className='savecta';
     b.textContent='\uff0b  Save this setup';
     var bl=document.createElement('div');bl.className='pcblurb';
-    bl.textContent='Keeps the whole thing \u2014 cmux settings, colours and your Claude Code side.';
+    bl.textContent='Keeps every cmux setting and its colours under one name.';
     body.appendChild(b);body.appendChild(bl);
     b.addEventListener('click',naming);
   }
@@ -1649,7 +1505,7 @@ function saveCard(){
     inp.type='text';inp.id='oursName';inp.className='saveinput';
     inp.setAttribute('maxlength','40');
     inp.setAttribute('autocomplete','off');
-    inp.value=ccPayload.n||'My cmux setup';
+    inp.value='My cmux setup';
     var row=document.createElement('div');row.className='saverow';
     var go=document.createElement('button');
     go.type='button';go.className='savego';go.textContent='Save';
@@ -1694,13 +1550,6 @@ function commitSave(name){
   toast('Saved \u201c'+pl.n+'\u201d to Our Community');
 }
 
-// After boot: both of these read ccPayload, which the boot IIFE above is what sets.
-// Called any earlier they see null. The picker writes the same ccPayload.p the preset
-// grid does, so picking a starter and picking a preset both repaint the recipe pane.
-installCcPicker(function(){return ccPayload;},
-                function(pl){ccPayload=pl;umResync();},
-                function(){drawWindows();drawCmd();});
-installRecipeSave(payload,'cmux + Claude Code');
 installNav();
 `;
 

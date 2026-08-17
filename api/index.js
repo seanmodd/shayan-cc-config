@@ -326,6 +326,44 @@ function route(req, res) {
   if (path === '/codex' || path === '/codex/') {
     return sendHTML(renderCodex(DATA, CSS, CLIENT_LIB, FAVICON, GH_SVG, GITHUB_URL));
   }
+  // Standalone per-terminal installers. Every terminal page is its own editor now —
+  // fully separated from the Claude Code side — so each page's command applies its
+  // layer and nothing else. (A studio payload carrying these layers still applies
+  // them through the combined /apply.sh; these routes are the pages' own.)
+  const STANDALONE = {
+    '/cmux-apply.sh': { key: 'cm', label: 'cmux', page: '/cmux',
+      block: pl => { const s = sanitizeCmux(pl.cm); return s && cmuxApplyBlock(s, pl.p || null); },
+      done: 'Reload cmux with Cmd+Shift+, (or run: cmux reload-config).' },
+    '/herdr-apply.sh': { key: 'hd', label: 'herdr', page: '/herdr',
+      block: pl => { const s = sanitizeHerdr(pl.hd); return s && herdrApplyBlock(s); },
+      done: 'Restart herdr to see it.' },
+    '/zellij-apply.sh': { key: 'zj', label: 'Zellij', page: '/zellij',
+      block: pl => { const s = sanitizeZellij(pl.zj); return s && zellijApplyBlock(s); },
+      done: 'Start a new Zellij session to see it.' },
+    '/warp-apply.sh': { key: 'wp', label: 'Warp', page: '/warp',
+      block: pl => { const s = sanitizeWarp(pl.wp); return s && warpApplyBlock(s, pl.p || null); },
+      done: 'Open Warp settings > Appearance > Themes to activate it.' },
+  };
+  if (STANDALONE[path]) {
+    const t = STANDALONE[path];
+    const c = u.searchParams.get('c');
+    if (!c) return sendText('echo "missing ?c= payload"; exit 1', 'text/x-shellscript; charset=utf-8', 400);
+    try {
+      const pl = decodeCustom(c);
+      const block = t.block(pl);
+      if (!block) return sendText(`echo "this link has no ${t.label} layer enabled"; exit 1`, 'text/x-shellscript; charset=utf-8', 404);
+      const body = `#!/bin/bash
+set -euo pipefail
+# shayan-cc-config — ${t.label} setup (standalone)
+echo "▸ Applying your ${t.label} setup…"
+${block}
+echo ""
+echo "✓ ${t.label} configured. ${t.done}"
+echo "  Adjust anytime at ${origin}${t.page}"
+`;
+      return sendText(body, 'text/x-shellscript; charset=utf-8');
+    } catch (e) { return sendText(`echo "bad payload: ${cleanText(e.message, 120)}"; exit 1`, 'text/x-shellscript; charset=utf-8', 400); }
+  }
   // The standalone Codex installer: ONLY the codex layer. The /codex page is not a
   // recipe page — codex and Claude Code are separate agents — so its command applies
   // codex and nothing else. (A studio payload carrying a cx layer still applies it

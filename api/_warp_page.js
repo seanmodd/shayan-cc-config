@@ -16,8 +16,6 @@ const { TERM_CSS } = require('./_term.js');
 const { STUDIO_CSS } = require('./_customize.js');
 const { topBar, navPayload } = require('./_nav.js');
 const { compareBlock, COMPARE_CSS } = require('./_compare.js');
-const { STARTERS } = require('./_theme.js');
-const { RECIPE_CSS, RECIPE_JS, recipeSaveBlock } = require('./_recipes.js');
 const {
   WARP_DEFAULTS, DETAILS, PANE_COLORS, CURSOR_TYPES, INPUT_MODES,
   SPACINGS, SPLITS, AGENT_COMMANDS, INPUT_BOX_TYPES,
@@ -81,14 +79,22 @@ const WARP_CSS = `
   .wbadge .pill{border:1px solid var(--border);border-radius:20px;padding:2px 9px;
     font-size:10.5px;letter-spacing:.04em;}
   .wbadge .pill.aft{border-color:var(--accent);color:var(--accent);}
-  .ccpick{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);
-    white-space:nowrap;}
-  .ccpick select{background:#0b0e14;border:1px solid var(--border);border-radius:8px;
-    color:var(--text);font-family:inherit;font-size:12.5px;padding:7px 9px;min-height:38px;}
-  @media(max-width:700px),(max-height:520px){
-    .ccpick{flex:1 1 100%;}
-    .ccpick select{flex:1;min-height:44px;font-size:16px;}
-  }
+  /* ── saved setups ─────────────────────────────────────────────────────────── */
+  .svrow{display:flex;flex-direction:column;gap:7px;}
+  .svchip{display:flex;align-items:center;gap:10px;cursor:pointer;text-align:left;
+    font-family:inherit;border:1px solid var(--border);background:#10141b;
+    border-radius:10px;padding:8px 11px;color:var(--dim);width:100%;}
+  .svchip:hover{border-color:var(--accent);}
+  .svchip.savecard{border-style:dashed;}
+  .svsw{display:flex;gap:4px;flex:none;}
+  .svsw i{width:10px;height:10px;border-radius:50%;}
+  .svbody{flex:1;min-width:0;}
+  .svname{font-size:12.5px;font-weight:600;color:var(--text);overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;}
+  .svmeta{font-size:10.5px;color:var(--faint);margin-top:1px;}
+  .svacts{display:flex;gap:9px;flex:none;font-size:10.5px;}
+  .svact{color:var(--faint);text-decoration:underline;text-underline-offset:2px;padding:6px 2px;}
+  .svact:hover{color:var(--accent);}
 
   body.pinned .wpair{position:sticky;top:var(--switch-h,46px);z-index:45;background:var(--bg);
     padding-bottom:12px;box-shadow:0 16px 20px -14px rgba(0,0,0,.75);}
@@ -142,12 +148,12 @@ function renderWarp(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   });
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Warp · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${RECIPE_CSS}${WARP_CSS}</style></head><body class="pinned">
+<title>Warp · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${WARP_CSS}</style></head><body class="pinned">
 ${topBar('warp', ghSvg)}
 <header class="whead"><h1>\u{1F300} Warp</h1>
 <p class="sub" style="margin-top:8px">The terminal that puts every command in its own <b>block</b> — with its own exit status, its own output,
-and its own share link. Build a theme from your Claude Code palette here, plus a tab config that opens the agent, a shell
-and a git pane in one go. Both are new files, so nothing you already have gets overwritten.</p></header>
+and its own share link. A standalone editor for how Warp looks — nothing here depends on any other page: build a theme,
+plus a tab config that opens the agent, a shell and a git pane in one go. Both are new files, so nothing you already have gets overwritten.</p></header>
 
 <div class="wwrap">
   <div class="switchrow">
@@ -159,8 +165,6 @@ and a git pane in one go. Both are new files, so nothing you already have gets o
     <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
       <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
-    <label class="ccpick"><span>Claude Code side</span><select id="ccTheme"
-      title="Your own saved setups, or one of the starters. A creation brings its verbs, spinner and status line too."></select></label>
   </div>
   <div class="wpair" data-pane="claude" id="pair">
     <div class="wcol wcol-before">
@@ -172,7 +176,7 @@ and a git pane in one go. Both are new files, so nothing you already have gets o
       <div id="winAfter"></div>
     </div>
     <div class="wcol wcol-claude">
-      <div class="wbadge"><span class="pill aft">recipe</span><b>+ Claude Code</b><span id="ccname">— tokyo-night</span></div>
+      <div class="wbadge"><span class="pill aft">sample</span><b>+ an agent pane</b><span>— a fixed sample session</span></div>
       <div id="winClaude"></div>
     </div>
     <div class="dockgrip" id="dockgrip" role="separator" aria-orientation="horizontal" tabindex="0"
@@ -220,8 +224,6 @@ and a git pane in one go. Both are new files, so nothing you already have gets o
     <div class="wfiles wmanual" id="settingsOut"></div>
   </div>
 
-${recipeSaveBlock()}
-
 ${compareBlock('warp')}
 </div>
 
@@ -238,30 +240,27 @@ ${compareBlock('warp')}
 <div id="toast"></div>
 <script>
 var NAV=${navPayload('warp')};
-var STARTERS=${JSON.stringify(STARTERS)};
 var WP_DEFAULTS=${defaults};
 var WP_OPTS=${opts};
 ${clientLib}
-${RECIPE_JS}
 ${WARP_JS}
 </script></body></html>`;
 }
 
 const WARP_JS = `
 var ORIGIN=location.origin;
-var state=null, ccPayload=null;
+var state=null;
 
 function ownKey(o,k){return Object.prototype.hasOwnProperty.call(o,k);}
 function copyObj(o){return JSON.parse(JSON.stringify(o));}
 function defaultWarp(){var d={};for(var k in WP_DEFAULTS){if(ownKey(WP_DEFAULTS,k))d[k]=WP_DEFAULTS[k];}d.on=true;return d;}
-function defaultCC(){
-  return {n:'My Setup',s:'blue',p:{bg:[26,27,38],raised:[41,46,66],text:[192,202,245],
-    comment:[86,95,137],subtle:[48,52,70],accent:[122,162,247],accent2:[187,154,247],
-    cyan:[125,207,255],green:[158,206,106],red:[247,118,142],orange:[255,158,100],
-    yellow:[224,175,104],pink:[187,154,247],blue:[122,162,247]},
-    vf:'{}\\u2026 ',vv:['Cooking','Vibing'],ph:['\\u00b7','\\u2736','\\u2733','\\u2736','\\u273b','\\u273d'],
-    rm:true,iv:120,ub:'none',uc:'rgb(122,162,247)',id:'warp',author:'you'};
-}
+// The fixed palette the preview is painted with (tokyo-night). This page is a
+// standalone editor: nothing rides in from any other page, so the sample agent
+// session and the from-palette theme colours both come from these literals.
+var DEFAULT_PAL={bg:[26,27,38],raised:[41,46,66],text:[192,202,245],
+  comment:[86,95,137],subtle:[48,52,70],accent:[122,162,247],accent2:[187,154,247],
+  cyan:[125,207,255],green:[158,206,106],red:[247,118,142],orange:[255,158,100],
+  yellow:[224,175,104],pink:[187,154,247],blue:[122,162,247]};
 
 // Client mirror of sanitizeWarp. A ?c= link is a stranger's, and the theme name reaches a
 // FILENAME while the colours reach style attributes.
@@ -316,7 +315,7 @@ function palHex(t,fb){
   }).join('');
 }
 function liveColors(s){
-  var p=ccPayload.p||{};
+  var p=DEFAULT_PAL;
   if(!s.fromPalette)return {bg:s.background,fg:s.foreground,accent:s.accent};
   return {bg:palHex(p.bg,s.background),fg:palHex(p.text,s.foreground),accent:palHex(p.accent,s.accent)};
 }
@@ -333,7 +332,7 @@ function mixHex(hex,to,amt){
 }
 
 function winHTML(s,stock,mode){
-  var p=ccPayload.p||{};
+  var p=DEFAULT_PAL;
   var c=stock?{bg:'#1e2126',fg:'#d8dee9',accent:'#5aa2f7'}:liveColors(s);
   var dim=mixHex(c.fg,c.bg,0.45);
   var chrome=mixHex(c.bg,'#ffffff',0.05);
@@ -363,8 +362,8 @@ function winHTML(s,stock,mode){
   var L=function(col,t){return '<div class="l"><span style="color:'+col+'">'+esc(t)+'</span></div>';};
 
   var older=blk('npm test','ok',L(palHex(p.green,'#9ece6a'),'12 passing (0.9s)'),' dim');
-  // The recipe pane: Warp is themed by the controls, the SESSION inside it by the Claude
-  // Code palette layered on top. Everything else shows an ordinary shell, so the two
+  // The sample pane: Warp is themed by the controls, the SESSION inside it painted with
+  // fixed literal sample colours. Everything else shows an ordinary shell, so the two
   // "after" panes are genuinely different pictures rather than the same one twice.
   var newer;
   if(mode==='claude'){
@@ -396,7 +395,7 @@ function winHTML(s,stock,mode){
 }
 
 function ccColors(){
-  var p=ccPayload.p||{};
+  var p=DEFAULT_PAL;
   return {bg:palHex(p.bg,'#1a1b26'),text:palHex(p.text,'#c0caf5'),
     dim:palHex(p.comment,'#565f89'),accent:palHex(p.accent,'#7aa2f7'),
     green:palHex(p.green,'#9ece6a')};
@@ -409,7 +408,8 @@ function drawWindows(){
 
 // ── controls ──────────────────────────────────────────────────────────────────
 var TIPS={
-  fromPalette:{t:'Colours from your palette',d:'Builds the theme out of the Claude Code palette carried in the link, so the terminal and the agent inside it match. Turn it off to pick the three base colours by hand.'},
+  saved:{t:'Saved setups',d:'The whole page under one name: theme colours, blocks and window, text, tab config, keybindings. Saved in THIS browser (localStorage \\u2014 this site has no server storage). Share copies a link that opens the setup here; the install command on that link applies it.'},
+  fromPalette:{t:'Colours from the built-in palette',d:'Builds the theme out of the built-in tokyo-night palette, so the terminal and the sample agent session inside it match. Turn it off to pick the three base colours by hand.'},
   details:{t:'Details',d:'How Warp shades its own chrome against your background \\u2014 darker for a dark theme, lighter for a light one. Getting this wrong makes the UI furniture disappear into the background.'},
   showBlockDividers:{t:'Block dividers',d:'The border around each command block. Off is cleaner; on makes it obvious where one command ends and the next begins, which is most of the reason to use Warp.'},
   inputMode:{t:'Block flow',d:'Which way blocks flow in the viewport \\u2014 newest at the bottom, newest at the top, or waterfall. This is appearance.input.input_mode, and it is NOT the setting that makes the input box look classic; that one is below.'},
@@ -435,12 +435,100 @@ function chk(id,label,on,tip){
 }
 function panel(t,inner){return '<div class="panel"><h3>'+t+'</h3>'+inner+'</div>';}
 
+// ── saved setups ──────────────────────────────────────────────────────────────
+// Same convention as every other saved thing on this site: this browser's
+// localStorage, an array of named payloads, nothing on a server. A setup leaves
+// this machine only when its share link is copied.
+function svGet(){
+  try{
+    var a=JSON.parse(localStorage.getItem('scc_warp_saved')||'[]');
+    return Object.prototype.toString.call(a)==='[object Array]'?a:[];
+  }catch(e){return [];}
+}
+function svSet(a){try{localStorage.setItem('scc_warp_saved',JSON.stringify(a.slice(0,40)));}catch(e){}}
+
+function saveWarpSetup(){
+  var fallback=state.themeName||'My Warp setup';
+  var name=(prompt('Name this setup:',fallback)||'').replace(/^ +| +$/g,'').slice(0,40);
+  if(!name)return;
+  var all=svGet().filter(function(x){return x.name!==name;});
+  all.push({name:name,savedAt:new Date().toISOString().slice(0,10),payload:payload()});
+  svSet(all);
+  paintSaved();
+  toast('Saved “'+name+'”');
+}
+
+// The swatch shows the colours the setup would actually render with: its own three
+// base colours when the palette is not driving them, the fixed default palette's
+// accent/green/yellow/red otherwise.
+function svPalOf(wp){
+  if(wp&&wp.fromPalette===false&&typeof wp.background==='string'){
+    return [wHex(wp.background,'#1a1b26'),wHex(wp.foreground,'#c0caf5'),
+      wHex(wp.accent,'#7aa2f7'),palHex(DEFAULT_PAL.green,'#9ece6a')];
+  }
+  return [palHex(DEFAULT_PAL.accent,'#7aa2f7'),palHex(DEFAULT_PAL.green,'#9ece6a'),
+    palHex(DEFAULT_PAL.yellow,'#e0af68'),palHex(DEFAULT_PAL.red,'#f7768e')];
+}
+function paintSaved(){
+  var row=$('#svRow'); if(!row)return;
+  row.innerHTML='';
+  var save=document.createElement('button');
+  save.type='button';save.className='svchip savecard';
+  save.innerHTML='<span class="svsw"><i style="background:var(--accent)"></i></span>'
+    +'<span class="svbody"><span class="svname">＋ Save this setup</span>'
+    +'<span class="svmeta" style="display:block">keeps every control on this page</span></span>';
+  save.addEventListener('click',saveWarpSetup);
+  row.appendChild(save);
+  svGet().forEach(function(item){
+    var wp=(item.payload&&item.payload.wp)||{};
+    var pal=svPalOf(wp);
+    var b=document.createElement('button');
+    b.type='button';b.className='svchip';
+    var sw=document.createElement('span');sw.className='svsw';
+    pal.forEach(function(cx){
+      var d=document.createElement('i');d.style.background=cx;sw.appendChild(d);
+    });
+    var body=document.createElement('span');body.className='svbody';
+    var nm=document.createElement('span');nm.className='svname';nm.textContent=item.name;
+    var mt=document.createElement('span');mt.className='svmeta';
+    mt.textContent=(wp.fromPalette===false?'your colours':'palette colours')
+      +' · saved '+(item.savedAt||'');
+    body.appendChild(nm);body.appendChild(mt);
+    var acts=document.createElement('span');acts.className='svacts';
+    function act(label,fn){
+      var a=document.createElement('span');a.className='svact';a.textContent=label;
+      a.addEventListener('click',function(e){e.stopPropagation();fn();});
+      return a;
+    }
+    acts.appendChild(act('share',function(){
+      copyText(ORIGIN+'/warp?c='+encodeURIComponent(b64e(item.payload)));
+      toast('Link to “'+item.name+'” copied');
+    }));
+    acts.appendChild(act('delete',function(){
+      svSet(svGet().filter(function(x){return x.name!==item.name;}));
+      paintSaved();toast('Removed “'+item.name+'”');
+    }));
+    b.appendChild(sw);b.appendChild(body);b.appendChild(acts);
+    b.addEventListener('click',function(){
+      state=saneWarp(copyObj(wp));
+      buildControls();refresh();
+      toast('Loaded “'+item.name+'”');
+    });
+    row.appendChild(b);
+  });
+}
+
 function buildControls(){
   var s=state,h='';
+  h+=panel('\\u{1F4BE} Saved setups'+ihtml('saved'),
+    '<p class="phint">Everything on this page under one name \\u2014 theme colours, blocks, text,'
+    +' tab config, keybindings. Saved in this browser; the share link on each one is how'
+    +' a setup travels.</p>'
+    +'<div class="svrow" id="svRow"></div>');
   h+=panel('\\u{1F3A8} Theme',
     '<label class="ctl"><span class="cap">Name'+ihtml('themeName')+'</span>'
     +'<input type="text" id="f_themeName" value="'+esc(s.themeName)+'" maxlength="40"></label>'
-    +chk('f_fromPalette','Build the colours from my Claude Code palette',s.fromPalette,'fromPalette')
+    +chk('f_fromPalette','Build the colours from the built-in tokyo-night palette',s.fromPalette,'fromPalette')
     +'<div class="swatches" style="margin-bottom:11px">'
     +'<label class="sw"><input type="color" id="f_background" value="'+esc(s.background)+'"'+(s.fromPalette?' disabled':'')+'><span>Background</span></label>'
     +'<label class="sw"><input type="color" id="f_foreground" value="'+esc(s.foreground)+'"'+(s.fromPalette?' disabled':'')+'><span>Foreground</span></label>'
@@ -496,13 +584,16 @@ function buildControls(){
       refresh();
     });
   });
+  paintSaved();
 }
 
-function payload(){var pl=copyObj(ccPayload);pl.wp=copyObj(state);pl.wp.on=true;return pl;}
+// The payload carries ONLY the warp layer: this page is a standalone editor, not a
+// recipe. The command is the warp-only installer.
+function payload(){var pl={wp:copyObj(state)};pl.wp.on=true;return pl;}
 function refresh(){
   drawWindows();
   var c=encodeURIComponent(b64e(payload()));
-  $('#cmdtext').textContent='curl -fsSL "'+ORIGIN+'/apply.sh?c='+c+'" | bash';
+  $('#cmdtext').textContent='curl -fsSL "'+ORIGIN+'/warp-apply.sh?c='+c+'" | bash';
   window.__sccPayloadC=c;
   // Server-rendered, so the preview is the installer's own output rather than a second
   // YAML builder that can drift from it.
@@ -520,20 +611,17 @@ function refresh(){
 }
 
 (function(){
-  ccPayload=defaultCC();state=defaultWarp();
+  state=defaultWarp();
   try{
     var q=new URLSearchParams(location.search),c=q.get('c');
     if(c){
       var pl=b64d(c);
-      if(pl&&typeof pl==='object'){
-        if(pl.p&&typeof pl.p==='object')ccPayload=pl;
-        if(pl.wp&&typeof pl.wp==='object')state=saneWarp(pl.wp);
-      }
+      if(pl&&typeof pl==='object'&&pl.wp&&typeof pl.wp==='object')state=saneWarp(pl.wp);
     }else{
       var draft=localStorage.getItem('scc_warp');
       if(draft)state=saneWarp(JSON.parse(draft));
     }
-  }catch(e){ccPayload=defaultCC();state=defaultWarp();}
+  }catch(e){state=defaultWarp();}
 })();
 buildControls();refresh();
 
@@ -593,11 +681,6 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();})
     });
   });
 })();
-
-installCcPicker(function(){return ccPayload;},
-                function(pl){ccPayload=pl;},
-                refresh);
-installRecipeSave(payload,'Warp + Claude Code');
 
 installPreviewDock({dock:'#pair',grip:'#dockgrip',pin:'#pinbtn',
   term:'.wblocks',key:'warp',pinDefault:true});

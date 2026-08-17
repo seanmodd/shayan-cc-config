@@ -1,4 +1,4 @@
-// The /herdr page — herdr's looks and behaviour, layered on a Claude Code theme.
+// The /herdr page — a standalone editor for herdr's looks and behaviour.
 //
 // The mock here is deliberately not another terminal window. herdr's distinguishing
 // feature is that it knows what your agents are DOING — working, blocked, done, idle —
@@ -12,8 +12,6 @@ const { TERM_CSS } = require('./_term.js');
 const { STUDIO_CSS } = require('./_customize.js');
 const { topBar, navPayload } = require('./_nav.js');
 const { compareBlock, COMPARE_CSS } = require('./_compare.js');
-const { STARTERS } = require('./_theme.js');
-const { RECIPE_CSS, RECIPE_JS, recipeSaveBlock } = require('./_recipes.js');
 const {
   HERDR_DEFAULTS, HERDR_THEMES, HERDR_PLUGINS, SHELL_MODES, NEW_CWD,
   COLLAPSED_MODES, HOST_CURSORS, TAB_POSITIONS, AGENT_SORTS, TOAST_DELIVERY,
@@ -105,16 +103,23 @@ const HERDR_CSS = `
   .hbadge .pill{border:1px solid var(--border);border-radius:20px;padding:2px 9px;
     font-size:10.5px;letter-spacing:.04em;}
   .hbadge .pill.aft{border-color:var(--accent);color:var(--accent);}
-  /* The Claude Code theme picker rides in the switch row, because it changes the
-     preview rather than the config file. */
-  .ccpick{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);
-    white-space:nowrap;}
-  .ccpick select{background:#0b0e14;border:1px solid var(--border);border-radius:8px;
-    color:var(--text);font-family:inherit;font-size:12.5px;padding:7px 9px;min-height:38px;}
-  @media(max-width:700px),(max-height:520px){
-    .ccpick{flex:1 1 100%;}
-    .ccpick select{flex:1;min-height:44px;font-size:16px;}
-  }
+
+  /* ── saved setups ─────────────────────────────────────────────────────────── */
+  .svrow{display:flex;flex-direction:column;gap:7px;}
+  .svchip{display:flex;align-items:center;gap:10px;cursor:pointer;text-align:left;
+    font-family:inherit;border:1px solid var(--border);background:#10141b;
+    border-radius:10px;padding:8px 11px;color:var(--dim);width:100%;}
+  .svchip:hover{border-color:var(--accent);}
+  .svchip.savecard{border-style:dashed;}
+  .svsw{display:flex;gap:4px;flex:none;}
+  .svsw i{width:10px;height:10px;border-radius:50%;}
+  .svbody{flex:1;min-width:0;}
+  .svname{font-size:12.5px;font-weight:600;color:var(--text);overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;}
+  .svmeta{font-size:10.5px;color:var(--faint);margin-top:1px;}
+  .svacts{display:flex;gap:9px;flex:none;font-size:10.5px;}
+  .svact{color:var(--faint);text-decoration:underline;text-underline-offset:2px;padding:6px 2px;}
+  .svact:hover{color:var(--accent);}
 
   /* Pinned: the mock rides the top with the controls sliding under it, offset by the
      sticky switch row above. The terminal takes a fixed height while pinned so the
@@ -210,7 +215,7 @@ function renderHerdr(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   const lines = JSON.stringify(LINES);
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>herdr · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${RECIPE_CSS}${HERDR_CSS}</style></head><body class="pinned">
+<title>herdr · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${HERDR_CSS}</style></head><body class="pinned">
 ${topBar('herdr', ghSvg)}
 <header class="hhead"><h1>\u{1F9AC} herdr</h1>
 <p class="sub" style="margin-top:8px">The multiplexer that knows what your agents are <b>doing</b>. herdr classifies every agent pane as
@@ -227,8 +232,6 @@ ${topBar('herdr', ghSvg)}
     <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
       <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
-    <label class="ccpick"><span>Claude Code side</span><select id="ccTheme"
-      title="Your own saved setups, or one of the starters. A creation brings its verbs, spinner and status line too."></select></label>
   </div>
   <div class="hpair" data-pane="claude" id="pair">
     <div class="hcol hcol-before">
@@ -240,7 +243,7 @@ ${topBar('herdr', ghSvg)}
       <div id="winAfter"></div>
     </div>
     <div class="hcol hcol-claude">
-      <div class="hbadge"><span class="pill aft">recipe</span><b>+ Claude Code</b><span id="ccname">— tokyo-night</span></div>
+      <div class="hbadge"><span class="pill aft">agent</span><b>+ Claude Code</b><span>— a sample agent session</span></div>
       <div id="winClaude"></div>
     </div>
     <div class="dockgrip" id="dockgrip" role="separator" aria-orientation="horizontal" tabindex="0"
@@ -293,8 +296,6 @@ brew install herdr</div>
     </div>
   </div>
 
-${recipeSaveBlock()}
-
 ${compareBlock('herdr')}
 </div>
 
@@ -311,21 +312,19 @@ ${compareBlock('herdr')}
 <div id="toast"></div>
 <script>
 var NAV=${navPayload('herdr')};
-var STARTERS=${JSON.stringify(STARTERS)};
 var HD_DEFAULTS=${defaults};
 var HD_OPTS=${opts};
 var HD_THEMES=${themePreview};
 var HD_PLUGINS=${plugins};
 var LINES=${lines};
 ${clientLib}
-${RECIPE_JS}
 ${HERDR_JS}
 </script></body></html>`;
 }
 
 const HERDR_JS = `
 var ORIGIN=location.origin;
-var state=null, ccPayload=null;
+var state=null;
 
 function defaultHerdr(){var d={};for(var k in HD_DEFAULTS){if(ownKey(HD_DEFAULTS,k))d[k]=HD_DEFAULTS[k];}
   d.plugins=[];d.on=true;return d;}
@@ -398,16 +397,12 @@ function saneHerdr(o){
   };
 }
 
-// The Claude Code half. This page styles the terminal AROUND Claude Code, so it carries
-// whatever setup arrived in the link rather than inventing one.
-function defaultCC(){
-  return {n:'My Setup',s:'blue',p:{bg:[26,27,38],raised:[41,46,66],text:[192,202,245],
-    comment:[86,95,137],subtle:[48,52,70],accent:[122,162,247],accent2:[187,154,247],
-    cyan:[125,207,255],green:[158,206,106],red:[247,118,142],orange:[255,158,100],
-    yellow:[224,175,104],pink:[187,154,247],blue:[122,162,247]},
-    vf:'{}\\u2026 ',vv:['Cooking','Vibing'],ph:['\\u00b7','\\u2736','\\u2733','\\u2736','\\u273b','\\u273d'],
-    rm:true,iv:120,ub:'none',uc:'rgb(122,162,247)',id:'herdr',author:'you'};
-}
+// The fixed palette the "+ Claude Code" pane paints with. This page is standalone:
+// the pane is a sample agent session in these colours, not a payload from anywhere.
+var DEFAULT_PAL={bg:[26,27,38],raised:[41,46,66],text:[192,202,245],
+  comment:[86,95,137],subtle:[48,52,70],accent:[122,162,247],accent2:[187,154,247],
+  cyan:[125,207,255],green:[158,206,106],red:[247,118,142],orange:[255,158,100],
+  yellow:[224,175,104],pink:[187,154,247],blue:[122,162,247]};
 
 // ── the window mock ───────────────────────────────────────────────────────────
 // Four agents in three workspaces, chosen so every documented state is on screen at
@@ -467,10 +462,10 @@ function winHTML(s,mode){
       '<div class="htab on">claude</div><div class="htab">tests</div><div class="htab">shell</div>')
     +'</div>';
 
-  // The recipe pane is the point of the third column: the terminal is themed by the
-  // controls below, and the SESSION inside it is themed by the Claude Code palette
-  // carried in the payload. Everywhere else shows an ordinary shell, so the difference
-  // between "my terminal" and "my terminal running the agent" is visible side by side.
+  // The third column: the terminal is themed by the controls below, and the SESSION
+  // inside it is a fixed sample painted with DEFAULT_PAL. Everywhere else shows an
+  // ordinary shell, so the difference between "my terminal" and "my terminal running
+  // the agent" is visible side by side.
   var cc=(mode==='claude')?ccColors():null;
   var body='';
   if(mode==='claude'){
@@ -525,9 +520,9 @@ function hexA(hex,a){
   return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';
 }
 
-// The Claude Code half, as colours the mock can use.
+// The sample agent session's colours — fixed literals from DEFAULT_PAL.
 function ccColors(){
-  var p=ccPayload.p||{};
+  var p=DEFAULT_PAL;
   return {
     bg:palHex(p.bg,'#1a1b26'), text:palHex(p.text,'#c0caf5'),
     dim:palHex(p.comment,'#565f89'), accent:palHex(p.accent,'#7aa2f7'),
@@ -549,6 +544,7 @@ function drawWindows(){
 
 // ── controls ──────────────────────────────────────────────────────────────────
 var TIPS={
+  saved:{t:'Saved setups',d:'The whole page under one name: theme, window layout, sidebar, input, notifications, session settings, plugins. Saved in THIS browser (localStorage \\u2014 this site has no server storage). Share copies a link that opens the setup here; the install command on that link applies it.'},
   prefix:{t:'Prefix key',d:'The key you press before a herdr shortcut, tmux-style. Default ctrl+b. herdr is mouse-first, so you can ignore the prefix entirely — but if ctrl+b clashes with your editor, move it here.'},
   sidebarWidth:{t:'Sidebar width',d:'In terminal COLUMNS, not pixels (18\\u201336). The preview scales it so you can see the effect.'},
   agentPanelSort:{t:'Sidebar order',d:'spaces groups by workspace. priority floats the agents that need you \\u2014 blocked first, then done \\u2014 which is the ordering that makes a wall of agents readable.'},
@@ -575,8 +571,99 @@ function chk(id,label,on,tip){
 }
 function panel(title,inner){return '<div class="panel"><h3>'+title+'</h3>'+inner+'</div>';}
 
+// ── saved setups ──────────────────────────────────────────────────────────────
+// Same convention as every other saved thing on this site: this browser's
+// localStorage, an array of named payloads, nothing on a server. A setup leaves
+// this machine only when its share link is copied.
+function svGet(){
+  try{
+    var a=JSON.parse(localStorage.getItem('scc_herdr_saved')||'[]');
+    return Object.prototype.toString.call(a)==='[object Array]'?a:[];
+  }catch(e){return [];}
+}
+function svSet(a){try{localStorage.setItem('scc_herdr_saved',JSON.stringify(a.slice(0,40)));}catch(e){}}
+
+function saveHerdrSetup(){
+  var name=(prompt('Name this setup:','My herdr setup')||'').replace(/^ +| +$/g,'').slice(0,40);
+  if(!name)return;
+  var all=svGet().filter(function(x){return x.name!==name;});
+  all.push({name:name,savedAt:new Date().toISOString().slice(0,10),payload:payload()});
+  svSet(all);
+  paintSaved();
+  toast('Saved “'+name+'”');
+}
+
+// The swatch shows the colours the setup would actually render with: its theme's
+// preview palette, with a custom accent riding on top when one is set, and the
+// sample session's palette as the stand-in when the theme is unknown.
+function svPalOf(hd){
+  var t=(hd&&typeof hd.theme==='string'&&ownKey(HD_THEMES,hd.theme))?HD_THEMES[hd.theme]:null;
+  var acc=(hd&&hd.customAccent&&typeof hd.accentColor==='string'
+    &&/^#[0-9a-fA-F]{6}$/.test(hd.accentColor))?hd.accentColor:null;
+  if(t)return {accent:acc||t.accent,green:t.green,yellow:t.yellow,red:t.red};
+  return {
+    accent:acc||palHex(DEFAULT_PAL.accent,'#7aa2f7'),
+    green:palHex(DEFAULT_PAL.green,'#9ece6a'),
+    yellow:palHex(DEFAULT_PAL.yellow,'#e0af68'),
+    red:palHex(DEFAULT_PAL.red,'#f7768e')
+  };
+}
+function paintSaved(){
+  var row=$('#svRow'); if(!row)return;
+  row.innerHTML='';
+  var save=document.createElement('button');
+  save.type='button';save.className='svchip savecard';
+  save.innerHTML='<span class="svsw"><i style="background:var(--accent)"></i></span>'
+    +'<span class="svbody"><span class="svname">＋ Save this setup</span>'
+    +'<span class="svmeta" style="display:block">keeps every control on this page</span></span>';
+  save.addEventListener('click',saveHerdrSetup);
+  row.appendChild(save);
+  svGet().forEach(function(item){
+    var hd=(item.payload&&item.payload.hd)||{};
+    var pal=svPalOf(hd);
+    var b=document.createElement('button');
+    b.type='button';b.className='svchip';
+    var sw=document.createElement('span');sw.className='svsw';
+    ['accent','green','yellow','red'].forEach(function(k){
+      var d=document.createElement('i');d.style.background=pal[k]||'#888';sw.appendChild(d);
+    });
+    var body=document.createElement('span');body.className='svbody';
+    var nm=document.createElement('span');nm.className='svname';nm.textContent=item.name;
+    var mt=document.createElement('span');mt.className='svmeta';
+    mt.textContent=(hd.theme||'catppuccin')+(hd.customAccent?' · custom accent':'')
+      +' · saved '+(item.savedAt||'');
+    body.appendChild(nm);body.appendChild(mt);
+    var acts=document.createElement('span');acts.className='svacts';
+    function act(label,fn){
+      var a=document.createElement('span');a.className='svact';a.textContent=label;
+      a.addEventListener('click',function(e){e.stopPropagation();fn();});
+      return a;
+    }
+    acts.appendChild(act('share',function(){
+      copyText(ORIGIN+'/herdr?c='+encodeURIComponent(b64e(item.payload)));
+      toast('Link to “'+item.name+'” copied');
+    }));
+    acts.appendChild(act('delete',function(){
+      svSet(svGet().filter(function(x){return x.name!==item.name;}));
+      paintSaved();toast('Removed “'+item.name+'”');
+    }));
+    b.appendChild(sw);b.appendChild(body);b.appendChild(acts);
+    b.addEventListener('click',function(){
+      state=saneHerdr(copyObj(hd));
+      buildControls();paintThemes();paintPlugins();refresh();
+      toast('Loaded “'+item.name+'”');
+    });
+    row.appendChild(b);
+  });
+}
+
 function buildControls(){
   var s=state,h='';
+  h+=panel('\\u{1F4BE} Saved setups'+ihtml('saved'),
+    '<p class="phint">Everything on this page under one name \\u2014 theme, window, sidebar,'
+    +' input, notifications, plugins. Saved in this browser; the share link on each one is'
+    +' how a setup travels.</p>'
+    +'<div class="svrow" id="svRow"></div>');
   h+=panel('\\u{1F5A5} Window',
     '<label class="ctl"><span class="cap">Tab bar position</span>'+sel('f_tabBarPosition',HD_OPTS.tabPositions,s.tabBarPosition)+'</label>'
     +chk('f_hideTabBarWhenSingle','Hide the tab bar when there is only one tab',s.hideTabBarWhenSingle)
@@ -627,6 +714,7 @@ function buildControls(){
 
   $('#herdrControls').innerHTML=h;
   wire();
+  paintSaved();
 }
 
 // One listener per control, bound by convention: an element id of f_<key> writes
@@ -749,17 +837,14 @@ function paintPluCmds(){
   host.appendChild(head);host.appendChild(pre);
 }
 
-function payload(){
-  var pl=copyObj(ccPayload);
-  pl.hd=copyObj(state);
-  pl.hd.on=true;
-  return pl;
-}
+// The payload carries ONLY the herdr layer: this page is a standalone editor, not a
+// recipe. The command is the herdr-only installer.
+function payload(){var pl={hd:copyObj(state)};pl.hd.on=true;return pl;}
 function refresh(){
   drawWindows();
   paintPluCmds();
   var c=encodeURIComponent(b64e(payload()));
-  $('#cmdtext').textContent='curl -fsSL "'+ORIGIN+'/apply.sh?c='+c+'" | bash';
+  $('#cmdtext').textContent='curl -fsSL "'+ORIGIN+'/herdr-apply.sh?c='+c+'" | bash';
   window.__sccPayloadC=c;
   // The file preview is rendered server-side truth, fetched rather than reimplemented:
   // a second TOML builder in the browser is a second thing to drift.
@@ -775,24 +860,20 @@ function refresh(){
 
 // ── boot ──────────────────────────────────────────────────────────────────────
 (function(){
-  ccPayload=defaultCC();
   state=defaultHerdr();
   try{
     var q=new URLSearchParams(location.search),c=q.get('c');
     if(c){
       var pl=b64d(c);
-      if(pl&&typeof pl==='object'){
-        if(pl.p&&typeof pl.p==='object')ccPayload=pl;
-        // Through saneHerdr, never merged raw: the link is a stranger's.
-        if(pl.hd&&typeof pl.hd==='object')state=saneHerdr(pl.hd);
-      }
+      // Through saneHerdr, never merged raw: the link is a stranger's.
+      if(pl&&typeof pl==='object'&&pl.hd&&typeof pl.hd==='object')state=saneHerdr(pl.hd);
     }else{
       // localStorage is this browser's own, but it was written from a payload that may
       // not have been, so it gets the same treatment.
       var draft=localStorage.getItem('scc_herdr');
       if(draft)state=saneHerdr(JSON.parse(draft));
     }
-  }catch(e){ccPayload=defaultCC();state=defaultHerdr();}
+  }catch(e){state=defaultHerdr();}
 })();
 buildControls();
 paintThemes();
@@ -853,13 +934,6 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();})
     });
   });
 })();
-
-// Which Claude Code palette is layered on top. Shared with the other terminal pages.
-installCcPicker(function(){return ccPayload;},
-                function(pl){ccPayload=pl;},
-                refresh);
-
-installRecipeSave(payload,'herdr + Claude Code');
 
 installPreviewDock({dock:'#pair',grip:'#dockgrip',pin:'#pinbtn',
   term:'.hterm',key:'herdr',pinDefault:true});

@@ -13,8 +13,6 @@ const { TERM_CSS } = require('./_term.js');
 const { STUDIO_CSS } = require('./_customize.js');
 const { topBar, navPayload } = require('./_nav.js');
 const { compareBlock, COMPARE_CSS } = require('./_compare.js');
-const { STARTERS } = require('./_theme.js');
-const { RECIPE_CSS, RECIPE_JS, recipeSaveBlock } = require('./_recipes.js');
 const {
   ZELLIJ_DEFAULTS, ZJ_THEMES, ZJ_MODES, ZJ_LAYOUTS, ON_FORCE_CLOSE,
   COPY_CLIPBOARD, WEB_SHARING, COPY_COMMANDS, ZJ_PLUGINS,
@@ -109,14 +107,22 @@ const ZJ_CSS = `
   .zbadge .pill{border:1px solid var(--border);border-radius:20px;padding:2px 9px;
     font-size:10.5px;letter-spacing:.04em;}
   .zbadge .pill.aft{border-color:var(--accent);color:var(--accent);}
-  .ccpick{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);
-    white-space:nowrap;}
-  .ccpick select{background:#0b0e14;border:1px solid var(--border);border-radius:8px;
-    color:var(--text);font-family:inherit;font-size:12.5px;padding:7px 9px;min-height:38px;}
-  @media(max-width:700px),(max-height:520px){
-    .ccpick{flex:1 1 100%;}
-    .ccpick select{flex:1;min-height:44px;font-size:16px;}
-  }
+  /* ── saved setups ─────────────────────────────────────────────────────────── */
+  .svrow{display:flex;flex-direction:column;gap:7px;}
+  .svchip{display:flex;align-items:center;gap:10px;cursor:pointer;text-align:left;
+    font-family:inherit;border:1px solid var(--border);background:#10141b;
+    border-radius:10px;padding:8px 11px;color:var(--dim);width:100%;}
+  .svchip:hover{border-color:var(--accent);}
+  .svchip.savecard{border-style:dashed;}
+  .svsw{display:flex;gap:4px;flex:none;}
+  .svsw i{width:10px;height:10px;border-radius:50%;}
+  .svbody{flex:1;min-width:0;}
+  .svname{font-size:12.5px;font-weight:600;color:var(--text);overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;}
+  .svmeta{font-size:10.5px;color:var(--faint);margin-top:1px;}
+  .svacts{display:flex;gap:9px;flex:none;font-size:10.5px;}
+  .svact{color:var(--faint);text-decoration:underline;text-underline-offset:2px;padding:6px 2px;}
+  .svact:hover{color:var(--accent);}
 
   /* Pinned: same arrangement as the other terminal pages — the mock sticks below the
      switch row, and the pane height stops tracking its content so the window cannot
@@ -177,7 +183,7 @@ function renderZellij(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   const plugins = JSON.stringify(ZJ_PLUGINS);
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Zellij · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${RECIPE_CSS}${ZJ_CSS}</style></head><body class="pinned">
+<title>Zellij · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}${COMPARE_CSS}${ZJ_CSS}</style></head><body class="pinned">
 ${topBar('zellij', ghSvg)}
 <header class="zhead"><h1>\u{1F9E9} Zellij</h1>
 <p class="sub" style="margin-top:8px">A terminal workspace with <b>layouts you can check into the repo</b> and sessions that come back after a crash,
@@ -194,8 +200,6 @@ Build a <span class="mono">config.kdl</span> and an agent layout here; one comma
     <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
       <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
-    <label class="ccpick"><span>Claude Code side</span><select id="ccTheme"
-      title="Your own saved setups, or one of the starters. A creation brings its verbs, spinner and status line too."></select></label>
   </div>
   <div class="zpair" data-pane="claude" id="pair">
     <div class="zcol zcol-before">
@@ -207,7 +211,7 @@ Build a <span class="mono">config.kdl</span> and an agent layout here; one comma
       <div id="winAfter"></div>
     </div>
     <div class="zcol zcol-claude">
-      <div class="zbadge"><span class="pill aft">recipe</span><b>+ Claude Code</b><span id="ccname">— tokyo-night</span></div>
+      <div class="zbadge"><span class="pill aft">sample</span><b>+ Claude Code</b><span>— a fixed sample session</span></div>
       <div id="winClaude"></div>
     </div>
     <div class="dockgrip" id="dockgrip" role="separator" aria-orientation="horizontal" tabindex="0"
@@ -261,8 +265,6 @@ Build a <span class="mono">config.kdl</span> and an agent layout here; one comma
     </div>
   </div>
 
-${recipeSaveBlock()}
-
 ${compareBlock('zellij')}
 </div>
 
@@ -279,33 +281,29 @@ ${compareBlock('zellij')}
 <div id="toast"></div>
 <script>
 var NAV=${navPayload('zellij')};
-var STARTERS=${JSON.stringify(STARTERS)};
 var ZJ_DEFAULTS=${defaults};
 var ZJ_OPTS=${opts};
 var ZJ_PREVIEW=${preview};
 var ZJ_PLUGINS=${plugins};
 ${clientLib}
-${RECIPE_JS}
 ${ZJ_JS}
 </script></body></html>`;
 }
 
 const ZJ_JS = `
 var ORIGIN=location.origin;
-var state=null, ccPayload=null;
+var state=null;
+// The palette the sample agent pane renders with. Fixed — this page is a standalone
+// Zellij editor, and the pane is a literal sample, not a live layer from another page.
+var DEFAULT_PAL={bg:[26,27,38],raised:[41,46,66],text:[192,202,245],
+  comment:[86,95,137],subtle:[48,52,70],accent:[122,162,247],accent2:[187,154,247],
+  cyan:[125,207,255],green:[158,206,106],red:[247,118,142],orange:[255,158,100],
+  yellow:[224,175,104],pink:[187,154,247],blue:[122,162,247]};
 
 function ownKey(o,k){return Object.prototype.hasOwnProperty.call(o,k);}
 function copyObj(o){return JSON.parse(JSON.stringify(o));}
 function defaultZj(){var d={};for(var k in ZJ_DEFAULTS){if(ownKey(ZJ_DEFAULTS,k))d[k]=ZJ_DEFAULTS[k];}
   d.plugins=[];d.on=true;return d;}
-function defaultCC(){
-  return {n:'My Setup',s:'blue',p:{bg:[26,27,38],raised:[41,46,66],text:[192,202,245],
-    comment:[86,95,137],subtle:[48,52,70],accent:[122,162,247],accent2:[187,154,247],
-    cyan:[125,207,255],green:[158,206,106],red:[247,118,142],orange:[255,158,100],
-    yellow:[224,175,104],pink:[187,154,247],blue:[122,162,247]},
-    vf:'{}\\u2026 ',vv:['Cooking','Vibing'],ph:['\\u00b7','\\u2736','\\u2733','\\u2736','\\u273b','\\u273d'],
-    rm:true,iv:120,ub:'none',uc:'rgb(122,162,247)',id:'zellij',author:'you'};
-}
 
 // Client mirror of sanitizeZellij. A ?c= link is a stranger's, and theme names and mode
 // names are interpolated into the mock's style and class attributes.
@@ -388,8 +386,8 @@ var MODE_KEYS={
 
 function pal(name){return ZJ_PREVIEW[name]||ZJ_PREVIEW['catppuccin-mocha'];}
 
-// The Claude Code palette, as hex, for the recipe pane. Zellij's own colours come from
-// its theme; these are the layer sitting inside it.
+// The sample pane's palette, as hex. Zellij's own colours come from its theme; these
+// paint the fixed sample session drawn inside one pane.
 function palHex(t,fb){
   if(Object.prototype.toString.call(t)!=='[object Array]'||t.length!==3)return fb;
   return '#'+t.map(function(n){
@@ -398,7 +396,7 @@ function palHex(t,fb){
   }).join('');
 }
 function ccColors(){
-  var p=(ccPayload&&ccPayload.p)||{};
+  var p=DEFAULT_PAL;
   return {
     bg:palHex(p.bg,'#1a1b26'), text:palHex(p.text,'#c0caf5'),
     dim:palHex(p.comment,'#565f89'), accent:palHex(p.accent,'#7aa2f7'),
@@ -420,8 +418,8 @@ function winHTML(s,mode){
     +'</div>';
 
   var frameCls=s.paneFrames?'':' noframe';
-  // The recipe pane: the terminal is themed by the controls, the SESSION inside it by
-  // the Claude Code palette layered on top. Everything else shows an ordinary shell.
+  // The sample pane: the terminal is themed by the controls, the fixed sample session
+  // inside it by DEFAULT_PAL. Everything else shows an ordinary shell.
   var body,paneStyle='';
   if(mode==='claude'){
     var cc=ccColors();
@@ -478,6 +476,7 @@ function drawWindows(){
 
 // ── controls ──────────────────────────────────────────────────────────────────
 var TIPS={
+  saved:{t:'Saved setups',d:'The whole page under one name: theme, frames, startup, mouse and clipboard, sessions, web client, plugins. Saved in THIS browser (localStorage \\u2014 this site has no server storage). Share copies a link that opens the setup here; the install command on that link applies it.'},
   defaultMode:{t:'Default mode',d:'Which modal mode a new session starts in. locked passes every shortcut through to whatever is running \\u2014 the usual fix when Zellij\\u2019s defaults fight your editor. Ctrl g unlocks.'},
   paneFrames:{t:'Pane frames',d:'The border and title around each pane. Turning them off reclaims two rows and two columns per pane; you lose the pane name and the visible focus edge.'},
   roundedCorners:{t:'Rounded corners',d:'Only works nested inside ui { pane_frames { \\u2026 } }. Written at the top level Zellij silently ignores it, which is a popular way to lose an afternoon. The generated file nests it correctly.'},
@@ -505,8 +504,95 @@ function chk(id,label,on,tip){
 }
 function panel(t,inner){return '<div class="panel"><h3>'+t+'</h3>'+inner+'</div>';}
 
+// ── saved setups ──────────────────────────────────────────────────────────────
+// Same convention as every other saved thing on this site: this browser's
+// localStorage, an array of named payloads, nothing on a server. A setup leaves
+// this machine only when its share link is copied.
+function svGet(){
+  try{
+    var a=JSON.parse(localStorage.getItem('scc_zellij_saved')||'[]');
+    return Object.prototype.toString.call(a)==='[object Array]'?a:[];
+  }catch(e){return [];}
+}
+function svSet(a){try{localStorage.setItem('scc_zellij_saved',JSON.stringify(a.slice(0,40)));}catch(e){}}
+
+function saveZellijSetup(){
+  var fallback=state.theme||'My Zellij setup';
+  var name=(prompt('Name this setup:',fallback)||'').replace(/^ +| +$/g,'').slice(0,40);
+  if(!name)return;
+  var all=svGet().filter(function(x){return x.name!==name;});
+  all.push({name:name,savedAt:new Date().toISOString().slice(0,10),payload:payload()});
+  svSet(all);
+  paintSaved();
+  toast('Saved “'+name+'”');
+}
+
+// The swatch shows the colours the setup would actually render with: its theme's
+// preview palette when we know it, the fixed sample palette otherwise.
+function svPalOf(zj){
+  if(zj&&zj.theme&&ownKey(ZJ_PREVIEW,zj.theme)){
+    var p=ZJ_PREVIEW[zj.theme];
+    return [p[4],p[5],p[6],p[7]];
+  }
+  return [palHex(DEFAULT_PAL.accent,'#7aa2f7'),palHex(DEFAULT_PAL.green,'#9ece6a'),
+    palHex(DEFAULT_PAL.yellow,'#e0af68'),palHex(DEFAULT_PAL.red,'#f7768e')];
+}
+function paintSaved(){
+  var row=$('#svRow'); if(!row)return;
+  row.innerHTML='';
+  var save=document.createElement('button');
+  save.type='button';save.className='svchip savecard';
+  save.innerHTML='<span class="svsw"><i style="background:var(--accent)"></i></span>'
+    +'<span class="svbody"><span class="svname">＋ Save this setup</span>'
+    +'<span class="svmeta" style="display:block">keeps every control on this page</span></span>';
+  save.addEventListener('click',saveZellijSetup);
+  row.appendChild(save);
+  svGet().forEach(function(item){
+    var zj=(item.payload&&item.payload.zj)||{};
+    var cols=svPalOf(zj);
+    var b=document.createElement('button');
+    b.type='button';b.className='svchip';
+    var sw=document.createElement('span');sw.className='svsw';
+    cols.forEach(function(cx){
+      var d=document.createElement('i');d.style.background=cx||'#888';sw.appendChild(d);
+    });
+    var body=document.createElement('span');body.className='svbody';
+    var nm=document.createElement('span');nm.className='svname';nm.textContent=item.name;
+    var mt=document.createElement('span');mt.className='svmeta';
+    mt.textContent=(zj.theme||'stock theme')+' · saved '+(item.savedAt||'');
+    body.appendChild(nm);body.appendChild(mt);
+    var acts=document.createElement('span');acts.className='svacts';
+    function act(label,fn){
+      var a=document.createElement('span');a.className='svact';a.textContent=label;
+      a.addEventListener('click',function(e){e.stopPropagation();fn();});
+      return a;
+    }
+    acts.appendChild(act('share',function(){
+      copyText(ORIGIN+'/zellij?c='+encodeURIComponent(b64e(item.payload)));
+      toast('Link to “'+item.name+'” copied');
+    }));
+    acts.appendChild(act('delete',function(){
+      svSet(svGet().filter(function(x){return x.name!==item.name;}));
+      paintSaved();toast('Removed “'+item.name+'”');
+    }));
+    b.appendChild(sw);b.appendChild(body);b.appendChild(acts);
+    b.addEventListener('click',function(){
+      state=saneZj(copyObj(zj));
+      buildControls();paintThemes();paintPlugins();refresh();
+      toast('Loaded “'+item.name+'”');
+    });
+    row.appendChild(b);
+  });
+}
+
 function buildControls(){
   var s=state,h='';
+  h+=panel('\\u{1F4BE} Saved setups'+ihtml('saved'),
+    '<p class="phint">Everything on this page under one name \\u2014 theme, frames, startup,'
+    +' mouse, sessions, web client, plugins. Saved in this browser; the share link on each'
+    +' one is how a setup travels.</p>'
+    +'<div class="svrow" id="svRow"></div>');
+
   h+=panel('\\u{1F5A5} Appearance',
     chk('f_paneFrames','Pane frames',s.paneFrames,'paneFrames')
     +chk('f_roundedCorners','Rounded corners',s.roundedCorners,'roundedCorners')
@@ -562,6 +648,7 @@ function buildControls(){
       refresh();
     });
   });
+  paintSaved();
 }
 
 function paintThemes(){
@@ -667,12 +754,14 @@ function paintPluCmds(){
   host.appendChild(head);host.appendChild(pre);
 }
 
-function payload(){var pl=copyObj(ccPayload);pl.zj=copyObj(state);pl.zj.on=true;return pl;}
+// The payload carries ONLY the zellij layer: this page is a standalone editor, not a
+// recipe. The command is the zellij-only installer.
+function payload(){var pl={zj:copyObj(state)};pl.zj.on=true;return pl;}
 function refresh(){
   drawWindows();
   paintPluCmds();
   var c=encodeURIComponent(b64e(payload()));
-  $('#cmdtext').textContent='curl -fsSL "'+ORIGIN+'/apply.sh?c='+c+'" | bash';
+  $('#cmdtext').textContent='curl -fsSL "'+ORIGIN+'/zellij-apply.sh?c='+c+'" | bash';
   window.__sccPayloadC=c;
   fetch('/zellij-files.txt?c='+c).then(function(r){return r.text();}).then(function(t){
     var parts=t.split('@@LAYOUT@@');
@@ -687,20 +776,17 @@ function refresh(){
 }
 
 (function(){
-  ccPayload=defaultCC();state=defaultZj();
+  state=defaultZj();
   try{
     var q=new URLSearchParams(location.search),c=q.get('c');
     if(c){
       var pl=b64d(c);
-      if(pl&&typeof pl==='object'){
-        if(pl.p&&typeof pl.p==='object')ccPayload=pl;
-        if(pl.zj&&typeof pl.zj==='object')state=saneZj(pl.zj);
-      }
+      if(pl&&typeof pl==='object'&&pl.zj&&typeof pl.zj==='object')state=saneZj(pl.zj);
     }else{
       var draft=localStorage.getItem('scc_zellij');
       if(draft)state=saneZj(JSON.parse(draft));
     }
-  }catch(e){ccPayload=defaultCC();state=defaultZj();}
+  }catch(e){state=defaultZj();}
 })();
 buildControls();paintThemes();paintPlugins();refresh();
 
@@ -755,11 +841,6 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();})
     });
   });
 })();
-
-installCcPicker(function(){return ccPayload;},
-                function(pl){ccPayload=pl;},
-                refresh);
-installRecipeSave(payload,'Zellij + Claude Code');
 
 installPreviewDock({dock:'#pair',grip:'#dockgrip',pin:'#pinbtn',
   term:'.zterm',key:'zellij',pinDefault:true});

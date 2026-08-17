@@ -110,82 +110,54 @@ function bashCheck(src, label) {
       ok(r.body.includes(JSON.stringify(pg.path)), p + ': menu knows about ' + pg.path);
     }
   }
-  // ── recipes ───────────────────────────────────────────────────────────────
-  // A recipe is a Claude Code config plus a terminal theme under one name, and the
-  // reason it is worth having is that ONE curl applies both halves.
+  // ── full separation ───────────────────────────────────────────────────────
+  // Every terminal page is a standalone editor now: no Claude Code palette picker,
+  // no recipe pairing, its own installer route, and its own saved setups. The recipes
+  // module is gone; nothing may import it and no page may point at the combined
+  // installer or read a Claude Code payload.
   const homeBody = (await call('/')).body;
-  ok(homeBody.includes('id="recgrid"') && homeBody.includes('id="recmode"'),
-    'home: the recipes card is there, with its Favorites / Recent switch');
-  // The closed tag, not the opening one: a CSS comment further up mentions
-  // <main id="grid"> and would match first.
-  ok(homeBody.indexOf('id="recgrid"') < homeBody.indexOf('<main id="grid"></main>'),
-    'home: recipes sit above the gallery');
-  ok(homeBody.includes('function rec_curl('), 'home: recipes can produce a one-line install');
-
-  // Every terminal page must be able to build one: a theme picker for the Claude Code
-  // half, a save control, and a third preview pane showing the two combined.
-  for (const t of require(path.join(ROOT, 'api/_recipes.js')).TERMINALS) {
-    const body = (await call(t.path)).body;
-    ok(body.includes('id="ccTheme"'), t.path + ': can pick the Claude Code theme to layer');
-    ok(body.includes('id="recsave"') && body.includes('installRecipeSave('),
-      t.path + ': can save the pair as a recipe');
-    ok(body.includes('id="winClaude"'), t.path + ': has the "+ Claude Code" preview pane');
-    // The markup existing is not the same as the pane being drawn. /zellij shipped with
-    // the pane in the HTML and nothing writing to it (winHTML did not even take the mode
-    // it branched on, so the whole boot threw), and /warp shipped drawing the same
-    // picture into it as the plain "after" pane. Both passed an id-is-present check.
-    // Loose on the arguments between: the four pages pass different things, and one of
-    // them passes a call expression, so a paren-free match would miss it.
-    ok(new RegExp("#winClaude'\\)\\.innerHTML=winHTML\\([^;]{0,80}'claude'").test(body),
-      t.path + ': something actually draws the "+ Claude Code" pane');
-    const wdecl = /function winHTML\(([^)]*)\)/.exec(body);
-    ok(wdecl && /\bmode\b/.test(wdecl[1]),
-      t.path + ': winHTML declares the mode it branches on');
-    // Either polarity is fine — /cmux branches on 'plain', the others on 'claude'. What
-    // matters is that the pane's contents depend on which one it is.
-    ok(/mode===.(claude|plain)./.test(body),
-      t.path + ': the recipe pane is painted differently from the plain one');
-    ok(body.includes('data-pane="claude"'), t.path + ': the pane switch offers all three');
-    // installCcPicker reads the page's Claude Code half, which the boot code sets. Called
-    // before boot it throws and takes the rest of the script with it — which is exactly
-    // what happened on /cmux — so the ordering is pinned here.
-    ok(body.indexOf('ccPayload=defaultCC()') < body.indexOf('installCcPicker(function('),
-      t.path + ': the theme picker runs after boot, not before');
-  }
-
-  // ── your own creations, offered alongside the starters ────────────────────
-  // A creation is verbs, spinner phases, status line and message styling as well as a
-  // palette. Adopting only its colours would install something the person never built
-  // and they would not find out until the install ran.
-  const RJ = require(path.join(ROOT, 'api/_recipes.js')).RECIPE_JS;
-  const { STARTERS: ST } = require(path.join(ROOT, 'api/_theme.js'));
-  const mine = [
-    { id: 'c1', n: 'Older', p: ST['nord'], vv: ['Herding'] },
-    { id: 'c2', n: 'Newer', p: ST['matrix'], vv: ['Ledgering'], cm: { on: true } },
+  ok(!homeBody.includes('id="recgrid"') && !/recipe/i.test(homeBody),
+    'home: the recipes card is gone');
+  ok(!fs.existsSync(path.join(ROOT, 'api/_recipes.js')),
+    'recipes: the module itself is deleted');
+  const SEP = [
+    { path: '/cmux', route: '/cmux-apply.sh', saved: 'scc_cmux_saved' },
+    { path: '/herdr', route: '/herdr-apply.sh', saved: 'scc_herdr_saved' },
+    { path: '/zellij', route: '/zellij-apply.sh', saved: 'scc_zellij_saved' },
+    { path: '/warp', route: '/warp-apply.sh', saved: 'scc_warp_saved' },
+    { path: '/codex', route: '/codex-apply.sh', saved: 'scc_codex_saved' },
   ];
-  const recLib = new Function('STARTERS', 'customs_get', 'localStorage', 'document',
-    RJ + '\n;return {rec_stripLayers, rec_ccChoices, rec_terminalOf};')(
-    ST, () => mine, { getItem: () => null, setItem() {} }, { getElementById: () => null });
-  const choices = recLib.rec_ccChoices();
-  ok(choices[0].group === 'Your creations' && choices[0].label === 'Newer',
-    'picker: your own creations come first, newest first', choices[0] && choices[0].label);
-  ok(choices.filter(c => c.group === 'Starters').length === Object.keys(ST).length,
-    'picker: every starter is still offered');
-  const adopted = recLib.rec_stripLayers(choices[0].payload);
-  ok(adopted.vv && adopted.vv[0] === 'Ledgering',
-    'picker: a creation brings its verbs, not just its colours');
-  ok(adopted.cm === undefined,
-    'picker: a creation never drags its terminal layer onto another terminal page');
-  ok(/optgroup/.test(RJ), 'picker: creations and starters are grouped apart');
-  ok(/none yet: build one in the Studio/.test(RJ),
-    'picker: says where creations come from when you have none');
+  for (const t of SEP) {
+    const body = (await call(t.path)).body;
+    // \b guards: window.__sccPayloadC contains the plain substring.
+    ok(!/\bccPayload\b/.test(body) && !body.includes('id="ccTheme"'),
+      t.path + ': reads no Claude Code payload and offers no palette picker');
+    ok(body.includes(t.route + '?c='), t.path + ': its command is its own installer');
+    ok(!body.includes("'/apply.sh?c="), t.path + ': nothing points at the combined installer');
+    ok(body.includes(t.saved), t.path + ': has its own saved setups');
+    ok(!body.includes('installRecipeSave(') && !body.includes('installCcPicker('),
+      t.path + ': recipe machinery is gone');
+  }
+  // The standalone routes themselves: layer-only, bash-clean, refusing empty layers.
+  for (const t of SEP.filter(x => x.path !== '/codex')) {
+    const key = { '/cmux': 'cm', '/herdr': 'hd', '/zellij': 'zj', '/warp': 'wp' }[t.path];
+    const on = Buffer.from(JSON.stringify({ [key]: { on: true } })).toString('base64url');
+    const rs = await call(t.route + '?c=' + on);
+    ok(rs.status === 200 && /standalone/.test(rs.body) && !/tweakcc/.test(rs.body),
+      t.route + ': applies its layer and nothing else');
+    const f = path.join(TMP, 'sep-' + key + '.sh');
+    fs.writeFileSync(f, rs.body);
+    ok(cp.spawnSync('bash', ['-n', f], { encoding: 'utf8' }).status === 0,
+      t.route + ': parses as bash');
+    const rn = await call(t.route + '?c=' + Buffer.from(JSON.stringify({ n: 'x' })).toString('base64url'));
+    ok(rn.status === 404, t.route + ': refuses a payload without its layer');
+  }
 
   // ── favorites, folded and split by kind ───────────────────────────────────
   ok(/<details class="favsec" id="favcc"/.test(homeBody)
-     && /<details class="favsec" id="favrec"/.test(homeBody),
-    'home: favorites split into a Claude Code section and a Recipes section');
-  ok(homeBody.includes('id="favccgrid"') && homeBody.includes('id="favrecgrid"'),
-    'home: each favorites section has its own list');
+     && !/id="favrec"/.test(homeBody),
+    'home: favorites hold starred setups only — the recipes section is gone');
+  ok(homeBody.includes('id="favccgrid"'), 'home: the favorites list exists');
   ok(homeBody.indexOf('id="favwrap"') < homeBody.indexOf('<main id="grid"></main>'),
     'home: favorites sit above the gallery');
   ok(/scc_fold_/.test(homeBody), 'home: a section you folded stays folded');
@@ -199,8 +171,6 @@ function bashCheck(src, label) {
   // #grid would leak two timers per favorited card on every repaint.
   ok(/document\.querySelectorAll\('\.card'\)[\s\S]{0,140}clearInterval/.test(homeBody),
     'home: card timers are cleared wherever the card lives');
-  ok(/function recipeItem\(/.test(homeBody) && /function paintFavRecipes\(/.test(homeBody),
-    'home: both recipe lists are built by the same function');
 
   // The payoff, end to end: a payload carrying both halves produces one script that
   // applies both. This is the claim the whole feature rests on.
@@ -1113,8 +1083,6 @@ function bashCheck(src, label) {
     ["'scc_cmux_saved'", 'saved setups have a storage key'],
     ["'Our Community'", 'the Our Community section exists'],
     ['id="themenote"', 'the Ghostty theme box says whether it can be previewed'],
-    ["promptColorMode('pm_fgm','pm_fg','fg'", 'prompt text colour is controllable'],
-    ["promptColorMode('pm_bgm','pm_bg','bg'", 'prompt highlight is controllable'],
     ['presetByThemeName', 'a typed theme name previews when its palette is known'],
   ]) ok(cmPage.includes(needle), '/cmux: ' + label);
   // Our Community has to render above the community themes: it is the shortest list and
@@ -1753,8 +1721,7 @@ print(json.dumps([d['check_for_update_on_startup'], d['model_reasoning_summary']
     ['installRecipeSave(payload', 'the recipe save call'],
     ['id="recsave"', 'the recipe save card'],
   ]) ok(!cxPage.includes(needle), '/codex: no ' + label + ' (either/or, not a pairing)');
-  ok(!require(path.join(ROOT, 'api/_recipes.js')).TERMINALS.some(t => t.id === 'codex'),
-    'recipes: codex is not a recipe terminal');
+
   // The standalone editor's page contract.
   for (const [needle, label] of [
     ['codex-apply.sh?c=', 'the command is the codex-only installer'],

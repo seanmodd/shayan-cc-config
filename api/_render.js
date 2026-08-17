@@ -6,7 +6,6 @@ const { previewColors } = require('./_term.js');
 // _nav.js owns the page list and the repo URL; re-exported here so the existing
 // importers (index.js and the two page modules) keep one place to get chrome from.
 const { GITHUB_URL, topBar, navPayload } = require('./_nav.js');
-const { RECIPE_CSS, RECIPE_JS } = require('./_recipes.js');
 
 const FAVICON = `<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230a0c10'/><rect x='4' y='4' width='24' height='24' rx='5' fill='none' stroke='%237aa2f7' stroke-width='1.4'/><text x='7' y='22' font-family='monospace' font-size='15' fill='%23bb9af7'>&gt;_</text></svg>">`;
 
@@ -53,10 +52,7 @@ const CSS = `
   button.copy:hover{border-color:var(--accent);color:var(--accent);}
   .sectlabel{max-width:1200px;margin:30px auto 0;padding:0 24px;font-size:13px;color:var(--gold);text-transform:uppercase;letter-spacing:.1em;display:flex;align-items:center;gap:8px;}
   /* ── Favorites ──────────────────────────────────────────────────────────────
-     Two kinds of starred thing, one region. A Claude Code setup on its own and a
-     recipe pairing one with a terminal are genuinely different objects, so they get
-     a section each rather than one mixed list where you cannot tell which is which.
-     Both fold, and remember whether you folded them. */
+     The starred subset of the gallery, folded and remembered. */
   /* Tight under #favlabel, which is this region's heading rather than a separate band. */
   .favwrap{max-width:1200px;margin:12px auto 0;padding:0 24px;display:flex;flex-direction:column;gap:10px;}
   .favsec{background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
@@ -650,18 +646,15 @@ function render(){
 // sections is a worse first impression than no region at all, and the star on each card
 // is where you learn what it is for.
 function paintFavWrap(){
-  var cc=$('#favccgrid').children.length, rc=$('#favrecgrid').children.length;
+  var cc=$('#favccgrid').children.length;
   $('#favccn').textContent=cc;
-  $('#favrecn').textContent=rc;
   $('#favcc').style.display=cc?'':'none';
-  $('#favrec').style.display=rc?'':'none';
-  var any=cc||rc;
-  $('#favwrap').style.display=any?'':'none';
-  $('#favlabel').style.display=any?'flex':'none';
+  $('#favwrap').style.display=cc?'':'none';
+  $('#favlabel').style.display=cc?'flex':'none';
 }
 // Fold state is per-section and remembered: the two lists grow at very different rates,
 // and people settle on keeping one open and the other shut.
-['favcc','favrec'].forEach(function(id){
+['favcc'].forEach(function(id){
   var d=$('#'+id), k='scc_fold_'+id, v=null;
   try{v=localStorage.getItem(k);}catch(e){}
   d.open=(v!=='closed');
@@ -687,126 +680,6 @@ function paintSel(){
 })();
 $('#copybtn').addEventListener('click',function(){copyText($('#cmdtext').textContent);this.textContent='Copied \\u2713';var b=this;setTimeout(function(){b.textContent='Copy';},1600);});
 
-// ── recipes ───────────────────────────────────────────────────────────────────
-// One card, two lists, a dropdown between them. Recently-created is the default
-// because a brand-new visitor has no favorites and an empty list is a worse first
-// impression than a short one.
-// One tile, built once. The recipes card and the favorites section show the same
-// object, so they build it with the same function — two copies of this drift the moment
-// one of them gains an action.
-function recipeItem(r,favs){
-  var pl=r.payload||{};
-  var pal=pl.p||{};
-  var term=rec_terminalOf(pl);
-  var on=favs.indexOf(r.id)>=0;
-
-  var item=document.createElement('div');
-  item.className='recitem'+(on?' fav':'');
-
-  // The swatch IS the recipe: the Claude Code palette rendered in its own colours.
-  var sw=document.createElement('div');sw.className='recsw';
-  sw.style.background=rec_hex(pal.bg,'#0b0e14');
-  sw.style.color=rec_hex(pal.text,'#c0caf5');
-  ['accent','green','red','yellow','accent2'].forEach(function(k){
-    var d=document.createElement('span');d.className='rdot';
-    d.style.background=rec_hex(pal[k],'#888');sw.appendChild(d);
-  });
-  if(term){
-    var tb=document.createElement('span');tb.className='rterm';
-    tb.textContent=term.icon+' '+term.label;sw.appendChild(tb);
-  }
-
-  var body=document.createElement('div');body.className='recbody';
-  var nm=document.createElement('div');nm.className='recname';
-  nm.appendChild(document.createTextNode(r.name||'Recipe'));
-  var meta=document.createElement('div');meta.className='recmeta';
-  meta.textContent=(term?term.label:'Claude Code only')+' \\u00b7 saved '+(r.savedAt||'');
-  body.appendChild(nm);body.appendChild(meta);
-
-  var acts=document.createElement('div');acts.className='recacts';
-  var mk=function(label,title,fn,cls){
-    var b=document.createElement('button');b.type='button';
-    b.textContent=label;b.title=title;
-    if(cls)b.className=cls;
-    b.addEventListener('click',fn);return b;
-  };
-  // The headline action: one curl for BOTH halves.
-  acts.appendChild(mk('Copy curl','Install the Claude Code side and the terminal side in one run',function(){
-    copyText(rec_curl(ORIGIN,pl));
-    toast('One-line install for \\u201c'+(r.name||'Recipe')+'\\u201d copied \\u2014 both halves');
-  }));
-  acts.appendChild(mk('Open','Open this recipe on its terminal page',function(){
-    location.href=rec_link(ORIGIN,pl);
-  }));
-  acts.appendChild(mk('Share','Copy a link to this recipe',function(){
-    copyText(rec_link(ORIGIN,pl));toast('Recipe link copied');
-  }));
-  acts.appendChild(mk(on?'\\u2605':'\\u2606',on?'Remove from favorites':'Add to favorites',function(){
-    var f=recfav_get(),i=f.indexOf(r.id);
-    if(i>=0)f.splice(i,1);else f.push(r.id);
-    recfav_set(f);repaintRecipes();
-  },'recstar'+(on?' on':'')));
-  acts.appendChild(mk('Delete','Remove this recipe from this browser',function(){
-    rec_set(rec_get().filter(function(x){return x.id!==r.id;}));
-    recfav_set(recfav_get().filter(function(x){return x!==r.id;}));
-    repaintRecipes();toast('Removed \\u201c'+(r.name||'Recipe')+'\\u201d');
-  }));
-  body.appendChild(acts);
-
-  item.appendChild(sw);item.appendChild(body);
-  return item;
-}
-// Starring or deleting shows up in both places at once, so neither can be left showing
-// a recipe that is no longer there.
-function repaintRecipes(){paintRecipes();paintFavRecipes();paintFavWrap();}
-
-function paintRecipes(){
-  var mode=$('#recmode').value;
-  var all=rec_get();
-  var favs=recfav_get();
-  // Newest first. Recipes are appended, so the stored order is oldest-first.
-  var list=all.slice().reverse();
-  if(mode==='fav')list=list.filter(function(r){return favs.indexOf(r.id)>=0;});
-
-  var grid=$('#recgrid');grid.innerHTML='';
-  $('#reccount').textContent=all.length
-    ? (list.length+' of '+all.length+' saved here')
-    : '';
-
-  if(!list.length){
-    var e=document.createElement('div');e.className='recempty';
-    e.innerHTML=all.length
-      ? 'No favorites yet. Star a recipe and it shows up here.'
-      : 'Nothing saved yet. Open <b>cmux</b>, <b>herdr</b>, <b>Zellij</b> or <b>Warp</b>, '
-        +'pick a Claude Code setup to layer on top \\u2014 one of yours or a starter \\u2014 '
-        +'and press <b>Save as recipe</b>. '
-        +'They live in this browser \\u2014 share the link to pass one on.';
-    grid.appendChild(e);
-    return;
-  }
-  list.forEach(function(r){grid.appendChild(recipeItem(r,favs));});
-}
-// The favorites section is the starred subset only, and never an empty-state message —
-// paintFavWrap hides the whole section instead, which is quieter than a section that
-// exists only to say it is empty.
-function paintFavRecipes(){
-  var favs=recfav_get();
-  var grid=$('#favrecgrid');grid.innerHTML='';
-  rec_get().slice().reverse()
-    .filter(function(r){return favs.indexOf(r.id)>=0;})
-    .forEach(function(r){grid.appendChild(recipeItem(r,favs));});
-}
-$('#recmode').addEventListener('change',function(){
-  try{localStorage.setItem('scc_recmode',this.value);}catch(e){}
-  paintRecipes();
-});
-try{
-  var savedMode=localStorage.getItem('scc_recmode');
-  if(savedMode==='fav'||savedMode==='recent')$('#recmode').value=savedMode;
-}catch(e){}
-paintRecipes();
-paintFavRecipes();
-
 render();
 installNav();
 `;
@@ -815,7 +688,7 @@ function renderPage(DATA) {
   const presets = DATA.presets.map(p => clientPreset(DATA, p));
   const payload = JSON.stringify(presets).replace(/</g, '\\u003c');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>shayan-cc-config — Claude Code setup picker</title>${FAVICON}<style>${CSS}${RECIPE_CSS}</style></head><body>
+<title>shayan-cc-config — Claude Code setup picker</title>${FAVICON}<style>${CSS}</style></head><body>
 ${topBar('home', GH_SVG)}
 <header><h1>shayan-cc-config</h1>
 <p class="sub">Pick a Claude Code look for your cmux terminals. Click a card — its one-line install command copies itself; run it and <span class="mono">tweakcc</span> applies the theme, thinking verbs, spinner and status-line accent together. Or open <b>the studio</b>: interactive before/after terminals, your-message styling, and a build-your-own status line.</p>
@@ -823,26 +696,10 @@ ${topBar('home', GH_SVG)}
 <div class="applybar" id="applybar"><div><div class="step" id="steplabel">Step 1 — click a setup (☆ to favorite)</div><div class="selbadge" id="selbadge">No setup selected yet</div></div>
 <div class="cmd"><span class="dollar">$</span><span id="cmdtext">pick a setup to get its install command</span></div>
 <button class="copy" id="copybtn">Copy</button></div></header>
-<div class="recwrap"><div class="reccard">
-  <div class="rechead">
-    <h3>\u{1F9EA} Recipes</h3>
-    <select id="recmode" aria-label="Which recipes to show">
-      <option value="recent">Recently created</option>
-      <option value="fav">\u2605 Favorites</option>
-    </select>
-    <span class="reccount" id="reccount"></span>
-  </div>
-  <p class="rechint">A <b>recipe</b> is a Claude Code config and a terminal theme kept together \u2014
-  the palette, verbs and status line on one side, cmux, herdr, Zellij or Warp on the other.
-  One curl installs both halves. Build one on any terminal page and save it there.</p>
-  <div id="recgrid" class="recgrid"></div>
-</div></div>
 <div class="sectlabel" id="favlabel" style="display:none">★ Your favorites</div>
 <div class="favwrap" id="favwrap" style="display:none">
   <details class="favsec" id="favcc"><summary><span>★ Claude Code</span><span class="favn" id="favccn">0</span><span class="favsub">setups you starred in the gallery</span></summary>
     <div class="favbody cards" id="favccgrid"></div></details>
-  <details class="favsec" id="favrec"><summary><span>★ Recipes</span><span class="favn" id="favrecn">0</span><span class="favsub">a setup paired with a terminal</span></summary>
-    <div class="favbody"><div class="recgrid" id="favrecgrid"></div></div></details>
 </div>
 <main id="grid"></main>
 <footer>Patching by <a href="https://github.com/Piebald-AI/tweakcc" target="_blank" rel="noreferrer">tweakcc</a> · community themes credited on each card · <a href="${GITHUB_URL}" target="_blank" rel="noreferrer">source on GitHub</a> · re-run the command after Claude Code updates<br>built for Sean by Claude ✦ <span class="mono">shayan-cc-config</span></footer>
@@ -850,7 +707,6 @@ ${topBar('home', GH_SVG)}
 <script>var PRESETS=${payload};
 var NAV=${navPayload('home')};
 ${CLIENT_LIB}
-${RECIPE_JS}
 ${HOME_JS}
 </script></body></html>`;
 }

@@ -48,8 +48,8 @@ const PANE_COLORS = ['', 'blue', 'green', 'yellow', 'red', 'magenta', 'cyan'];
 
 const WARP_DEFAULTS = {
   // theme
-  themeName: 'Claude Code',
-  fromPalette: true,          // derive the theme from the Claude Code palette
+  themeName: 'My Warp Theme',
+  fromPalette: true,          // derive the theme from the built-in base palette
   background: '#1a1b26',
   foreground: '#c0caf5',
   accent: '#7aa2f7',
@@ -57,7 +57,7 @@ const WARP_DEFAULTS = {
   // launch configuration
   launchConfig: true,
   lcName: 'agent_dev',
-  lcTitle: 'Claude Code',
+  lcTitle: 'My Warp Theme',
   lcSplit: 'horizontal',
   lcColor: 'magenta',
   lcGitPane: true,
