@@ -15,8 +15,8 @@ const PAGES = [
     sub: 'pick a ready-made setup',
   },
   {
-    id: 'studio', path: '/customize', icon: '\u{1F39B}', label: 'The Studio', short: 'Studio',
-    sub: 'build your own, before / after',
+    id: 'studio', path: '/customize', icon: '\u{1F39B}', label: 'Claude Code', short: 'Claude Code',
+    sub: 'your agent, before / after',
   },
   {
     id: 'cmux', path: '/cmux', icon: '\u{1FA9F}', label: 'cmux', short: 'cmux',

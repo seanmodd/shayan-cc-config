@@ -407,6 +407,28 @@ function paintSaved(){
       copyText(ORIGIN+'/moshi?c='+encodeURIComponent(b64e(item.payload)));
       toast('Link to \\u201c'+item.name+'\\u201d copied');
     }));
+    acts.appendChild(act('update',function(){
+      svSet(svGet().map(function(x){
+        return x.name===item.name
+          ?{name:item.name,savedAt:new Date().toISOString().slice(0,10),payload:payload()}
+          :x;
+      }));
+      paintSaved();toast('Updated \\u201c'+item.name+'\\u201d from the current controls');
+    }));
+    acts.appendChild(act('rename',function(){
+      var n=(prompt('New name:',item.name)||'').trim().slice(0,40);
+      if(!n)return;
+      var out=[];
+      svGet().forEach(function(x){
+        if(x.name===item.name){
+          x.name=n;
+          if(x.payload&&x.payload.ms)x.payload.ms.name=xName(n,x.payload.ms.name);
+          out.push(x);
+        }else if(x.name!==n)out.push(x);
+      });
+      svSet(out);
+      paintSaved();toast('Renamed to \\u201c'+n+'\\u201d');
+    }));
     acts.appendChild(act('delete',function(){
       svSet(svGet().filter(function(x){return x.name!==item.name;}));
       paintSaved();toast('Removed \\u201c'+item.name+'\\u201d');

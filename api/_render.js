@@ -583,8 +583,8 @@ function card(m){
   var userMsg=hasB?('<span class="umsg-border" style="border:1px solid '+m.umd.borderColor+';color:'+c.text+'">fix the login redirect bug</span>'):('<span style="color:'+c.inactive+'">&gt;</span> <span style="color:'+c.text+'">fix the login redirect bug</span>');
   var star='<button class="star'+(fav_has(m.id)?' on':'')+'" title="Favorite">'+(fav_has(m.id)?'\\u2605':'\\u2606')+'</button>';
   var extra=m.custom
-    ?'<button class="ghost" data-act="edit" title="Open in the studio">Edit</button><button class="ghost" data-act="del">Delete</button>'
-    :'<button class="ghost" data-act="remix" title="Open in the studio, seeded with this setup">Customize</button>';
+    ?'<button class="ghost" data-act="edit" title="Open in the Claude Code editor">Edit</button><button class="ghost" data-act="del">Delete</button>'
+    :'<button class="ghost" data-act="remix" title="Open in the Claude Code editor, seeded with this setup">Customize</button>';
   el.innerHTML=star+
     '<div class="term" style="background:'+c.bg+'">'+
       '<div class="tbar" style="color:'+c.text+'"><div class="dots"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span></div><span class="tname">'+esc(m.name)+'</span><span class="tauthor">by '+esc(m.author)+'</span></div>'+
@@ -691,8 +691,8 @@ function renderPage(DATA) {
 <title>shayan-cc-config — Claude Code setup picker</title>${FAVICON}<style>${CSS}</style></head><body>
 ${topBar('home', GH_SVG)}
 <header><h1>shayan-cc-config</h1>
-<p class="sub">Pick a Claude Code look for your cmux terminals. Click a card — its one-line install command copies itself; run it and <span class="mono">tweakcc</span> applies the theme, thinking verbs, spinner and status-line accent together. Or open <b>the studio</b>: interactive before/after terminals, your-message styling, and a build-your-own status line.</p>
-<div><a class="cta" href="/customize">🎛 Customize everything — before / after studio →</a></div>
+<p class="sub">Pick a Claude Code look for your cmux terminals. Click a card — its one-line install command copies itself; run it and <span class="mono">tweakcc</span> applies the theme, thinking verbs, spinner and status-line accent together. Or open <b>Claude Code</b>, the editor page: interactive before/after terminals, your-message styling, and a build-your-own status line.</p>
+<div><a class="cta" href="/customize">🎛 Claude Code — customize everything, before / after →</a></div>
 <div class="applybar" id="applybar"><div><div class="step" id="steplabel">Step 1 — click a setup (☆ to favorite)</div><div class="selbadge" id="selbadge">No setup selected yet</div></div>
 <div class="cmd"><span class="dollar">$</span><span id="cmdtext">pick a setup to get its install command</span></div>
 <button class="copy" id="copybtn">Copy</button></div></header>

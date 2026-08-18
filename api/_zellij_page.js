@@ -574,6 +574,25 @@ function paintSaved(){
       copyText(ORIGIN+'/zellij?c='+encodeURIComponent(b64e(item.payload)));
       toast('Link to “'+item.name+'” copied');
     }));
+    acts.appendChild(act('update',function(){
+      svSet(svGet().map(function(x){
+        return x.name===item.name
+          ?{name:item.name,savedAt:new Date().toISOString().slice(0,10),payload:payload()}
+          :x;
+      }));
+      paintSaved();toast('Updated “'+item.name+'” from the current controls');
+    }));
+    acts.appendChild(act('rename',function(){
+      var n=(prompt('New name:',item.name)||'').trim().slice(0,40);
+      if(!n)return;
+      var out=[];
+      svGet().forEach(function(x){
+        if(x.name===item.name){x.name=n;out.push(x);}
+        else if(x.name!==n)out.push(x);
+      });
+      svSet(out);
+      paintSaved();toast('Renamed to “'+n+'”');
+    }));
     acts.appendChild(act('delete',function(){
       svSet(svGet().filter(function(x){return x.name!==item.name;}));
       paintSaved();toast('Removed “'+item.name+'”');

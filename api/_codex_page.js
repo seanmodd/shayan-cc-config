@@ -317,7 +317,7 @@ defaults. Every key was verified against the 0.147.0 binary, and one command mer
       theme scope reaches it (the syntax theme paints code blocks only). Codex is a compiled binary, so unlike
       Claude Code there is nothing to patch. If a future release adds a key, this page's verified pipeline
       will pick it up. Until then, the one agent whose prompts you can style — any colours, yellow strip and
-      black text included — is Claude Code, in <a href="/customize" style="color:var(--accent)">the Studio</a>
+      black text included — is Claude Code, on <a href="/customize" style="color:var(--accent)">its own page</a>
       under <b>Your messages</b>.</p>
     </div>
   </div>
@@ -666,6 +666,25 @@ function paintSaved(){
     acts.appendChild(act('share',function(){
       copyText(ORIGIN+'/codex?c='+encodeURIComponent(b64e(item.payload)));
       toast('Link to \u201c'+item.name+'\u201d copied');
+    }));
+    acts.appendChild(act('update',function(){
+      svSet(svGet().map(function(x){
+        return x.name===item.name
+          ?{name:item.name,savedAt:new Date().toISOString().slice(0,10),payload:payload()}
+          :x;
+      }));
+      paintSaved();toast('Updated \u201c'+item.name+'\u201d from the current controls');
+    }));
+    acts.appendChild(act('rename',function(){
+      var n=(prompt('New name:',item.name)||'').trim().slice(0,40);
+      if(!n)return;
+      var out=[];
+      svGet().forEach(function(x){
+        if(x.name===item.name){x.name=n;out.push(x);}
+        else if(x.name!==n)out.push(x);
+      });
+      svSet(out);
+      paintSaved();toast('Renamed to \u201c'+n+'\u201d');
     }));
     acts.appendChild(act('delete',function(){
       svSet(svGet().filter(function(x){return x.name!==item.name;}));

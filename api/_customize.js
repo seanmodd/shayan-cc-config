@@ -97,6 +97,25 @@ const STUDIO_CSS = `
   .ghosthandle{visibility:hidden;}
   .segrow.dragging{border-color:var(--accent);background:#141a24;opacity:.92;
     box-shadow:0 8px 20px rgba(0,0,0,.55);}
+  /* ── Saved setups ──────────────────────────────────────────────────────────
+     The same scc_customs list the homepage gallery renders, editable in place.
+     Ids are the identity (homepage favorites star by id), so Update and Rename
+     keep them and only Delete removes one. */
+  .savedlist{display:flex;flex-direction:column;gap:6px;margin-bottom:11px;}
+  /* Two lines per card, not one: a ~300px panel column cannot hold a swatch, a name
+     AND four buttons across — the name was the part that lost. */
+  .savedrow{display:flex;flex-direction:column;gap:7px;border:1px solid var(--border);border-radius:8px;padding:8px 9px;background:#0b0e14;min-width:0;}
+  .savedtop{display:flex;align-items:center;gap:9px;min-width:0;}
+  .savedrow .swp{display:flex;gap:3px;flex:none;}
+  .savedrow .swp i{width:12px;height:12px;border-radius:3px;display:block;border:1px solid rgba(255,255,255,.14);}
+  .savedrow .nm{flex:1;min-width:0;font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .savedrow .acts{display:flex;gap:5px;flex-wrap:wrap;}
+  .savedrow .acts button{cursor:pointer;background:none;border:1px solid var(--border);border-radius:6px;color:var(--dim);font-size:11px;padding:2px 7px;}
+  .savedrow .acts button:hover{border-color:var(--accent);color:var(--accent);}
+  button.savednew{cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;width:100%;
+    border:1px dashed var(--border);border-radius:8px;background:#0b0e14;color:var(--dim);
+    font-family:inherit;font-size:12.5px;padding:9px 10px;transition:all .15s;}
+  button.savednew:hover{border-color:var(--accent);color:var(--accent);}
   .barbot{position:fixed;left:0;right:0;bottom:0;z-index:60;background:rgba(13,16,22,.96);backdrop-filter:blur(10px);border-top:1px solid var(--border);padding:11px 22px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
   .barbot .cmd{flex:1 1 340px;display:flex;align-items:center;gap:8px;background:#0b0e14;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;color:#b7c3d6;overflow-x:auto;white-space:nowrap;font-family:ui-monospace,Menlo,monospace;scrollbar-width:thin;}
   .barbot .cmd .dollar{color:var(--ok);}
@@ -255,6 +274,9 @@ const STUDIO_CSS = `
     .segrow button{min-width:40px;min-height:40px;font-size:13px;}
     .seghandle{min-width:40px;min-height:40px;font-size:19px;}
     .segrow input[type=checkbox]{width:22px;height:22px;}
+    .savedrow{min-height:48px;}
+    .savedrow .acts button{min-width:40px;min-height:40px;font-size:12px;}
+    button.savednew{min-height:44px;font-size:13px;}
 
     /* Header and intro: on a phone the intro paragraph alone was a full screen. */
     header h1{font-size:24px!important;}
@@ -548,6 +570,7 @@ var HELP={
  name:{t:'Setup name',d:'What this setup is called. It shows up in the install command and in tweakcc’s theme list, so you can pick it again later. A label only — it changes nothing about how the terminal looks.'},
  start:{t:'Start from a starter palette',d:'Replaces ONLY the colours below with a hand‑picked set. Everything else you have set — thinking verbs, spinner, message style, input box, status line — is left exactly as it is. Use this when you like your setup and just want it in different colours.'},
  seed:{t:'…or seed everything from a preset',d:'Replaces your WHOLE setup with a complete ready‑made one: the colours and the verbs, spinner, message format, input box and status line. Use this to start over from a finished look. It overwrites the panels below, so if you only want new colours use the starter palette above instead.'},
+ saved:{t:'Saved setups',d:'Setups you have saved in this browser — the same list the homepage gallery shows. Load brings one back into the editor, Update overwrites it with what the editor holds right now (its identity is kept, so homepage favourites still point at it), Rename and Delete do what they say. “Save current as…” adds the editor’s setup as a new entry.'},
  palette:{t:'Palette',d:'The colour Claude Code uses for each job. These are roles, not decoration: Accent tints Claude’s own name and spinner, Cyan is plan mode, Success / Error / Warning colour tool results, Remember is the memory notice. Change one and every place that uses it changes in the AFTER preview.'},
  verbs:{t:'Thinking verbs',d:'The words shown while Claude works — the “Cooking” in “Cooking… (esc to interrupt)”. One per line, and Claude Code shows one of them each time it starts thinking. Add as many as you like; empty lines are ignored.'},
  vf:{t:'Verb format',d:'The wrapper around each verb. {} is where the verb goes and everything else is printed literally, so “{}… ” gives “Cooking… ” and “· {} ·” gives “· Cooking ·”. It must contain {} or the change is ignored.'},
@@ -715,6 +738,9 @@ function resyncColorModes(){if(_syncFg)_syncFg();if(_syncBg)_syncBg();}
 function buildControls(){
   var host=$('#controls');
   host.innerHTML=
+  '<div class="panel"><h3>\u{1F4BE} Saved setups</h3>'+
+    '<div class="ctl"><span class="cap">Your saved Claude Code setups'+ihtml('saved')+'</span><div class="savedlist" id="c_saved"></div></div>'+
+  '</div>'+
   '<div class="panel"><h3>\u{1F3AF} Setup</h3>'+
     '<label class="ctl"><span class="cap">Name'+ihtml('name')+'</span><input id="c_name" type="text" maxlength="60"></label>'+
     '<label class="ctl"><span class="cap">Start from a starter palette'+ihtml('start')+'</span><select id="c_start"><option value="">— pick —</option></select></label>'+
@@ -852,6 +878,8 @@ function buildControls(){
   STATUS_COLORS.forEach(function(x){var o=document.createElement('option');o.value=x;o.textContent=x;stSel.appendChild(o);});
   stSel.value=state.s;
   stSel.addEventListener('change',function(){state.s=this.value;edited();});
+
+  paintSaved();
 }
 function paintSwatches(){
   var host=$('#c_swatches');host.innerHTML='';
@@ -979,6 +1007,112 @@ function paintSegs(){
   });
 }
 
+// ── Saved setups ──────────────────────────────────────────────────────────────
+// The panel edits the same localStorage list ('scc_customs', via the shared
+// customs_get/customs_set helpers) that the homepage gallery renders — one storage
+// shape, two views. An item's id is its identity (homepage favorites star
+// 'custom:<id>'), so Update and Rename keep it; only Delete removes one.
+function savedIndex(cs,id){for(var i=0;i<cs.length;i++)if(cs[i].id===id)return i;return -1;}
+function savedSwatch(p){
+  // Four palette roles as a fingerprint. Saved payloads can come from share imports,
+  // so the palette is sanitized before its values reach a style attribute.
+  var pal=sanePal(p);
+  var wrap=document.createElement('span');wrap.className='swp';wrap.setAttribute('aria-hidden','true');
+  ['accent','green','yellow','red'].forEach(function(k){
+    var b=document.createElement('i');b.style.background=hx(pal[k]);wrap.appendChild(b);
+  });
+  return wrap;
+}
+function loadSaved(id){
+  var cs=customs_get(),ix=savedIndex(cs,id);if(ix<0)return;
+  var nm=String(cs[ix].n||'Custom');
+  // The same sanitizing path a shared ?c= link boots through, so a saved item and a
+  // shared link can never install two different things.
+  state=stateFromPayload(copyObj(cs[ix]));
+  buildControls();edited();
+  toast('Loaded “'+nm+'” into the editor');
+}
+function updateSaved(id){
+  var cs=customs_get(),ix=savedIndex(cs,id);if(ix<0)return;
+  var pl=payload();
+  pl.id=cs[ix].id;pl.n=cs[ix].n;
+  cs[ix]=pl;
+  customs_set(cs);paintSaved();
+  toast('Updated “'+String(pl.n||'Custom')+'” with the current editor setup');
+}
+function renameSaved(id){
+  var cs=customs_get(),ix=savedIndex(cs,id);if(ix<0)return;
+  var nm=prompt('Rename this setup',String(cs[ix].n||'Custom'));
+  if(nm==null)return;
+  nm=String(nm).replace(/^\\s+|\\s+$/g,'').slice(0,60);
+  if(!nm)return;
+  cs[ix].n=nm;customs_set(cs);paintSaved();
+  toast('Renamed to “'+nm+'”');
+}
+function deleteSaved(id){
+  var cs=customs_get(),ix=savedIndex(cs,id);if(ix<0)return;
+  var nm=String(cs[ix].n||'Custom');
+  cs.splice(ix,1);customs_set(cs);paintSaved();
+  toast('Deleted “'+nm+'”');
+}
+function saveCurrentAs(){
+  var nm=prompt('Save the current setup as…',state.n||'My Setup');
+  if(nm==null)return;
+  nm=String(nm).replace(/^\\s+|\\s+$/g,'').slice(0,60);
+  if(!nm)return;
+  // Publish's exact save path, reused: payload() stamps the content id, and any
+  // existing entry with the same id is replaced rather than duplicated. The name goes
+  // through state so the id reflects it, then comes back — saving a copy under a new
+  // name must not rename what the editor is holding.
+  var keep=state.n;state.n=nm;
+  var pl=payload();
+  state.n=keep;
+  var cs=customs_get().filter(function(x){return x.id!==pl.id;});
+  cs.push(pl);customs_set(cs);paintSaved();
+  toast('Saved “'+nm+'” — it shows here and in the homepage gallery');
+}
+function paintSaved(){
+  var host=$('#c_saved');if(!host)return;
+  host.innerHTML='';
+  var add=document.createElement('button');
+  add.type='button';add.className='savednew';
+  add.textContent='+ Save current as…';
+  add.setAttribute('title','Save what the editor holds right now as a new entry');
+  add.addEventListener('click',saveCurrentAs);
+  host.appendChild(add);
+  var cs=customs_get();
+  if(!cs.length){
+    var em=document.createElement('div');em.className='hint';
+    em.textContent='Nothing saved yet — saved setups show here and in the homepage gallery.';
+    host.appendChild(em);
+    return;
+  }
+  // Newest first: saves append to the array, so it reads back-to-front.
+  cs.slice().reverse().forEach(function(it){
+    var row=document.createElement('div');row.className='savedrow';
+    row.setAttribute('data-id',String(it.id||''));
+    var top=document.createElement('div');top.className='savedtop';
+    top.appendChild(savedSwatch(it.p));
+    var nm=document.createElement('span');nm.className='nm';
+    nm.textContent=String(it.n||'Custom').slice(0,60);nm.title=nm.textContent;
+    top.appendChild(nm);
+    row.appendChild(top);
+    var acts=document.createElement('span');acts.className='acts';
+    [['Load','Load into the editor',loadSaved],
+     ['Update','Overwrite with the current editor setup',updateSaved],
+     ['Rename','Rename this saved setup',renameSaved],
+     ['Delete','Remove this saved setup',deleteSaved]].forEach(function(a){
+      var b=document.createElement('button');b.type='button';b.textContent=a[0];
+      b.setAttribute('title',a[1]);
+      b.setAttribute('aria-label',a[0]+' “'+(it.n||'Custom')+'”');
+      b.addEventListener('click',function(){a[2](it.id);});
+      acts.appendChild(b);
+    });
+    row.appendChild(acts);
+    host.appendChild(row);
+  });
+}
+
 // boot: priority ?c= payload > ?from= preset > saved draft > defaults
 (function(){
   state=defaultState();
@@ -1023,8 +1157,8 @@ $('#c_replay').addEventListener('click',function(){
   termB.replay();termA.replay();
 });
 $('#c_copy').addEventListener('click',function(){copyText($('#cmdtext').textContent);this.textContent='Copied ✓';var b=this;setTimeout(function(){b.textContent='Copy install command';},1600);});
-$('#c_share').addEventListener('click',function(){var link=ORIGIN+'/customize?c='+encodeURIComponent(b64e(payload()));copyText(link);toast('Shareable studio link copied — anyone who opens it can preview & install your setup');});
-$('#c_publish').addEventListener('click',function(){var cs=customs_get();var pl=payload();cs=cs.filter(function(x){return x.id!==pl.id;});cs.push(pl);customs_set(cs);toast('Published “'+pl.n+'” to your homepage ⭐');});
+$('#c_share').addEventListener('click',function(){var link=ORIGIN+'/customize?c='+encodeURIComponent(b64e(payload()));copyText(link);toast('Shareable Claude Code link copied — anyone who opens it can preview & install your setup');});
+$('#c_publish').addEventListener('click',function(){var cs=customs_get();var pl=payload();cs=cs.filter(function(x){return x.id!==pl.id;});cs.push(pl);customs_set(cs);paintSaved();toast('Published “'+pl.n+'” to your homepage ⭐');});
 $('#c_reset').addEventListener('click',function(){
   state=defaultState();allowDraft=false;
   try{localStorage.removeItem('scc_draft');}catch(e){}
@@ -1055,7 +1189,7 @@ function renderCustomize(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Customize · shayan-cc-config</title>${favicon}<style>${baseCss}${TERM_CSS}${STUDIO_CSS}</style></head><body class="pinned">
 ${topBar('studio', ghSvg)}
-<header style="padding-bottom:2px"><h1 style="font-size:32px">🎛 The Studio</h1>
+<header style="padding-bottom:2px"><h1 style="font-size:32px">🎛 Claude Code</h1>
 <p class="sub" style="margin-top:8px">Your terminal, <b>before</b> and <b>after</b> — both are real, scrollable Claude Code sessions. <b>Type a message into either one</b> (or fire a sample) and watch both respond in their own style. Tweak everything below; the AFTER side updates live.</p></header>
 <div class="swrap">
   <div class="switchrow">

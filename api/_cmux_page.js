@@ -1087,6 +1087,58 @@ function paintPresets(){
       copyText(ORIGIN+'/cmux?c='+encodeURIComponent(b64e(item.payload)));
       toast('Link to \u201c'+item.name+'\u201d copied');
     }));
+    acts.appendChild(act('update',function(){
+      ours_set(ours_get().map(function(x){
+        if(x.name!==item.name)return x;
+        var pl=payload();pl.n=item.name;
+        return {name:item.name,savedAt:new Date().toISOString().slice(0,10),
+          pal:copyObj(activePal()),payload:pl};
+      }));
+      paintPresets();toast('Updated \u201c'+item.name+'\u201d from the current controls');
+    }));
+    // Renaming happens in an inline field, same as saving: a modal dialog blocks the
+    // click handler for as long as it is open, and an <input> cannot live inside this
+    // card's <button>, so the card is swapped for a <div> while the name is edited.
+    acts.appendChild(act('rename',function(){
+      var card=document.createElement('div');
+      card.className='pchip';
+      var rb=document.createElement('div');rb.className='pcbody';
+      var lab=document.createElement('label');
+      lab.className='pcname';lab.setAttribute('for','renName');
+      lab.textContent='Rename this setup';
+      var inp=document.createElement('input');
+      inp.type='text';inp.id='renName';inp.className='saveinput';
+      inp.setAttribute('maxlength','40');
+      inp.setAttribute('autocomplete','off');
+      inp.value=item.name;
+      var row=document.createElement('div');row.className='saverow';
+      var go=document.createElement('button');
+      go.type='button';go.className='savego';go.textContent='Rename';
+      var no=document.createElement('button');
+      no.type='button';no.className='saveno';no.textContent='Cancel';
+      row.appendChild(go);row.appendChild(no);
+      rb.appendChild(lab);rb.appendChild(inp);rb.appendChild(row);
+      card.appendChild(rb);
+      function commit(){
+        var n=(inp.value||'').trim().slice(0,40);
+        if(!n){inp.focus();return;}
+        var out=[];
+        ours_get().forEach(function(x){
+          if(x.name===item.name){x.name=n;out.push(x);}
+          else if(x.name!==n)out.push(x);
+        });
+        ours_set(out);
+        paintPresets();toast('Renamed to \u201c'+n+'\u201d');
+      }
+      go.addEventListener('click',commit);
+      no.addEventListener('click',function(){paintPresets();});
+      inp.addEventListener('keydown',function(e){
+        if(e.key==='Enter'){e.preventDefault();commit();}
+        else if(e.key==='Escape'){e.preventDefault();paintPresets();}
+      });
+      b.parentNode.replaceChild(card,b);
+      inp.focus();inp.select();
+    }));
     acts.appendChild(act('delete',function(){
       ours_set(ours_get().filter(function(x){return x.name!==item.name;}));
       paintPresets();toast('Removed \u201c'+item.name+'\u201d');
