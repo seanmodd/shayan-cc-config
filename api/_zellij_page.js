@@ -358,6 +358,8 @@ function saneZj(o){
     webSharing:zPick(o.webSharing,ZJ_OPTS.webSharing,d.webSharing),
     webServerPort:zNum(o.webServerPort,1024,65535,d.webServerPort),
     agentLayout:zBool(o.agentLayout,d.agentLayout),
+    agentCommand:(typeof o.agentCommand==='string'
+      &&/^[A-Za-z0-9][A-Za-z0-9 ._\/-]{0,39}$/.test(o.agentCommand))?o.agentCommand:d.agentCommand,
     plugins:(Object.prototype.toString.call(o.plugins)==='[object Array]'
       ? o.plugins.filter(function(x){return ids.indexOf(x)>=0;}) : []),
     on:true
@@ -487,7 +489,8 @@ var TIPS={
   osc8Hyperlinks:{t:'OSC 8 hyperlinks',d:'Clickable links in terminal output. The docs say the default is false; the binary\\u2019s default is true. It is written explicitly here so the file means what it says.'},
   copyCommand:{t:'Copy command',d:'Zellij copies through OSC 52 by default, which silently fails in some terminals. Setting pbcopy on macOS routes copying through the system clipboard instead.'},
   webServer:{t:'Web client',d:'Serves your sessions over HTTP so you can attach from a browser. Keep sharing off unless you mean it \\u2014 this exposes live terminals.'},
-  agentLayout:{t:'Agent layout',d:'Writes layouts/ai-agent.kdl alongside the config: the agent in a big pane, a shell and a git pane beside it. Open it with zellij --layout ai-agent.'},
+  agentLayout:{t:'Agent layout',d:'Writes layouts/ai-agent.kdl alongside the config: a big main pane, a shell and a git pane beside it. Open it with zellij --layout ai-agent.'},
+  agentCommand:{t:'Main pane command',d:'What the layout\\u2019s main pane runs \\u2014 YOUR choice, e.g. claude, codex, or anything else. Empty (stock) keeps it a plain shell so the layout stays agent-agnostic. Letters, numbers, spaces, dots, dashes, slashes; it lands inside the layout file, so nothing else survives.'},
   scrollBufferSize:{t:'Scroll buffer',d:'Lines of scrollback kept per pane. This one really is lines, unlike herdr\\u2019s byte budget.'},
 };
 function ihtml(k){return TIPS[k]?'<button type="button" class="i" data-tip="'+k+'" aria-label="What is this?">i</button>':'';}
@@ -605,6 +608,8 @@ function buildControls(){
   h+=panel('\\u{1F3AF} Startup',
     '<label class="ctl"><span class="cap">Default mode'+ihtml('defaultMode')+'</span>'+sel('f_defaultMode',ZJ_OPTS.modes,s.defaultMode)+'</label>'
     +chk('f_agentLayout','Write an AI-agent layout and use it by default',s.agentLayout,'agentLayout')
+    +'<label class="ctl"><span class="cap">Main pane runs'+ihtml('agentCommand')+'</span>'
+    +'<input type="text" id="f_agentCommand" maxlength="40" placeholder="empty = a plain shell pane" value="'+esc(s.agentCommand)+'"></label>'
     +'<label class="ctl"><span class="cap">Default layout <span class="hint">(when the agent layout is off)</span></span>'+sel('f_defaultLayout',ZJ_OPTS.layouts,s.defaultLayout)+'</label>'
     +chk('f_attachToSession','Attach to an existing session instead of making a new one',s.attachToSession)
     +chk('f_showStartupTips','Show startup tips',s.showStartupTips)

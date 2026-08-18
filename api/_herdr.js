@@ -114,7 +114,6 @@ const HERDR_DEFAULTS = {
   allowNested: false,
   kittyGraphics: false,
   // integration + plugins
-  claudeIntegration: true,
   plugins: [],
 };
 
@@ -207,7 +206,6 @@ function sanitizeHerdr(hd) {
     paneHistory: bool(hd.paneHistory, d.paneHistory),
     allowNested: bool(hd.allowNested, d.allowNested),
     kittyGraphics: bool(hd.kittyGraphics, d.kittyGraphics),
-    claudeIntegration: bool(hd.claudeIntegration, d.claudeIntegration),
     plugins,
   };
 }
@@ -344,16 +342,6 @@ else
   cat > "$HERDR_CFG" <<'SCC_HERDR_TOML'
 ${toml}SCC_HERDR_TOML
   echo "  wrote $HERDR_CFG"
-${s.claudeIntegration ? `
-  # Lifecycle hooks, so herdr can resume the Claude Code conversation and not just the
-  # pane. Needs the config dir to exist already, which is why this runs after the mkdir.
-  mkdir -p "\${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-  if herdr integration install claude >/dev/null 2>&1; then
-    echo "  Claude Code integration installed (conversation resume enabled)"
-  else
-    echo "  note: could not install the Claude Code integration — run it yourself with:"
-    echo "        herdr integration install claude"
-  fi` : ''}
 ${chosen.length ? `
   echo "  installing ${chosen.length} plugin${chosen.length > 1 ? 's' : ''}…"
 ${pluginLines}` : ''}

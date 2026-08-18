@@ -82,6 +82,10 @@ const ZELLIJ_DEFAULTS = {
   webSharing: 'off',
   webServerPort: 8082,
   agentLayout: true,
+  // What the layout's main pane runs. '' = a plain shell pane (stock default): the
+  // layout stays agent-agnostic unless the USER picks a command. Sanitized to a
+  // strict charset because it lands inside the KDL layout.
+  agentCommand: '',
   plugins: [],
 };
 
@@ -173,6 +177,8 @@ function sanitizeZellij(zj) {
     webSharing: pick(zj.webSharing, WEB_SHARING, d.webSharing),
     webServerPort: clampInt(zj.webServerPort, 1024, 65535, d.webServerPort),
     agentLayout: bool(zj.agentLayout, d.agentLayout),
+    agentCommand: (typeof zj.agentCommand === 'string'
+      && /^[A-Za-z0-9][A-Za-z0-9 ._\/-]{0,39}$/.test(zj.agentCommand)) ? zj.agentCommand : d.agentCommand,
     plugins,
   };
 }
@@ -304,6 +310,23 @@ function buildZellijKdl(s) {
 //
 // start_suspended on the agent and git panes is deliberate — opening the layout should
 // not immediately spawn an AI session or shell out to git; you press Enter when ready.
+// The layout's main pane: a plain shell unless the user chose a command. The command
+// is sanitizer-restricted, and multi-word commands split into command + args the way
+// KDL wants them.
+function agentPane(s) {
+  if (!s.agentCommand) {
+    return `        // The main pane is yours; start whatever agent you like in it.
+        pane size="60%" name="main" focus=true`;
+  }
+  const parts = s.agentCommand.split(/\s+/);
+  const args = parts.slice(1).map(a => `\n            args "${a}"`).join('');
+  return `        // Runs what YOU chose on this page; press Enter in the pane to start it.
+        pane size="60%" name="${parts[0]}" focus=true {
+            command "${parts[0]}"${args}
+            start_suspended true
+        }`;
+}
+
 function buildAgentLayout(s) {
   return `// ~/.config/zellij/layouts/ai-agent.kdl
 // Open it with:  zellij --layout ai-agent
@@ -319,11 +342,7 @@ layout {
     }
 
     tab name="agent" focus=true split_direction="vertical" {
-        // The agent gets the room; press Enter in the pane to start it.
-        pane size="60%" name="claude" focus=true {
-            command "claude"
-            start_suspended true
-        }
+${agentPane(s)}
         pane size="40%" split_direction="horizontal" {
             pane name="shell"
             pane name="git" size="45%" {

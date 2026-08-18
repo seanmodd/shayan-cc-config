@@ -20,7 +20,7 @@ const PAGES = [
   },
   {
     id: 'cmux', path: '/cmux', icon: '\u{1FA9F}', label: 'cmux', short: 'cmux',
-    sub: 'the macOS terminal around Claude Code',
+    sub: 'the native macOS terminal built on Ghostty',
   },
   {
     id: 'codex', path: '/codex', icon: '\u{25B8}', label: 'Codex CLI', short: 'Codex',

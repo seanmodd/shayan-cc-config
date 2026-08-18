@@ -44,7 +44,7 @@ const THEME_PREVIEW = {
 
 const HERDR_CSS = `
   .hwrap{max-width:1440px;margin:0 auto;padding:0 24px 40px;}
-  .hpair{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;}
+  .hpair{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;}
   .hcol{min-width:0;}
 
   /* The herdr window mock. Every colour is a custom property so the preview updates by
@@ -131,7 +131,7 @@ const HERDR_CSS = `
   body.docked .hterm{height:var(--dock-h);flex:none;overflow:hidden;}
 
   @media(max-width:1100px){.hpair{grid-template-columns:1fr 1fr;}
-    .hpair .hcol-claude{grid-column:1/-1;}}
+}
   .hpanels{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;
     align-items:start;}
   @media(min-width:760px){#herdrControls{grid-template-columns:repeat(auto-fit,minmax(370px,1fr));}}
@@ -176,9 +176,8 @@ const HERDR_CSS = `
   @media(max-width:700px),(max-height:520px){
     .hwrap{padding:0 12px 40px;}
     .hpair{grid-template-columns:1fr;gap:0;}
-    .hpair[data-pane="before"] .hcol-after,.hpair[data-pane="before"] .hcol-claude{display:none;}
-    .hpair[data-pane="after"] .hcol-before,.hpair[data-pane="after"] .hcol-claude{display:none;}
-    .hpair[data-pane="claude"] .hcol-before,.hpair[data-pane="claude"] .hcol-after{display:none;}
+    .hpair[data-pane="before"] .hcol-after{display:none;}
+    .hpair[data-pane="after"] .hcol-before{display:none;}
     .hhead h1{font-size:25px;margin-bottom:2px;}
     .hhead .sub{font-size:12.5px;line-height:1.5;}
     .hterm{height:min(30dvh,200px);flex:none;font-size:calc(var(--hd-font) * .9);}
@@ -226,25 +225,20 @@ ${topBar('herdr', ghSvg)}
   <div class="switchrow">
     <div class="paneswitch" data-pane-toggle role="tablist" aria-label="Which window to show">
       <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
-      <button type="button" class="pswbtn" data-pane="after" role="tab" aria-selected="false">After</button>
-      <button type="button" class="pswbtn on" data-pane="claude" role="tab" aria-selected="true">+ Claude</button>
+      <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
     </div>
     <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
       <span class="pico">\u{1F4CC}</span><span class="ptxt">Preview pinned</span></button>
   </div>
-  <div class="hpair" data-pane="claude" id="pair">
+  <div class="hpair" data-pane="after" id="pair">
     <div class="hcol hcol-before">
       <div class="hbadge"><span class="pill">before</span><b>Stock herdr</b><span>— every default, straight from 0.8.0</span></div>
       <div id="winBefore"></div>
     </div>
     <div class="hcol hcol-after">
-      <div class="hbadge"><span class="pill aft">after</span><b>Your herdr</b><span>— an ordinary shell</span></div>
+      <div class="hbadge"><span class="pill aft">after</span><b>Your herdr</b><span>— herding a sample agent</span></div>
       <div id="winAfter"></div>
-    </div>
-    <div class="hcol hcol-claude">
-      <div class="hbadge"><span class="pill aft">agent</span><b>+ Claude Code</b><span>— a sample agent session</span></div>
-      <div id="winClaude"></div>
     </div>
     <div class="dockgrip" id="dockgrip" role="separator" aria-orientation="horizontal" tabindex="0"
       aria-label="Resize the preview. Arrow keys adjust the height, Home resets it."
@@ -288,11 +282,10 @@ ${topBar('herdr', ghSvg)}
       <div class="hfiles">curl -fsSL https://herdr.dev/install.sh | sh
 <span style="color:#5b6470"># or</span>
 brew install herdr</div>
-      <p class="phint" style="margin-top:11px">Claude Code integration is a separate step the
-      installer runs for you: it writes lifecycle hooks into
-      <span class="mono">~/.claude</span> so herdr can resume the <b>conversation</b> after a server
-      restart, not just the pane. herdr reads Claude Code's <i>state</i> from the screen either
-      way — the hook supplies the session identity.</p>
+      <p class="phint" style="margin-top:11px">This page configures <b>herdr and nothing else</b>: the installer
+      writes only herdr's own config. Per-agent integrations (conversation resume) are herdr's own
+      <span class="mono">herdr integration install</span> command — run it yourself if you want it; nothing here
+      touches any other tool's files.</p>
     </div>
   </div>
 
@@ -390,15 +383,14 @@ function saneHerdr(o){
     paneHistory:hBool(o.paneHistory,d.paneHistory),
     allowNested:hBool(o.allowNested,d.allowNested),
     kittyGraphics:hBool(o.kittyGraphics,d.kittyGraphics),
-    claudeIntegration:hBool(o.claudeIntegration,d.claudeIntegration),
     plugins:(Object.prototype.toString.call(o.plugins)==='[object Array]'
       ? o.plugins.filter(function(x){return ids.indexOf(x)>=0;}) : []),
     on:true
   };
 }
 
-// The fixed palette the "+ Claude Code" pane paints with. This page is standalone:
-// the pane is a sample agent session in these colours, not a payload from anywhere.
+// The fixed palette the sample agent session paints with. This page is standalone:
+// a fixed sample in these colours, not a payload from anywhere.
 var DEFAULT_PAL={bg:[26,27,38],raised:[41,46,66],text:[192,202,245],
   comment:[86,95,137],subtle:[48,52,70],accent:[122,162,247],accent2:[187,154,247],
   cyan:[125,207,255],green:[158,206,106],red:[247,118,142],orange:[255,158,100],
@@ -408,9 +400,9 @@ var DEFAULT_PAL={bg:[26,27,38],raised:[41,46,66],text:[192,202,245],
 // Four agents in three workspaces, chosen so every documented state is on screen at
 // once: that is the whole pitch, and a mock showing four idle panes would not make it.
 var AGENTS=[
-  {ws:'api',    tab:'claude',  agent:'claude', state:'blocked', sub:'needs approval'},
-  {ws:'api',    tab:'tests',   agent:'claude', state:'working', sub:'running suite'},
-  {ws:'web',    tab:'claude',  agent:'claude', state:'done',    sub:'ready to read'},
+  {ws:'api',    tab:'agent',   agent:'agent',  state:'blocked', sub:'needs approval'},
+  {ws:'api',    tab:'tests',   agent:'agent',  state:'working', sub:'running suite'},
+  {ws:'web',    tab:'agent',   agent:'agent',  state:'done',    sub:'ready to read'},
   {ws:'infra',  tab:'shell',   agent:'',       state:'idle',    sub:''}
 ];
 
@@ -458,17 +450,16 @@ function winHTML(s,mode){
   }
 
   var tabs='<div class="htabs'+(s.tabBarPosition==='bottom'?' bottom':'')+'">'
-    +((s.hideTabBarWhenSingle)?'<div class="htab on">claude</div>':
-      '<div class="htab on">claude</div><div class="htab">tests</div><div class="htab">shell</div>')
+    +((s.hideTabBarWhenSingle)?'<div class="htab on">agent</div>':
+      '<div class="htab on">agent</div><div class="htab">tests</div><div class="htab">shell</div>')
     +'</div>';
 
-  // The third column: the terminal is themed by the controls below, and the SESSION
-  // inside it is a fixed sample painted with DEFAULT_PAL. Everywhere else shows an
-  // ordinary shell, so the difference between "my terminal" and "my terminal running
-  // the agent" is visible side by side.
-  var cc=(mode==='claude')?ccColors():null;
+  // AFTER shows herdr doing what herdr is for: herding an agent. The session is a
+  // fixed sample painted with DEFAULT_PAL — no other page's payload is read. BEFORE
+  // shows an ordinary shell so the state-tracking chrome is the visible difference.
+  var cc=(mode==='agent')?ccColors():null;
   var body='';
-  if(mode==='claude'){
+  if(mode==='agent'){
     for(var j=0;j<LINES.length;j++){
       var kind=LINES[j][0],txt=LINES[j][1];
       if(kind==='nl'){body+='</div><div class="l">';continue;}
@@ -485,9 +476,9 @@ function winHTML(s,mode){
       +'<span style="color:'+t.text+'">\u2588</span>';
   }
 
-  var paneBg=(mode==='claude')?(' style="background:'+cc.bg+'"'):'';
+  var paneBg=(mode==='agent')?(' style="background:'+cc.bg+'"'):'';
   var pane1='<div class="hpane active"'+paneBg+'>'
-    +(s.agentLabelsOnBorders?'<div class="hlabel">claude · blocked</div>':'')
+    +(s.agentLabelsOnBorders?'<div class="hlabel">agent · blocked</div>':'')
     +'<div class="hterm"><div class="l">'+body+'</div></div>'
     +(s.paneScrollbars?'<div class="hscroll"></div>':'')+'</div>';
   var pane2='<div class="hpane">'
@@ -500,7 +491,7 @@ function winHTML(s,mode){
   if(s.toastDelivery!=='off'){
     var where=s.toastDelivery==='herdr'?s.toastPosition:'bottom-right';
     var what=s.toastDelivery==='system'?'macOS notification':
-      s.toastDelivery==='terminal'?'terminal bell + title':'claude is blocked';
+      s.toastDelivery==='terminal'?'terminal bell + title':'agent is blocked';
     toast='<div class="htoast '+where+'">'+esc(what)+'</div>';
   }
 
@@ -538,8 +529,7 @@ function palHex(t,fb){
 }
 function drawWindows(){
   $('#winBefore').innerHTML=winHTML(defaultHerdr(),'plain');
-  $('#winAfter').innerHTML=winHTML(state,'plain');
-  $('#winClaude').innerHTML=winHTML(state,'claude');
+  $('#winAfter').innerHTML=winHTML(state,'agent');
 }
 
 // ── controls ──────────────────────────────────────────────────────────────────
@@ -550,11 +540,10 @@ var TIPS={
   agentPanelSort:{t:'Sidebar order',d:'spaces groups by workspace. priority floats the agents that need you \\u2014 blocked first, then done \\u2014 which is the ordering that makes a wall of agents readable.'},
   toastDelivery:{t:'Notifications',d:'OFF by default in herdr, which surprises people. herdr draws its own toast in the terminal; terminal uses the bell and title (works over SSH); system uses the OS notifier.'},
   paneHistory:{t:'Pane history replay',d:'Restores what was ON SCREEN after a server restart, not just the pane. Off by default upstream for a real reason: the stored output can contain secrets and tokens, and it lands in session-history.json in plain text.'},
-  resumeAgents:{t:'Resume conversations',d:'After a server restart, reopen supported agents into their native conversation \\u2014 for Claude Code that is claude --resume. Needs the integration installed; on by default.'},
+  resumeAgents:{t:'Resume conversations',d:'After a server restart, reopen supported agents into their native conversation rather than a fresh pane. Whether an agent supports this depends on its own herdr integration (herdr integration install <agent> \\u2014 a herdr feature this page deliberately does not run for you).'},
   scrollbackBytes:{t:'Scrollback limit',d:'A BYTE budget, not a line count, despite the legacy alias being named scrollback_lines. 10 MB is the default.'},
   allowNested:{t:'Allow nesting',d:'Lets you launch herdr inside a herdr pane. Off by default, and worth leaving off: agent-state detection reads the live screen, and a nested multiplexer redrawing over it breaks that reading.'},
   worktreeDir:{t:'Worktree directory',d:'Where herdr puts per-branch git checkouts when you run several agents on different branches. Default ~/.herdr/worktrees.'},
-  claudeIntegration:{t:'Claude Code integration',d:'Runs herdr integration install claude, which writes lifecycle hooks into ~/.claude. It supplies the SESSION IDENTITY so a conversation can be resumed; herdr still reads Claude Code state from the screen.'},
   newCwd:{t:'New pane directory',d:'follow inherits the current pane\\u2019s directory, home always starts at ~, current uses the directory herdr was started in.'},
   hostCursor:{t:'Cursor',d:'auto lets herdr decide, native leaves your terminal\\u2019s own cursor alone, drawn makes herdr paint it (useful when the native one lands in the wrong pane).'},
 };
@@ -698,7 +687,6 @@ function buildControls(){
 
   h+=panel('\\u{1F4BE} Session &amp; storage',
     chk('f_resumeAgents','Resume agent conversations after a restart',s.resumeAgents,'resumeAgents')
-    +chk('f_claudeIntegration','Install the Claude Code integration',s.claudeIntegration,'claudeIntegration')
     +'<label class="ctl"><span class="cap">Scrollback limit (bytes)'+ihtml('scrollbackBytes')+'</span>'
     +'<input type="number" id="f_scrollbackBytes" min="1000000" max="200000000" step="1000000" value="'+s.scrollbackBytes+'"></label>'
     +'<label class="ctl"><span class="cap">Worktree directory'+ihtml('worktreeDir')+'</span>'

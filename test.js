@@ -120,6 +120,24 @@ function bashCheck(src, label) {
     'home: the recipes card is gone');
   ok(!fs.existsSync(path.join(ROOT, 'api/_recipes.js')),
     'recipes: the module itself is deleted');
+  // /herdr is exclusively herdr: no Claude Code pane, no integration toggle, no
+  // mention at all — the whole page is greppable-clean.
+  // herdr is exclusively herdr. Two scopes, because two things could leak:
+  // (1) herdr's OWN source files — zero mentions, full stop (the installer used to
+  //     run 'herdr integration install claude', which writes hooks into ~/.claude);
+  // (2) the page a visitor READS — visible text clean outside the shared comparison
+  //     card ("which tool when" names all seven tools; that is editorial). Shared
+  //     CLIENT_LIB internals keep tweakcc's own schema field names (claude:,
+  //     claudeShimmer:) — identifiers, not content, excluded by stripping scripts.
+  for (const f of ['api/_herdr.js', 'api/_herdr_page.js']) {
+    ok(!/claude/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')),
+      f + ': zero Claude Code references');
+  }
+  const hdVisible = (await call('/herdr')).body
+    .replace(/<section class="cmpwrap" id="compare"[\s\S]*?<\/section>/, '')
+    .replace(/<script>[\s\S]*?<\/script>/g, '');
+  ok(!/claude/i.test(hdVisible),
+    '/herdr: nothing a visitor reads mentions Claude Code outside the comparison card');
   const SEP = [
     { path: '/cmux', route: '/cmux-apply.sh', saved: 'scc_cmux_saved' },
     { path: '/herdr', route: '/herdr-apply.sh', saved: 'scc_herdr_saved' },
@@ -151,6 +169,11 @@ function bashCheck(src, label) {
       t.route + ': parses as bash');
     const rn = await call(t.route + '?c=' + Buffer.from(JSON.stringify({ n: 'x' })).toString('base64url'));
     ok(rn.status === 404, t.route + ': refuses a payload without its layer');
+    // Exclusivity is total: a standalone installer never mentions, reads or writes
+    // anything of Claude Code's — no ~/.claude, no claude binary, no integrations
+    // run on the user's behalf. (herdr shipped for a while running
+    // 'herdr integration install claude', which writes hooks into ~/.claude.)
+    ok(!/claude/i.test(rs.body), t.route + ': never touches or mentions Claude Code');
   }
 
   // ── favorites, folded and split by kind ───────────────────────────────────
@@ -1334,7 +1357,7 @@ function bashCheck(src, label) {
   ok(!/[^A-Za-z0-9 _-]/.test(wpEvil.themeName), '/warp: a theme name is reduced to a safe filename');
   ok(!wpEvil.themeName.includes('..') && !wpEvil.themeName.includes('/'),
     '/warp: a theme name cannot climb out of the themes directory');
-  ok(wpEvil.lcAgentCommand === 'claude', '/warp: the executed command comes from a fixed list');
+  ok(wpEvil.lcAgentCommand === 'zsh', '/warp: the executed command comes from a fixed list (and stock is a plain shell)');
   ok(wpEvil.background === WP.WARP_DEFAULTS.background, '/warp: a bad colour falls back');
   ok(wpEvil.opacity === 100 && wpEvil.fontSize === 8, '/warp: numbers are clamped');
   const wpEvilSh = WP.warpApplyBlock(wpEvil, wpal);

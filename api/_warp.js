@@ -61,7 +61,7 @@ const WARP_DEFAULTS = {
   lcSplit: 'horizontal',
   lcColor: 'magenta',
   lcGitPane: true,
-  lcAgentCommand: 'claude',
+  lcAgentCommand: 'zsh',
   // keybindings
   keybindings: false,
   kbCompletion: 'ctrl-space',
