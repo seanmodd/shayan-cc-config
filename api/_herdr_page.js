@@ -13,9 +13,10 @@ const { STUDIO_CSS } = require('./_customize.js');
 const { topBar, navPayload } = require('./_nav.js');
 const { compareBlock, COMPARE_CSS } = require('./_compare.js');
 const {
-  HERDR_DEFAULTS, HERDR_THEMES, HERDR_PLUGINS, SHELL_MODES, NEW_CWD,
-  COLLAPSED_MODES, HOST_CURSORS, TAB_POSITIONS, AGENT_SORTS, TOAST_DELIVERY,
-  TOAST_POSITIONS, UPDATE_CHANNELS, PREFIXES,
+  HERDR_DEFAULTS, HERDR_THEMES, BIN_VERIFIED_THEMES, THEME_SIBLINGS, THEME_SLOTS,
+  HERDR_PLUGINS, SHELL_MODES, NEW_CWD, COLLAPSED_MODES, HOST_CURSORS, TAB_POSITIONS,
+  AGENT_SORTS, TOAST_DELIVERY, TOAST_POSITIONS, CLIP_POSITIONS, UPDATE_CHANNELS,
+  PREFIXES, SOUND_AGENTS, SOUND_MODES, PANE_SPLITS, QA_TYPES, HP_LIMITS,
 } = require('./_herdr.js');
 
 // Palettes for the built-in themes, so a theme chip previews in its own colours rather
@@ -57,7 +58,7 @@ const HERDR_CSS = `
   .hside{flex:none;background:var(--hd-panel);border-right:1px solid var(--hd-chrome);
     padding:7px 0 8px;display:flex;flex-direction:column;gap:2px;overflow:hidden;}
   .hside .hgroup{font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;
-    color:var(--hd-dim);padding:5px 9px 3px;}
+    color:var(--hd-tabdim);padding:5px 9px 3px;}
   .hrow{display:flex;align-items:center;gap:6px;padding:3px 9px;font-size:var(--hd-sidefont);
     color:var(--hd-dim);white-space:nowrap;overflow:hidden;}
   .hrow .hname{overflow:hidden;text-overflow:ellipsis;}
@@ -70,13 +71,13 @@ const HERDR_CSS = `
   .hdot.working{background:var(--hd-yellow);}
   .hdot.blocked{background:var(--hd-red);box-shadow:0 0 0 2px color-mix(in srgb,var(--hd-red) 30%,transparent);}
   .hdot.done{background:var(--hd-green);}
-  .hdot.idle{background:var(--hd-dim);opacity:.55;}
+  .hdot.idle{background:var(--hd-idle);opacity:.55;}
   .hstate{margin-left:auto;font-size:8px;letter-spacing:.06em;text-transform:uppercase;
-    color:var(--hd-dim);}
+    color:var(--hd-statecol);}
   .hpanes{flex:1;display:flex;flex-direction:column;min-width:0;}
   .htabs{display:flex;gap:2px;padding:4px 6px 0;background:var(--hd-panel);font-size:9.5px;}
   .htabs.bottom{order:2;padding:0 6px 4px;}
-  .htab{padding:3px 9px;border-radius:5px 5px 0 0;color:var(--hd-dim);white-space:nowrap;}
+  .htab{padding:3px 9px;border-radius:5px 5px 0 0;color:var(--hd-tabdim);white-space:nowrap;}
   .htab.on{background:var(--hd-bg);color:var(--hd-text);}
   .htabs.bottom .htab{border-radius:0 0 5px 5px;}
   .hsplit{flex:1;display:flex;min-width:0;gap:var(--hd-gap);padding:var(--hd-gap);}
@@ -89,7 +90,7 @@ const HERDR_CSS = `
   .hterm{flex:1;padding:6px 8px;font-size:var(--hd-font);line-height:1.6;overflow:hidden;}
   .hterm .l{white-space:pre-wrap;word-break:break-word;}
   .hscroll{position:absolute;right:1px;top:5px;bottom:5px;width:3px;border-radius:3px;
-    background:var(--hd-chrome);}
+    background:var(--hd-scroll);}
   /* The toast, when notifications are on — it is the one setting whose effect is
      invisible unless the mock draws it. */
   .htoast{position:absolute;font-size:8.5px;background:var(--hd-panel);color:var(--hd-text);
@@ -97,6 +98,11 @@ const HERDR_CSS = `
     box-shadow:0 6px 16px rgba(0,0,0,.5);}
   .htoast.bottom-right{right:7px;bottom:7px;} .htoast.bottom-left{left:7px;bottom:7px;}
   .htoast.top-right{right:7px;top:7px;} .htoast.top-left{left:7px;top:7px;}
+  .htoast.top-center{left:50%;transform:translateX(-50%);top:7px;}
+  .htoast.bottom-center{left:50%;transform:translateX(-50%);bottom:7px;}
+  /* The clipboard toast is herdr's own copy-confirmation bubble, drawn dimmer so it
+     reads as a different thing from a notification toast. */
+  .htoast.clip{border-color:var(--hd-chrome);color:var(--hd-dim);}
   .hbadge{display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:.12em;
     text-transform:uppercase;color:var(--faint);margin-bottom:7px;}
   .hbadge b{color:var(--text);letter-spacing:.02em;}
@@ -169,6 +175,53 @@ const HERDR_CSS = `
     color:#b7c3d6;overflow-x:auto;white-space:pre;line-height:1.6;}
   .hfiles h4{margin:0 0 6px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;
     font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--gold);}
+  .hfilename{font-size:10.5px;letter-spacing:.05em;color:var(--gold);margin:10px 0 4px;
+    font-family:ui-monospace,Menlo,monospace;}
+
+  /* "no visual change" badge — the honest label for a key the mock cannot show. */
+  .nov{margin-left:7px;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--faint);border:1px solid var(--border);border-radius:5px;padding:1px 5px;
+    white-space:nowrap;}
+
+  /* Theme-chip corner tag for names whose only evidence is the 0.8.0 binary. */
+  .hcbadge{font-size:8px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);
+    padding:0 9px 6px;}
+
+  /* ── the 16 [theme.custom] tokens ─────────────────────────────────────────── */
+  #tokGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:7px;}
+  .tokrow{display:flex;align-items:center;gap:7px;border:1px solid var(--border);
+    border-radius:8px;padding:6px 8px;background:#10141b;overflow:hidden;}
+  .tokrow .tokname{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--dim);
+    width:86px;flex:none;overflow:hidden;text-overflow:ellipsis;}
+  .tokrow.set{border-color:var(--accent);}
+  .tokrow .stychip{padding:3px 8px;font-size:10.5px;flex:none;}
+  .tokrow input[type=color]{width:30px;height:22px;border:1px solid var(--border);
+    border-radius:5px;background:#0b0e14;padding:1px;cursor:pointer;flex:none;}
+  .tokrow .tokfile{font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--faint);margin-left:auto;white-space:nowrap;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;}
+
+  /* ── herdr-plus builders ──────────────────────────────────────────────────── */
+  .hpcard{border:1px solid var(--border);border-radius:10px;background:#10141b;
+    padding:9px 10px;margin-bottom:9px;}
+  .hpcard .hprow{display:flex;gap:7px;align-items:center;margin-bottom:6px;flex-wrap:wrap;}
+  .hpcard input[type=text],.hpcard select{background:#0b0e14;border:1px solid var(--border);
+    border-radius:7px;color:var(--text);font-family:inherit;font-size:12px;
+    padding:5px 8px;min-width:0;}
+  .hpcard input.grow{flex:1;}
+  .hpcard input.hpmono{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;}
+  .hptab{border:1px dashed var(--border);border-radius:8px;padding:7px 8px;margin:6px 0;}
+  .hptab .hptabhead{display:flex;gap:7px;align-items:center;margin-bottom:5px;flex-wrap:wrap;}
+  .hpdel{cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--faint);
+    border-radius:6px;font-family:inherit;font-size:11px;padding:4px 8px;flex:none;}
+  .hpdel:hover{border-color:var(--red,#f7768e);color:var(--red,#f7768e);}
+  .hpadd{cursor:pointer;border:1px dashed var(--border);background:transparent;color:var(--dim);
+    border-radius:7px;font-family:inherit;font-size:11.5px;padding:5px 10px;margin:2px 6px 2px 0;}
+  .hpadd:hover{border-color:var(--accent);color:var(--accent);}
+  .hpaneline{display:flex;gap:6px;align-items:center;margin:4px 0;}
+  .hphint{font-size:10.5px;color:var(--faint);margin:4px 0 0;line-height:1.5;}
+  .hpwarn{font-size:10.5px;color:var(--gold);margin:4px 0 0;}
+  .hpsep{border-top:1px dashed var(--border);margin:8px 0;}
 
   .hhead{padding-bottom:2px;}
   .hhead h1{font-size:32px;}
@@ -204,10 +257,13 @@ function esc(s) {
 function renderHerdr(DATA, baseCss, clientLib, favicon, ghSvg, ghUrl) {
   const defaults = JSON.stringify(HERDR_DEFAULTS);
   const opts = JSON.stringify({
-    themes: HERDR_THEMES, shellModes: SHELL_MODES, newCwd: NEW_CWD,
+    themes: HERDR_THEMES, binVerified: BIN_VERIFIED_THEMES, siblings: THEME_SIBLINGS,
+    slots: THEME_SLOTS, shellModes: SHELL_MODES, newCwd: NEW_CWD,
     collapsed: COLLAPSED_MODES, cursors: HOST_CURSORS, tabPositions: TAB_POSITIONS,
     sorts: AGENT_SORTS, toastDelivery: TOAST_DELIVERY, toastPositions: TOAST_POSITIONS,
-    channels: UPDATE_CHANNELS, prefixes: PREFIXES,
+    clipPositions: CLIP_POSITIONS, channels: UPDATE_CHANNELS, prefixes: PREFIXES,
+    soundAgents: SOUND_AGENTS, soundModes: SOUND_MODES, splits: PANE_SPLITS,
+    qaTypes: QA_TYPES, limits: HP_LIMITS,
   });
   const themePreview = JSON.stringify(THEME_PREVIEW);
   const plugins = JSON.stringify(HERDR_PLUGINS);
@@ -250,9 +306,36 @@ ${topBar('herdr', ghSvg)}
   <div class="panel" style="margin-bottom:14px"><h3>\u{1F3A8} Theme</h3>
     <p class="phint">herdr ships 18 built-in themes. Pick one and the whole window follows —
     sidebar, panes, state dots. <b>terminal</b> is the odd one out: it follows your terminal's
-    own ANSI palette instead of setting colours.</p>
+    own ANSI palette instead of setting colours. The light variants tagged
+    <span class="mono">binary-verified</span> exist as names in the 0.8.0 binary but the docs
+    never enumerate them; a wrong name falls back quietly, it never breaks.</p>
     <div id="hthemeGrid"></div>
     <div id="hthemeNote" class="pnote"></div>
+    <div class="hpsep"></div>
+    <label class="ctl2"><input type="checkbox" id="t_autoSwitch"><span>Follow the terminal's
+      light/dark appearance (<span class="mono">theme.auto_switch</span>)</span></label>
+    <div class="hprow" id="autoRow" style="display:flex;gap:10px;flex-wrap:wrap">
+      <label class="ctl" style="margin-bottom:0"><span class="cap">Light theme</span><select id="t_lightName"></select></label>
+      <label class="ctl" style="margin-bottom:0"><span class="cap">Dark theme</span><select id="t_darkName"></select></label>
+    </div>
+    <p class="phint" id="autoHint" style="margin-top:7px">Left unset, herdr picks each theme's own
+    sibling (e.g. catppuccin ↔ catppuccin-latte). The names are only written to the file while
+    auto-switch is on.</p>
+  </div>
+
+  <div class="panel" style="margin-bottom:14px"><h3>\u{1F58C} Custom colours — all 16 tokens</h3>
+    <p class="phint"><span class="mono">[theme.custom]</span> layers per-token overrides on top of
+    whichever base theme is active — all 16 slots the 0.8.0 binary accepts, each Default or a hex
+    colour of yours (<span class="mono">panel_bg</span> also takes <b>reset</b> = your terminal's own
+    background). Only the tokens you set are written; set none and the section is omitted entirely.</p>
+    <div id="tokGrid"></div>
+    <p class="phint" style="margin-top:9px">Honesty note: the preview maps
+    <span class="mono">panel_bg</span>→sidebar/panel, <span class="mono">text</span>→text,
+    <span class="mono">accent</span>→accent + selection, <span class="mono">green/yellow/red/blue</span>→state
+    dots, and the surface/overlay tokens→borders, scrollbars and dimmed chrome — an
+    <b>approximate</b> mapping, since the real UI uses them in more places than this mock draws.
+    <span class="mono">mauve/teal/peach</span> have no surface in the mock at all; they land in the
+    file only.</p>
   </div>
 
   <div class="hpanels" id="herdrControls"></div>
@@ -270,11 +353,65 @@ ${topBar('herdr', ghSvg)}
     else's code on your machine with your permissions. Read the repo first.</p>
   </div>
 
+  <div class="panel" style="margin-top:16px"><h3>➕ herdr-plus</h3>
+    <p class="phint"><b>herdr-plus</b> is a free, MIT-licensed herdr plugin by Cloudmanic Labs
+    (<a href="https://github.com/cloudmanic/herdr-plus" target="_blank" rel="noreferrer" style="color:var(--accent)">cloudmanic/herdr-plus</a>)
+    that adds a project browser, quick actions and per-repo worktree layouts. There is no central
+    config: <b>every entry is its own TOML file</b>. Build them below; the installer writes each one
+    as <span class="mono">scc-&lt;name&gt;.toml</span> into the plugin's config directory — and only
+    ever touches <span class="mono">scc-*.toml</span> files, never your own.</p>
+    <label class="ctl2"><input type="checkbox" id="hp_install"><span>Install the plugin
+      (<span class="mono">herdr plugin install cloudmanic/herdr-plus</span>) — runs its code, like any plugin</span></label>
+    <p class="phint" style="margin-top:6px">Commands run via <span class="mono">sh -c</span> when
+    <i>you</i> trigger them, and they are Go templates: <span class="mono">{{.Value}}</span> is the
+    picked option / typed form value, and every field is also in the environment as
+    <span class="mono">HERDR_PLUS_*</span> (VALUE, WORKDIR, SESSION_TITLE, …). If you remove every
+    entry later, also delete the old <span class="mono">scc-*.toml</span> files by hand — the
+    installer only rewrites them while at least one entry exists.</p>
+  </div>
+
+  <div class="hpanels" style="margin-top:14px">
+    <div class="panel"><h3>\u{1F4C1} Projects</h3>
+      <p class="phint">One workspace per file: a name, an optional group for the browser, a
+      working directory (~ and $VARS expand), and 1+ tabs — each tab either runs a command or
+      splits into up to 4 panes (never both; that is a load error upstream). Entries missing a
+      name or a named tab are left out of the files below.</p>
+      <div id="hpProjects"></div>
+    </div>
+    <div class="panel"><h3>⚡ Quick actions</h3>
+      <p class="phint">Launcher entries: <b>command</b> just runs; <b>select</b> offers options
+      (label shown, value substituted at <span class="mono">{{.Value}}</span> or appended
+      shell-quoted; a row with no label is a separator — give it a heading for a group title);
+      <b>form</b> asks for a value first. A select needs at least one labelled option or it is
+      left out.</p>
+      <div id="hpActions"></div>
+    </div>
+    <div class="panel"><h3>\u{1F33F} Worktree layouts</h3>
+      <p class="phint">Fires when herdr opens a worktree whose repo basename matches
+      <span class="mono">repo</span> (case-insensitive; optional exact branch narrows it) — the
+      tabs/panes shape is identical to projects. Only herdr's own worktree events trigger it,
+      not a plain <span class="mono">git worktree add</span>.</p>
+      <div id="hpTrees"></div>
+    </div>
+  </div>
+
   <div class="hpanels" style="margin-top:16px">
     <div class="panel"><h3>\u{1F4C4} config.toml</h3>
-      <p class="phint">Exactly what the command below writes to
-      <span class="mono">~/.config/herdr/config.toml</span>, backing up any file already there.</p>
+      <p class="phint">The keys this page manages, exactly as the installer writes them into
+      <span class="mono">~/.config/herdr/config.toml</span>. The installer <b>merges</b>, it does not
+      replace: it backs your file up, parses it (and <b>aborts if it doesn't parse</b>), keeps every
+      key and table it doesn't manage — <span class="mono">onboarding</span>, your
+      <span class="mono">[[keys.command]]</span> bindings, sound file paths, all of it — and
+      validates the result before writing a byte. Kept keys survive as values; their comments and
+      ordering may move.</p>
       <div class="hfiles" id="tomlOut"></div>
+    </div>
+    <div class="panel"><h3>\u{1F9E9} herdr-plus files</h3>
+      <p class="phint">One file per entry, verbatim — these exact bytes land as
+      <span class="mono">scc-*.toml</span> under
+      <span class="mono">herdr plugin config-dir cloudmanic.herdr-plus</span>
+      (falling back to <span class="mono">~/.config/herdr-plus</span>).</p>
+      <div class="hfiles" id="plusFiles"></div>
     </div>
     <div class="panel"><h3>\u{1F4E6} Getting herdr</h3>
       <p class="phint">The installer skips the herdr layer if the binary is missing, so it is
@@ -287,6 +424,29 @@ brew install herdr</div>
       <span class="mono">herdr integration install</span> command — run it yourself if you want it; nothing here
       touches any other tool's files.</p>
     </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px"><h3>\u{1F9EA} How this was verified — and what is deliberately missing</h3>
+    <p class="phint">Every config key, enum and default on this page was read from herdr 0.8.0's own
+    <span class="mono">herdr --default-config</span> (the authoritative 324-line commented schema) and
+    its binary's serde tables, cross-checked against the published docs — nothing is guessed. The 16
+    <span class="mono">[theme.custom]</span> slots are the binary's exact
+    <span class="mono">CustomThemeColors</span> field list (<span class="mono">sidebar_bg</span> exists
+    only on master, so it is deliberately not offered). The six light-variant theme names carry a
+    <b>binary-verified</b> badge because the docs never enumerate them. The herdr-plus schemas —
+    projects, quick actions, worktree layouts, the 4-pane cap, the command/panes exclusivity, the
+    separator rules — are from herdrplus.com's docs, read in full.</p>
+    <p class="phint"><b>herdr-plus has no colour surface of its own.</b> Its docs define no theme, no
+    colours, no fonts, no styling keys at all — every colour lives in herdr's own
+    <span class="mono">[theme]</span> above. Anything promising otherwise would be invented.</p>
+    <p class="phint"><b>Deliberately skipped:</b> <span class="mono">[[keys.command]]</span> (a share
+    link must not bind shell to a keypress), <span class="mono">ui.sound.path</span> and friends (file
+    paths this page cannot validate), <span class="mono">remote.*</span>, the per-token sidebar row
+    styling DSL (<span class="mono">{ token, fg, bold, dim }</span> — a deep grammar the preview could
+    not show honestly; the two row presets here emit only verified tokens), and the
+    <span class="mono">[experimental]</span> CJK/IME keys (experimental and unstable upstream). The
+    per-agent sound list offers a fixed subset of herdr's agent ids; the merge keeps any others you
+    set by hand — as it keeps every key this page does not manage.</p>
   </div>
 
 ${compareBlock('herdr')}
@@ -319,8 +479,7 @@ const HERDR_JS = `
 var ORIGIN=location.origin;
 var state=null;
 
-function defaultHerdr(){var d={};for(var k in HD_DEFAULTS){if(ownKey(HD_DEFAULTS,k))d[k]=HD_DEFAULTS[k];}
-  d.plugins=[];d.on=true;return d;}
+function defaultHerdr(){var d=copyObj(HD_DEFAULTS);d.plugins=[];d.on=true;return d;}
 function ownKey(o,k){return Object.prototype.hasOwnProperty.call(o,k);}
 function copyObj(o){return JSON.parse(JSON.stringify(o));}
 
@@ -344,19 +503,125 @@ function hPath(v,dflt){
   if(s.indexOf('..')>=0)return dflt;
   return s;
 }
+// herdr-plus text: printable only (control chars, zero-width and bidi controls out),
+// capped. Free text is fine HERE because it only ever lands in value="" attributes via
+// esc() and in the server-built TOML via its own escaper — never in style or class.
+var HP_CTRL=/[\\x00-\\x1f\\x7f-\\x9f\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]/g;
+function hpText(v,max){return typeof v==='string'?v.replace(HP_CTRL,'').slice(0,max).replace(/^ +| +$/g,''):'';}
+function hpWorkdir(v){
+  if(typeof v!=='string')return '';
+  var s=v.replace(/^ +| +$/g,'');
+  if(!s||s.length>120)return '';
+  if(!/^[~$A-Za-z0-9._\\/ -]+$/.test(s))return '';
+  if(s.indexOf('..')>=0)return '';
+  return s;
+}
+function saneTabs(list){
+  if(Object.prototype.toString.call(list)!=='[object Array]')return [];
+  var out=[];
+  for(var i=0;i<list.length&&i<HD_OPTS.limits.tabs;i++){
+    var t=list[i];
+    if(!t||typeof t!=='object')continue;
+    var panes=[];
+    if(Object.prototype.toString.call(t.panes)==='[object Array]'){
+      for(var j=0;j<t.panes.length&&j<HD_OPTS.limits.panes;j++){
+        var p=t.panes[j];
+        if(!p||typeof p!=='object')continue;
+        panes.push({command:hpText(p.command,200),split:hPick(p.split,HD_OPTS.splits,'down')});
+      }
+    }
+    out.push({name:hpText(t.name,40),command:panes.length?'':hpText(t.command,200),panes:panes});
+  }
+  return out;
+}
+// Shapes only — validity (required fields) is the server builder's call, so a
+// half-typed entry survives a reload instead of vanishing.
+function sanePlus(pl){
+  var out={install:false,projects:[],quickActions:[],worktrees:[]};
+  if(!pl||typeof pl!=='object')return out;
+  out.install=pl.install===true;
+  var i,e;
+  if(Object.prototype.toString.call(pl.projects)==='[object Array]'){
+    for(i=0;i<pl.projects.length&&i<HD_OPTS.limits.projects;i++){
+      e=pl.projects[i];
+      if(!e||typeof e!=='object')continue;
+      out.projects.push({name:hpText(e.name,60),description:hpText(e.description,120),
+        group:hpText(e.group,60),workingDir:hpWorkdir(e.workingDir),tabs:saneTabs(e.tabs)});
+    }
+  }
+  if(Object.prototype.toString.call(pl.quickActions)==='[object Array]'){
+    for(i=0;i<pl.quickActions.length&&i<HD_OPTS.limits.quickActions;i++){
+      e=pl.quickActions[i];
+      if(!e||typeof e!=='object')continue;
+      var opts=[];
+      if(Object.prototype.toString.call(e.options)==='[object Array]'){
+        for(var j=0;j<e.options.length&&j<HD_OPTS.limits.options;j++){
+          var o=e.options[j];
+          if(!o||typeof o!=='object')continue;
+          opts.push({label:hpText(o.label,60),value:hpText(o.value,200),
+            description:hpText(o.description,120),heading:hpText(o.heading,60),sep:o.sep===true});
+        }
+      }
+      var form=(e.form&&typeof e.form==='object')
+        ?{prompt:hpText(e.form.prompt,80),placeholder:hpText(e.form.placeholder,80)}
+        :{prompt:'',placeholder:''};
+      out.quickActions.push({name:hpText(e.name,60),description:hpText(e.description,120),
+        type:hPick(e.type,HD_OPTS.qaTypes,'command'),command:hpText(e.command,200),
+        options:opts,form:form});
+    }
+  }
+  if(Object.prototype.toString.call(pl.worktrees)==='[object Array]'){
+    for(i=0;i<pl.worktrees.length&&i<HD_OPTS.limits.worktrees;i++){
+      e=pl.worktrees[i];
+      if(!e||typeof e!=='object')continue;
+      out.worktrees.push({repo:hpText(e.repo,60),branch:hpText(e.branch,60),tabs:saneTabs(e.tabs)});
+    }
+  }
+  return out;
+}
 function saneHerdr(o){
   var d=defaultHerdr();
   if(!o||typeof o!=='object')return d;
   var ids=HD_PLUGINS.map(function(p){return p.id;});
+  // [theme.custom]: hex-or-drop per slot; panel_bg also accepts the "reset" alias.
+  var tokens={};
+  var tsrc=(o.tokens&&typeof o.tokens==='object')?o.tokens:{};
+  for(var ti=0;ti<HD_OPTS.slots.length;ti++){
+    var slot=HD_OPTS.slots[ti];
+    var tv=hHex(tsrc[slot],null);
+    if(tv)tokens[slot]=tv;
+    else if(slot==='panel_bg'&&tsrc[slot]==='reset')tokens[slot]='reset';
+  }
+  // Older links carried customAccent/accentColor; fold them into the accent token.
+  if(!tokens.accent&&o.customAccent===true){
+    var legacy=hHex(o.accentColor,null);
+    if(legacy)tokens.accent=legacy;
+  }
+  var soundAgents={};
+  var sag=(o.soundAgents&&typeof o.soundAgents==='object')?o.soundAgents:{};
+  for(var si=0;si<HD_OPTS.soundAgents.length;si++){
+    var ag=HD_OPTS.soundAgents[si];
+    if(sag[ag]==='on'||sag[ag]==='off')soundAgents[ag]=sag[ag];
+  }
+  var sbMin=hNum(o.sidebarMinWidth,10,36,d.sidebarMinWidth);
+  var sbMax=hNum(o.sidebarMaxWidth,20,80,d.sidebarMaxWidth);
+  if(sbMax<sbMin)sbMax=sbMin;
+  var sbW=hNum(o.sidebarWidth,18,36,d.sidebarWidth);
+  sbW=Math.max(sbMin,Math.min(sbMax,sbW));
   return {
     theme:hPick(o.theme,HD_OPTS.themes,d.theme),
     autoSwitch:hBool(o.autoSwitch,d.autoSwitch),
-    customAccent:hBool(o.customAccent,d.customAccent),
-    accentColor:hHex(o.accentColor,d.accentColor),
+    lightName:hPick(o.lightName,HD_OPTS.themes,d.lightName),
+    darkName:hPick(o.darkName,HD_OPTS.themes,d.darkName),
+    tokens:tokens,
+    defaultShell:hpText(o.defaultShell,200),
     shellMode:hPick(o.shellMode,HD_OPTS.shellModes,d.shellMode),
     newCwd:hPick(o.newCwd,HD_OPTS.newCwd,d.newCwd),
     prefix:hPick(o.prefix,HD_OPTS.prefixes,d.prefix),
-    sidebarWidth:hNum(o.sidebarWidth,18,36,d.sidebarWidth),
+    sidebarWidth:sbW,
+    sidebarMinWidth:sbMin,
+    sidebarMaxWidth:sbMax,
+    mobileWidthThreshold:hNum(o.mobileWidthThreshold,20,200,d.mobileWidthThreshold),
     sidebarStartCollapsed:hBool(o.sidebarStartCollapsed,d.sidebarStartCollapsed),
     sidebarCollapsedMode:hPick(o.sidebarCollapsedMode,HD_OPTS.collapsed,d.sidebarCollapsedMode),
     agentPanelSort:hPick(o.agentPanelSort,HD_OPTS.sorts,d.agentPanelSort),
@@ -372,19 +637,27 @@ function saneHerdr(o){
     mouseScrollLines:hNum(o.mouseScrollLines,1,20,d.mouseScrollLines),
     hostCursor:hPick(o.hostCursor,HD_OPTS.cursors,d.hostCursor),
     confirmClose:hBool(o.confirmClose,d.confirmClose),
+    promptNewTabName:hBool(o.promptNewTabName,d.promptNewTabName),
+    promptNewWorkspaceName:hBool(o.promptNewWorkspaceName,d.promptNewWorkspaceName),
     toastDelivery:hPick(o.toastDelivery,HD_OPTS.toastDelivery,d.toastDelivery),
     toastDelaySeconds:hNum(o.toastDelaySeconds,0,3600,d.toastDelaySeconds),
     toastPosition:hPick(o.toastPosition,HD_OPTS.toastPositions,d.toastPosition),
+    clipToastEnabled:hBool(o.clipToastEnabled,d.clipToastEnabled),
+    clipToastPosition:hPick(o.clipToastPosition,HD_OPTS.clipPositions,d.clipToastPosition),
     soundEnabled:hBool(o.soundEnabled,d.soundEnabled),
+    soundAgents:soundAgents,
     resumeAgents:hBool(o.resumeAgents,d.resumeAgents),
     scrollbackBytes:hNum(o.scrollbackBytes,1000000,200000000,d.scrollbackBytes),
     worktreeDir:hPath(o.worktreeDir,d.worktreeDir),
     updateChannel:hPick(o.updateChannel,HD_OPTS.channels,d.updateChannel),
+    versionCheck:hBool(o.versionCheck,d.versionCheck),
+    manifestCheck:hBool(o.manifestCheck,d.manifestCheck),
     paneHistory:hBool(o.paneHistory,d.paneHistory),
     allowNested:hBool(o.allowNested,d.allowNested),
     kittyGraphics:hBool(o.kittyGraphics,d.kittyGraphics),
     plugins:(Object.prototype.toString.call(o.plugins)==='[object Array]'
       ? o.plugins.filter(function(x){return ids.indexOf(x)>=0;}) : []),
+    plus:sanePlus(o.plus),
     on:true
   };
 }
@@ -410,11 +683,28 @@ function themeOf(name){return HD_THEMES[name]||HD_THEMES['tokyo-night'];}
 
 function winHTML(s,mode){
   var t=themeOf(s.theme);
-  var accent=s.customAccent?s.accentColor:t.accent;
+  // [theme.custom] tokens override the base palette where the mock has a surface for
+  // them. Approximate on purpose (and said so in the tip): panel_bg → panel/sidebar,
+  // text → text, subtext0 → dim text, accent → accent + selection, green/yellow/red →
+  // the matching state dots, blue → the idle dot, surface0/1/dim → chrome, pane borders
+  // and scrollbars, overlay0/1 → inactive tabs and state text. mauve/teal/peach have no
+  // surface here and only reach the file. Every value is sanitizer-vetted (#rrggbb or
+  // panel_bg="reset"), so nothing here can break out of the style attribute.
+  var tok=s.tokens||{};
+  var accent=tok.accent||t.accent;
+  var panel=tok.panel_bg?(tok.panel_bg==='reset'?t.bg:tok.panel_bg):t.panel;
+  var text=tok.text||t.text;
+  var dim=tok.subtext0||t.dim;
+  var chrome=tok.surface0||t.panel;
+  var paneEdge=tok.surface1||t.panel;
   var vars=[
-    '--hd-bg:'+t.bg,'--hd-panel:'+t.panel,'--hd-text:'+t.text,'--hd-dim:'+t.dim,
-    '--hd-accent:'+accent,'--hd-green:'+t.green,'--hd-yellow:'+t.yellow,'--hd-red:'+t.red,
-    '--hd-chrome:'+t.panel,'--hd-pane:'+(s.paneBorders?t.panel:'transparent'),
+    '--hd-bg:'+t.bg,'--hd-panel:'+panel,'--hd-text:'+text,'--hd-dim:'+dim,
+    '--hd-accent:'+accent,'--hd-green:'+(tok.green||t.green),
+    '--hd-yellow:'+(tok.yellow||t.yellow),'--hd-red:'+(tok.red||t.red),
+    '--hd-idle:'+(tok.blue||dim),
+    '--hd-chrome:'+chrome,'--hd-pane:'+(s.paneBorders?paneEdge:'transparent'),
+    '--hd-scroll:'+(tok.surface_dim||chrome),
+    '--hd-tabdim:'+(tok.overlay0||dim),'--hd-statecol:'+(tok.overlay1||dim),
     '--hd-selwash:'+hexA(accent,0.14),
     '--hd-font:'+11+'px','--hd-sidefont:'+10+'px',
     '--hd-gap:'+(s.paneGaps?'5px':'0px'),'--hd-bw:'+(s.paneBorders?'1px':'0px')
@@ -494,11 +784,18 @@ function winHTML(s,mode){
       s.toastDelivery==='terminal'?'terminal bell + title':'agent is blocked';
     toast='<div class="htoast '+where+'">'+esc(what)+'</div>';
   }
+  // The clipboard toast is herdr's own copy bubble ([ui.toast.clipboard], on by
+  // default). Drawn in the AFTER window only — it is a transient event, and the mock
+  // shows the moment right after a copy. Position class is sanitizer-vetted.
+  var clip='';
+  if(mode==='agent'&&s.clipToastEnabled){
+    clip='<div class="htoast clip '+s.clipToastPosition+'">copied ✓</div>';
+  }
 
   var panes='<div class="hpanes" style="position:relative">'
     +(s.tabBarPosition==='bottom'?('<div class="hsplit">'+pane1+pane2+'</div>'+tabs)
       :(tabs+'<div class="hsplit">'+pane1+pane2+'</div>'))
-    +toast+'</div>';
+    +toast+clip+'</div>';
 
   return '<div class="hwin" style="'+vars+'"><div class="hbody">'+side+panes+'</div></div>';
 }
@@ -546,6 +843,13 @@ var TIPS={
   worktreeDir:{t:'Worktree directory',d:'Where herdr puts per-branch git checkouts when you run several agents on different branches. Default ~/.herdr/worktrees.'},
   newCwd:{t:'New pane directory',d:'follow inherits the current pane\\u2019s directory, home always starts at ~, current uses the directory herdr was started in.'},
   hostCursor:{t:'Cursor',d:'auto lets herdr decide, native leaves your terminal\\u2019s own cursor alone, drawn makes herdr paint it (useful when the native one lands in the wrong pane).'},
+  sidebarMinMax:{t:'Sidebar min/max',d:'The band the sidebar can be dragged within, in COLUMNS (stock 18\\u201336). Real 0.8.0 keys; the width above is kept inside this band.'},
+  mobileWidth:{t:'Mobile threshold',d:'Below this many terminal columns herdr switches to its narrow one-pane layout. Stock 64. The mock has a fixed size, so this only reaches the file.'},
+  promptNames:{t:'Name prompts',d:'Whether herdr asks for a name when you open a new tab / workspace (stock: tabs yes, workspaces no). A dialog the mock cannot show.'},
+  clipToast:{t:'Clipboard toast',d:'herdr\\u2019s own \\u201ccopied\\u201d bubble when copy-on-select or a copy action fires \\u2014 on by default, position bottom-center. Separate from notification delivery.'},
+  soundAgents:{t:'Per-agent sound',d:'Overrides the completion sound per agent id: on / off, or default (the agent\\u2019s own setting \\u2014 note droid ships muted by default, so \\u201cdefault\\u201d keeps droid silent). A fixed subset of herdr\\u2019s agent ids is offered here; ids you add to config.toml by hand survive the merge.'},
+  updateChecks:{t:'Update checks',d:'version_check pings for new releases; manifest_check refreshes the plugin marketplace index. Both on by default; both real 0.8.0 keys.'},
+  defaultShell:{t:'Default shell',d:'Command herdr starts in new panes. Empty (stock) means $SHELL, then /bin/sh. Free text, control characters stripped, TOML-escaped \\u2014 it runs on your machine only when herdr opens a pane.'},
 };
 function ihtml(k){return TIPS[k]?'<button type="button" class="i" data-tip="'+k+'" aria-label="What is this?">i</button>':'';}
 function sel(id,list,cur){
@@ -555,8 +859,9 @@ function sel(id,list,cur){
   }
   return h+'</select>';
 }
-function chk(id,label,on,tip){
-  return '<label class="ctl2"><input type="checkbox" id="'+id+'"'+(on?' checked':'')+'><span>'+esc(label)+(tip?ihtml(tip):'')+'</span></label>';
+function chk(id,label,on,tip,nov){
+  return '<label class="ctl2"><input type="checkbox" id="'+id+'"'+(on?' checked':'')+'><span>'+esc(label)
+    +(nov?'<span class="nov">no visual change</span>':'')+(tip?ihtml(tip):'')+'</span></label>';
 }
 function panel(title,inner){return '<div class="panel"><h3>'+title+'</h3>'+inner+'</div>';}
 
@@ -583,13 +888,23 @@ function saveHerdrSetup(){
 }
 
 // The swatch shows the colours the setup would actually render with: its theme's
-// preview palette, with a custom accent riding on top when one is set, and the
-// sample session's palette as the stand-in when the theme is unknown.
+// preview palette with any custom tokens riding on top (legacy customAccent payloads
+// still count), and the sample session's palette when the theme is unknown.
+function svHexOk(v){return typeof v==='string'&&/^#[0-9a-fA-F]{6}$/.test(v);}
+function svTokCount(hd){
+  var n=0,tok=(hd&&hd.tokens&&typeof hd.tokens==='object')?hd.tokens:{};
+  for(var k in tok){if(ownKey(tok,k)&&(svHexOk(tok[k])||(k==='panel_bg'&&tok[k]==='reset')))n++;}
+  return n;
+}
 function svPalOf(hd){
   var t=(hd&&typeof hd.theme==='string'&&ownKey(HD_THEMES,hd.theme))?HD_THEMES[hd.theme]:null;
-  var acc=(hd&&hd.customAccent&&typeof hd.accentColor==='string'
-    &&/^#[0-9a-fA-F]{6}$/.test(hd.accentColor))?hd.accentColor:null;
-  if(t)return {accent:acc||t.accent,green:t.green,yellow:t.yellow,red:t.red};
+  var tok=(hd&&hd.tokens&&typeof hd.tokens==='object')?hd.tokens:{};
+  var acc=svHexOk(tok.accent)?tok.accent
+    :((hd&&hd.customAccent&&svHexOk(hd.accentColor))?hd.accentColor:null);
+  if(t)return {accent:acc||t.accent,
+    green:svHexOk(tok.green)?tok.green:t.green,
+    yellow:svHexOk(tok.yellow)?tok.yellow:t.yellow,
+    red:svHexOk(tok.red)?tok.red:t.red};
   return {
     accent:acc||palHex(DEFAULT_PAL.accent,'#7aa2f7'),
     green:palHex(DEFAULT_PAL.green,'#9ece6a'),
@@ -619,7 +934,10 @@ function paintSaved(){
     var body=document.createElement('span');body.className='svbody';
     var nm=document.createElement('span');nm.className='svname';nm.textContent=item.name;
     var mt=document.createElement('span');mt.className='svmeta';
-    mt.textContent=(hd.theme||'catppuccin')+(hd.customAccent?' · custom accent':'')
+    var ntok=svTokCount(hd);
+    mt.textContent=(hd.theme||'catppuccin')
+      +(ntok?(' · '+ntok+' custom colour'+(ntok>1?'s':''))
+        :(hd.customAccent?' · custom accent':''))
       +' · saved '+(item.savedAt||'');
     body.appendChild(nm);body.appendChild(mt);
     var acts=document.createElement('span');acts.className='svacts';
@@ -658,7 +976,7 @@ function paintSaved(){
     b.appendChild(sw);b.appendChild(body);b.appendChild(acts);
     b.addEventListener('click',function(){
       state=saneHerdr(copyObj(hd));
-      buildControls();paintThemes();paintPlugins();refresh();
+      paintAll();
       toast('Loaded “'+item.name+'”');
     });
     row.appendChild(b);
@@ -683,6 +1001,12 @@ function buildControls(){
   h+=panel('\\u{1F9AC} Agent sidebar',
     '<label class="ctl"><span class="cap">Width'+ihtml('sidebarWidth')+'</span>'
     +'<input type="number" id="f_sidebarWidth" min="18" max="36" value="'+s.sidebarWidth+'"></label>'
+    +'<label class="ctl"><span class="cap">Min width'+ihtml('sidebarMinMax')+'<span class="nov">no visual change</span></span>'
+    +'<input type="number" id="f_sidebarMinWidth" min="10" max="36" value="'+s.sidebarMinWidth+'"></label>'
+    +'<label class="ctl"><span class="cap">Max width'+ihtml('sidebarMinMax')+'<span class="nov">no visual change</span></span>'
+    +'<input type="number" id="f_sidebarMaxWidth" min="20" max="80" value="'+s.sidebarMaxWidth+'"></label>'
+    +'<label class="ctl"><span class="cap">Mobile layout below (columns)'+ihtml('mobileWidth')+'<span class="nov">no visual change</span></span>'
+    +'<input type="number" id="f_mobileWidthThreshold" min="20" max="200" value="'+s.mobileWidthThreshold+'"></label>'
     +'<label class="ctl"><span class="cap">Order'+ihtml('agentPanelSort')+'</span>'+sel('f_agentPanelSort',HD_OPTS.sorts,s.agentPanelSort)+'</label>'
     +'<label class="ctl"><span class="cap">Row detail</span>'+sel('f_agentRowsStyle',['default','compact','verbose'],s.agentRowsStyle)+'</label>'
     +chk('f_sidebarStartCollapsed','Start collapsed',s.sidebarStartCollapsed)
@@ -695,14 +1019,29 @@ function buildControls(){
     +'<label class="ctl"><span class="cap">Scroll lines per notch</span>'
     +'<input type="number" id="f_mouseScrollLines" min="1" max="20" value="'+s.mouseScrollLines+'"></label>'
     +'<label class="ctl"><span class="cap">Cursor'+ihtml('hostCursor')+'</span>'+sel('f_hostCursor',HD_OPTS.cursors,s.hostCursor)+'</label>'
-    +chk('f_confirmClose','Confirm before closing a pane',s.confirmClose));
+    +chk('f_confirmClose','Confirm before closing a pane',s.confirmClose)
+    +chk('f_promptNewTabName','Ask for a name on new tab',s.promptNewTabName,'promptNames',1)
+    +chk('f_promptNewWorkspaceName','Ask for a name on new workspace',s.promptNewWorkspaceName,'promptNames',1));
 
   h+=panel('\\u{1F514} Notifications',
     '<label class="ctl"><span class="cap">Delivery'+ihtml('toastDelivery')+'</span>'+sel('f_toastDelivery',HD_OPTS.toastDelivery,s.toastDelivery)+'</label>'
     +'<label class="ctl"><span class="cap">Toast position <span class="hint">(herdr delivery only)</span></span>'+sel('f_toastPosition',HD_OPTS.toastPositions,s.toastPosition)+'</label>'
     +'<label class="ctl"><span class="cap">Delay before notifying (seconds)</span>'
     +'<input type="number" id="f_toastDelaySeconds" min="0" max="3600" value="'+s.toastDelaySeconds+'"></label>'
-    +chk('f_soundEnabled','Sound',s.soundEnabled));
+    +chk('f_clipToastEnabled','Clipboard \\u201ccopied\\u201d toast',s.clipToastEnabled,'clipToast')
+    +'<label class="ctl"><span class="cap">Clipboard toast position</span>'+sel('f_clipToastPosition',HD_OPTS.clipPositions,s.clipToastPosition)+'</label>'
+    +chk('f_soundEnabled','Sound',s.soundEnabled)
+    +'<div class="cap" style="margin:2px 0 6px;font-size:12.5px;color:var(--dim)">Per-agent sound'+ihtml('soundAgents')+'<span class="nov">no visual change</span></div>'
+    +HD_OPTS.soundAgents.map(function(a){
+      return '<label class="ctl" style="flex-direction:row;align-items:center;gap:8px;margin-bottom:6px">'
+        +'<span class="cap" style="width:84px;flex:none;font-family:ui-monospace,Menlo,monospace">'+esc(a)+'</span>'
+        +'<select class="hsag" data-agent="'+esc(a)+'">'
+        +HD_OPTS.soundModes.map(function(m){
+          var cur=s.soundAgents[a]||'default';
+          return '<option value="'+m+'"'+(m===cur?' selected':'')+'>'+m+'</option>';
+        }).join('')
+        +'</select></label>';
+    }).join(''));
 
   h+=panel('\\u{1F4BE} Session &amp; storage',
     chk('f_resumeAgents','Resume agent conversations after a restart',s.resumeAgents,'resumeAgents')
@@ -710,10 +1049,14 @@ function buildControls(){
     +'<input type="number" id="f_scrollbackBytes" min="1000000" max="200000000" step="1000000" value="'+s.scrollbackBytes+'"></label>'
     +'<label class="ctl"><span class="cap">Worktree directory'+ihtml('worktreeDir')+'</span>'
     +'<input type="text" id="f_worktreeDir" value="'+esc(s.worktreeDir)+'"></label>'
-    +'<label class="ctl"><span class="cap">Update channel</span>'+sel('f_updateChannel',HD_OPTS.channels,s.updateChannel)+'</label>');
+    +'<label class="ctl"><span class="cap">Update channel</span>'+sel('f_updateChannel',HD_OPTS.channels,s.updateChannel)+'</label>'
+    +chk('f_versionCheck','Check for new herdr releases',s.versionCheck,'updateChecks',1)
+    +chk('f_manifestCheck','Refresh the plugin marketplace index',s.manifestCheck,'updateChecks',1));
 
   h+=panel('\\u{1F9EA} Shell &amp; experimental',
-    '<label class="ctl"><span class="cap">Shell mode</span>'+sel('f_shellMode',HD_OPTS.shellModes,s.shellMode)+'</label>'
+    '<label class="ctl"><span class="cap">Default shell'+ihtml('defaultShell')+'<span class="nov">no visual change</span></span>'
+    +'<input type="text" id="f_defaultShell" value="'+esc(s.defaultShell)+'" placeholder="(empty = $SHELL, then /bin/sh)"></label>'
+    +'<label class="ctl"><span class="cap">Shell mode</span>'+sel('f_shellMode',HD_OPTS.shellModes,s.shellMode)+'</label>'
     +'<label class="ctl"><span class="cap">New pane directory'+ihtml('newCwd')+'</span>'+sel('f_newCwd',HD_OPTS.newCwd,s.newCwd)+'</label>'
     +chk('f_paneHistory','Replay pane screen history after a restart',s.paneHistory,'paneHistory')
     +chk('f_allowNested','Allow herdr inside herdr',s.allowNested,'allowNested')
@@ -739,6 +1082,16 @@ function wire(){
       refresh();
     });
   });
+  // Per-agent sound selects write into the soundAgents map instead of a flat key;
+  // "default" removes the entry so stock agents emit no line at all.
+  Array.prototype.forEach.call(host.querySelectorAll('.hsag'),function(el){
+    el.addEventListener('change',function(){
+      var a=el.getAttribute('data-agent');
+      if(el.value==='default')delete state.soundAgents[a];
+      else state.soundAgents[a]=el.value;
+      refresh();
+    });
+  });
 }
 
 function paintThemes(){
@@ -755,13 +1108,324 @@ function paintThemes(){
     var nm=document.createElement('div');nm.className='hcname';nm.textContent=name;
     nm.style.color=t.text||'#ccc';
     b.appendChild(sw);b.appendChild(nm);
-    b.addEventListener('click',function(){state.theme=name;paintThemes();refresh();});
+    // The six light variants exist only as strings in the 0.8.0 binary; the docs never
+    // enumerate them. The badge says which claim each chip is resting on.
+    if(HD_OPTS.binVerified.indexOf(name)>=0){
+      var bd=document.createElement('div');bd.className='hcbadge';
+      bd.textContent='binary-verified';
+      b.appendChild(bd);
+    }
+    // A theme change re-seeds the unset token pickers and the sibling hint too.
+    b.addEventListener('click',function(){state.theme=name;paintThemes();paintTokens();syncAuto();refresh();});
     g.appendChild(b);
   });
   var note=$('#hthemeNote');
   note.textContent=state.theme==='terminal'
     ? 'terminal follows your own terminal\\u2019s ANSI palette \\u2014 herdr sets no colours, so the preview here is a stand-in.'
     : 'Built into herdr 0.8.0, applied by name. The preview uses this scheme\\u2019s published colours.';
+}
+
+// ── the 16 [theme.custom] tokens ──────────────────────────────────────────────
+// Where each token lands in the mock — the row says it, so nobody wonders why mauve
+// changed nothing on screen. Approximate on purpose; the page copy above the grid
+// owns up to that.
+var TOK_SURFACE={accent:'accent + selection',panel_bg:'sidebar / panel',
+  surface0:'window chrome',surface1:'pane borders',surface_dim:'scrollbars',
+  overlay0:'inactive tabs',overlay1:'state text',text:'text',subtext0:'dim text',
+  green:'done dot',yellow:'working dot',red:'blocked dot',blue:'idle dot',
+  mauve:'file only',teal:'file only',peach:'file only'};
+// Seed an unset picker with the base theme's own published colour where the mock knows
+// one, so opening "custom" starts from what is on screen instead of black.
+function tokSeed(slot){
+  var t=themeOf(state.theme);
+  var m={accent:t.accent,panel_bg:t.panel,surface0:t.panel,surface1:t.panel,
+    surface_dim:t.panel,overlay0:t.dim,overlay1:t.dim,text:t.text,subtext0:t.dim,
+    green:t.green,yellow:t.yellow,red:t.red,blue:t.accent};
+  var v=m[slot]||'#888888';
+  return /^#[0-9a-fA-F]{6}$/.test(v)?v:'#888888';
+}
+function paintTokens(){
+  var g=$('#tokGrid');if(!g)return;
+  g.innerHTML='';
+  HD_OPTS.slots.forEach(function(slot){
+    var cur=state.tokens[slot]||null;
+    var row=document.createElement('div');
+    row.className='tokrow'+(cur?' set':'');
+    var nm=document.createElement('span');nm.className='tokname';nm.textContent=slot;
+    row.appendChild(nm);
+    function chip(label,on,fn){
+      var c=document.createElement('span');
+      c.className='stychip'+(on?' on':'');
+      c.textContent=label;
+      c.addEventListener('click',function(){fn();paintTokens();refresh();});
+      return c;
+    }
+    row.appendChild(chip('default',!cur,function(){delete state.tokens[slot];}));
+    row.appendChild(chip('custom',!!cur&&cur!=='reset',function(){
+      state.tokens[slot]=pickEl.value.toLowerCase();
+    }));
+    // panel_bg's documented third value: "reset" = the terminal's own background.
+    if(slot==='panel_bg'){
+      row.appendChild(chip('reset',cur==='reset',function(){state.tokens[slot]='reset';}));
+    }
+    var pickEl=document.createElement('input');pickEl.type='color';
+    pickEl.value=(cur&&cur!=='reset')?cur:tokSeed(slot);
+    pickEl.setAttribute('aria-label','Custom colour for '+slot);
+    // Dragging the picker IS choosing custom — nobody picks a colour to keep default.
+    // No repaint mid-drag: the chips are flipped in place so the picker keeps focus.
+    pickEl.addEventListener('input',function(){
+      state.tokens[slot]=pickEl.value.toLowerCase();
+      row.className='tokrow set';
+      var chips=row.querySelectorAll('.stychip');
+      for(var i=0;i<chips.length;i++){
+        chips[i].className='stychip'+(chips[i].textContent==='custom'?' on':'');
+      }
+      refresh();
+    });
+    row.appendChild(pickEl);
+    var note=document.createElement('span');note.className='tokfile';
+    note.textContent=TOK_SURFACE[slot]||'';
+    row.appendChild(note);
+    g.appendChild(row);
+  });
+}
+
+// ── theme.auto_switch + the light/dark pair ───────────────────────────────────
+// These controls live in the static page markup (not rebuilt by buildControls), so
+// they are wired exactly once and re-synced from state whenever state is replaced
+// wholesale (boot from a link, loading a saved setup, reset).
+function fillThemeSel(el,cur){
+  el.innerHTML='';
+  var sib=HD_OPTS.siblings[state.theme]||'';
+  var auto=document.createElement('option');
+  auto.value='';
+  auto.textContent='(unset \\u2014 herdr decides'+(sib?': '+state.theme+' \\u2194 '+sib:'')+')';
+  el.appendChild(auto);
+  HD_OPTS.themes.forEach(function(n){
+    var o=document.createElement('option');o.value=n;o.textContent=n;
+    if(n===cur)o.selected=true;
+    el.appendChild(o);
+  });
+  if(!cur)auto.selected=true;
+}
+function syncAuto(){
+  $('#t_autoSwitch').checked=state.autoSwitch;
+  fillThemeSel($('#t_lightName'),state.lightName);
+  fillThemeSel($('#t_darkName'),state.darkName);
+  $('#autoRow').style.display=state.autoSwitch?'flex':'none';
+}
+function syncStatic(){
+  syncAuto();
+  $('#hp_install').checked=state.plus.install;
+}
+function wireStatic(){
+  $('#t_autoSwitch').addEventListener('change',function(){
+    state.autoSwitch=this.checked;
+    $('#autoRow').style.display=state.autoSwitch?'flex':'none';
+    refresh();
+  });
+  $('#t_lightName').addEventListener('change',function(){state.lightName=this.value;refresh();});
+  $('#t_darkName').addEventListener('change',function(){state.darkName=this.value;refresh();});
+  $('#hp_install').addEventListener('change',function(){state.plus.install=this.checked;refresh();});
+}
+
+// ── herdr-plus builders ───────────────────────────────────────────────────────
+// DOM-built like paintPlugins: every value lands via textContent/value setters, never
+// innerHTML, so free text stays free. Text edits mutate state and refresh() without a
+// rebuild (a rebuild mid-keystroke would eat the focus); structural changes (add or
+// remove an entry, a tab, a pane, an option; a type flip) rebuild the panel.
+function hpInp(val,ph,cls,set){
+  var i=document.createElement('input');i.type='text';
+  if(cls)i.className=cls;
+  i.value=val||'';i.placeholder=ph;
+  i.addEventListener('input',function(){set(i.value);refresh();});
+  return i;
+}
+function hpBtn(label,cls,fn){
+  var b=document.createElement('button');b.type='button';b.className=cls;
+  b.textContent=label;
+  b.addEventListener('click',fn);
+  return b;
+}
+function hpSelEl(list,cur,set){
+  var s=document.createElement('select');
+  list.forEach(function(v){
+    var o=document.createElement('option');o.value=v;o.textContent=v;
+    if(v===cur)o.selected=true;
+    s.appendChild(o);
+  });
+  s.addEventListener('change',function(){set(s.value);refresh();});
+  return s;
+}
+function hpWarnLine(host,msg){
+  var w=document.createElement('p');w.className='hpwarn';w.textContent=msg;
+  host.appendChild(w);
+}
+// Tabs are shared between projects and worktree layouts: a name, then a command OR up
+// to 4 panes — never both (the docs make that a load error, so the UI cannot say it).
+function tabsUI(host,tabs){
+  tabs.forEach(function(t,ti){
+    var box=document.createElement('div');box.className='hptab';
+    var head=document.createElement('div');head.className='hptabhead';
+    head.appendChild(hpInp(t.name,'tab name (required)','grow',function(v){t.name=v;}));
+    head.appendChild(hpBtn('remove tab','hpdel',function(){tabs.splice(ti,1);paintPlus();refresh();}));
+    box.appendChild(head);
+    if(t.panes.length){
+      t.panes.forEach(function(p,pi){
+        var line=document.createElement('div');line.className='hpaneline';
+        line.appendChild(hpInp(p.command,'pane command (empty = a shell)','grow hpmono',function(v){p.command=v;}));
+        line.appendChild(hpSelEl(HD_OPTS.splits,p.split,function(v){p.split=v;}));
+        line.appendChild(hpBtn('\\u00d7','hpdel',function(){t.panes.splice(pi,1);paintPlus();refresh();}));
+        box.appendChild(line);
+      });
+    }else{
+      var cl=document.createElement('div');cl.className='hpaneline';
+      cl.appendChild(hpInp(t.command,'command (empty = a shell)','grow hpmono',function(v){t.command=v;}));
+      box.appendChild(cl);
+    }
+    if(t.panes.length<HD_OPTS.limits.panes){
+      box.appendChild(hpBtn(t.panes.length?'+ pane':'split into panes','hpadd',function(){
+        if(!t.panes.length){
+          // The first split carries the tab's command into pane 1, since a tab cannot
+          // keep both.
+          t.panes.push({command:t.command||'',split:'down'});
+          t.command='';
+          t.panes.push({command:'',split:'right'});
+        }else{
+          t.panes.push({command:'',split:'down'});
+        }
+        paintPlus();refresh();
+      }));
+    }
+    host.appendChild(box);
+  });
+}
+function paintPlus(){
+  var pj=$('#hpProjects');if(!pj)return;
+  var qa=$('#hpActions'),wt=$('#hpTrees');
+  pj.innerHTML='';qa.innerHTML='';wt.innerHTML='';
+
+  state.plus.projects.forEach(function(p,i){
+    var card=document.createElement('div');card.className='hpcard';
+    var r1=document.createElement('div');r1.className='hprow';
+    r1.appendChild(hpInp(p.name,'name (required)','grow',function(v){p.name=v;}));
+    r1.appendChild(hpInp(p.group,'group (optional)','',function(v){p.group=v;}));
+    r1.appendChild(hpBtn('remove','hpdel',function(){state.plus.projects.splice(i,1);paintPlus();refresh();}));
+    card.appendChild(r1);
+    var r2=document.createElement('div');r2.className='hprow';
+    r2.appendChild(hpInp(p.description,'description (optional)','grow',function(v){p.description=v;}));
+    r2.appendChild(hpInp(p.workingDir,'working dir, e.g. ~/code/app','grow hpmono',function(v){p.workingDir=v;}));
+    card.appendChild(r2);
+    tabsUI(card,p.tabs);
+    if(p.tabs.length<HD_OPTS.limits.tabs){
+      card.appendChild(hpBtn('+ tab','hpadd',function(){p.tabs.push({name:'',command:'',panes:[]});paintPlus();refresh();}));
+    }
+    if(!p.name||!p.tabs.some(function(t){return t.name;})){
+      hpWarnLine(card,'needs a name and at least one named tab before it reaches a file');
+    }
+    pj.appendChild(card);
+  });
+  if(state.plus.projects.length<HD_OPTS.limits.projects){
+    pj.appendChild(hpBtn('+ add project','hpadd',function(){
+      state.plus.projects.push({name:'',description:'',group:'',workingDir:'',tabs:[{name:'main',command:'',panes:[]}]});
+      paintPlus();refresh();
+    }));
+  }
+
+  state.plus.quickActions.forEach(function(a,i){
+    var card=document.createElement('div');card.className='hpcard';
+    var r1=document.createElement('div');r1.className='hprow';
+    r1.appendChild(hpInp(a.name,'name (required)','grow',function(v){a.name=v;}));
+    r1.appendChild(hpSelEl(HD_OPTS.qaTypes,a.type,function(v){a.type=v;paintPlus();}));
+    r1.appendChild(hpBtn('remove','hpdel',function(){state.plus.quickActions.splice(i,1);paintPlus();refresh();}));
+    card.appendChild(r1);
+    var r2=document.createElement('div');r2.className='hprow';
+    r2.appendChild(hpInp(a.description,'description (optional)','grow',function(v){a.description=v;}));
+    card.appendChild(r2);
+    var r3=document.createElement('div');r3.className='hprow';
+    r3.appendChild(hpInp(a.command,'command (required) \\u2014 {{.Value}} = the picked / typed value','grow hpmono',function(v){a.command=v;}));
+    card.appendChild(r3);
+    if(a.type==='select'){
+      a.options.forEach(function(o,oi){
+        var line=document.createElement('div');line.className='hprow';
+        line.appendChild(hpSelEl(['option','separator'],o.sep?'separator':'option',function(v){
+          o.sep=(v==='separator');
+          // A separator is an option with no label; clearing the fields keeps the
+          // payload honest instead of hiding values that would still be sent.
+          if(o.sep){o.label='';o.value='';o.description='';}
+          paintPlus();
+        }));
+        if(o.sep){
+          line.appendChild(hpInp(o.heading,'heading (optional group title)','grow',function(v){o.heading=v;}));
+        }else{
+          line.appendChild(hpInp(o.label,'label (required)','grow',function(v){o.label=v;}));
+          line.appendChild(hpInp(o.value,'value','grow hpmono',function(v){o.value=v;}));
+          line.appendChild(hpInp(o.description,'description','grow',function(v){o.description=v;}));
+        }
+        line.appendChild(hpBtn('\\u00d7','hpdel',function(){a.options.splice(oi,1);paintPlus();refresh();}));
+        card.appendChild(line);
+      });
+      if(a.options.length<HD_OPTS.limits.options){
+        card.appendChild(hpBtn('+ option','hpadd',function(){
+          a.options.push({label:'',value:'',description:'',heading:'',sep:false});
+          paintPlus();refresh();
+        }));
+      }
+    }
+    if(a.type==='form'){
+      var rf=document.createElement('div');rf.className='hprow';
+      rf.appendChild(hpInp(a.form.prompt,'form prompt','grow',function(v){a.form.prompt=v;}));
+      rf.appendChild(hpInp(a.form.placeholder,'placeholder','grow',function(v){a.form.placeholder=v;}));
+      card.appendChild(rf);
+    }
+    if(!a.name||!a.command){
+      hpWarnLine(card,'needs a name and a command before it reaches a file');
+    }else if(a.type==='select'&&!a.options.some(function(o){return o.label;})){
+      hpWarnLine(card,'a select needs at least one labelled option before it reaches a file');
+    }
+    qa.appendChild(card);
+  });
+  if(state.plus.quickActions.length<HD_OPTS.limits.quickActions){
+    qa.appendChild(hpBtn('+ add quick action','hpadd',function(){
+      state.plus.quickActions.push({name:'',description:'',type:'command',command:'',options:[],form:{prompt:'',placeholder:''}});
+      paintPlus();refresh();
+    }));
+  }
+
+  state.plus.worktrees.forEach(function(w,i){
+    var card=document.createElement('div');card.className='hpcard';
+    var r1=document.createElement('div');r1.className='hprow';
+    r1.appendChild(hpInp(w.repo,'repo basename (required)','grow hpmono',function(v){w.repo=v;}));
+    r1.appendChild(hpInp(w.branch,'branch (optional, exact)','hpmono',function(v){w.branch=v;}));
+    r1.appendChild(hpBtn('remove','hpdel',function(){state.plus.worktrees.splice(i,1);paintPlus();refresh();}));
+    card.appendChild(r1);
+    tabsUI(card,w.tabs);
+    if(w.tabs.length<HD_OPTS.limits.tabs){
+      card.appendChild(hpBtn('+ tab','hpadd',function(){w.tabs.push({name:'',command:'',panes:[]});paintPlus();refresh();}));
+    }
+    if(!w.repo||!w.tabs.some(function(t){return t.name;})){
+      hpWarnLine(card,'needs a repo and at least one named tab before it reaches a file');
+    }
+    wt.appendChild(card);
+  });
+  if(state.plus.worktrees.length<HD_OPTS.limits.worktrees){
+    wt.appendChild(hpBtn('+ add worktree layout','hpadd',function(){
+      state.plus.worktrees.push({repo:'',branch:'',tabs:[{name:'main',command:'',panes:[]}]});
+      paintPlus();refresh();
+    }));
+  }
+}
+
+// Everything that renders from state, in one place: called at boot and whenever state
+// is replaced wholesale (a saved setup, reset).
+function paintAll(){
+  buildControls();
+  paintThemes();
+  paintPlugins();
+  paintTokens();
+  paintPlus();
+  syncStatic();
+  refresh();
 }
 
 function paintPlugins(){
@@ -854,9 +1518,26 @@ function refresh(){
   $('#cmdtext').textContent='curl -fsSL "'+ORIGIN+'/herdr-apply.sh?c='+c+'" | bash';
   window.__sccPayloadC=c;
   // The file preview is rendered server-side truth, fetched rather than reimplemented:
-  // a second TOML builder in the browser is a second thing to drift.
+  // a second TOML builder in the browser is a second thing to drift. One response
+  // carries config.toml plus every herdr-plus file, split on the '@@PLUS@@<rel>'
+  // marker lines the server guarantees start a line.
   fetch('/herdr-files.txt?c='+c).then(function(r){return r.text();}).then(function(t){
-    $('#tomlOut').textContent=t;
+    var seg=t.split('\\n@@PLUS@@');
+    $('#tomlOut').textContent=seg[0]+(seg.length>1?'\\n':'');
+    var pf=$('#plusFiles');if(!pf)return;
+    pf.innerHTML='';
+    if(seg.length<2){
+      pf.textContent='(no herdr-plus entries yet \\u2014 complete one above and its exact file appears here)';
+      return;
+    }
+    for(var i=1;i<seg.length;i++){
+      var nl=seg[i].indexOf('\\n');
+      var head=document.createElement('div');head.className='hfilename';
+      head.textContent=seg[i].slice(0,nl);
+      var body=document.createElement('div');
+      body.textContent=seg[i].slice(nl+1);
+      pf.appendChild(head);pf.appendChild(body);
+    }
   }).catch(function(){});
   clearTimeout(refresh._t);
   refresh._t=setTimeout(function(){
@@ -882,10 +1563,8 @@ function refresh(){
     }
   }catch(e){state=defaultHerdr();}
 })();
-buildControls();
-paintThemes();
-paintPlugins();
-refresh();
+wireStatic();
+paintAll();
 
 $('#c_copy').addEventListener('click',function(){
   copyText($('#cmdtext').textContent);
@@ -899,7 +1578,7 @@ $('#c_share').addEventListener('click',function(){
 $('#c_reset').addEventListener('click',function(){
   state=defaultHerdr();
   try{localStorage.removeItem('scc_herdr');}catch(e){}
-  buildControls();paintThemes();paintPlugins();refresh();
+  paintAll();
   clearTimeout(refresh._t);
   history.replaceState(null,'','/herdr');
   toast('Reset to stock herdr');

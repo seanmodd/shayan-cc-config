@@ -491,7 +491,6 @@ echo "  Adjust anytime at ${origin}/codex"
     try {
       const pl = decodeCustom(c);
       const hdSan = sanitizeHerdr(pl.hd);
-  const zjSan = sanitizeZellij(pl.zj);
       if (!hdSan) return sendText('this setup has no herdr layer enabled', 'text/plain; charset=utf-8', 404);
       return sendText(buildHerdrToml(hdSan), 'text/plain; charset=utf-8');
     } catch (e) { return sendText('bad payload: ' + cleanText(e.message, 120), 'text/plain; charset=utf-8', 400); }
