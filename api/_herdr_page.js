@@ -109,6 +109,83 @@ const HERDR_CSS = `
   .hbadge .pill{border:1px solid var(--border);border-radius:20px;padding:2px 9px;
     font-size:10.5px;letter-spacing:.04em;}
   .hbadge .pill.aft{border-color:var(--accent);color:var(--accent);}
+  .hbadge .pill.plus{border-color:var(--gold);color:var(--gold);}
+
+  /* ── the herdr-plus preview mode ──────────────────────────────────────────
+     A third pane: what the plus builders below BUILD, rendered the way herdr-plus
+     shows it — the project browser in the sidebar (named groups sorted
+     case-insensitively, group-less under Ungrouped), the active project's tabs and
+     panes in the window, the quick-action launcher floating on top, and worktree
+     layouts as status chips (they only fire on herdr's own worktree events, so a
+     chip plus a tip is the honest rendering). One column at every width, so the
+     switch — hidden on desktop elsewhere — is always visible on this page. */
+  .paneswitch{display:flex;gap:8px;}
+  .hpair .hcol-plus{display:none;grid-column:1/-1;}
+  .hpair[data-pane="plus"] .hcol-plus{display:block;}
+  .hpair[data-pane="plus"] .hcol-before,.hpair[data-pane="plus"] .hcol-after{display:none;}
+  .hplpick{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 7px;}
+  .hplpick button{cursor:pointer;font-family:inherit;font-size:10.5px;
+    border:1px solid var(--border);background:#10141b;color:var(--dim);
+    border-radius:14px;padding:3px 10px;max-width:180px;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;}
+  .hplpick button.on{border-color:var(--accent);color:var(--accent);}
+  .hplitem{padding:3px 9px 4px;}
+  .hplitem[data-pp]{cursor:pointer;}
+  .hplitem .hplname{font-size:var(--hd-sidefont);color:var(--hd-dim);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .hplitem .hpldim{font-size:8.5px;color:var(--hd-tabdim);
+    white-space:normal;overflow:hidden;}
+  .hplitem.on{background:var(--hd-selwash);box-shadow:inset 2px 0 0 var(--hd-accent);}
+  .hplitem.on .hplname{color:var(--hd-text);}
+  .hplwsp{display:flex;align-items:baseline;gap:6px;padding:5px 8px 0;
+    background:var(--hd-panel);font-size:8px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--hd-tabdim);white-space:nowrap;overflow:hidden;}
+  .hplwsp b{color:var(--hd-text);font-size:9.5px;letter-spacing:.02em;
+    overflow:hidden;text-overflow:ellipsis;}
+  .htab[data-pt]{cursor:pointer;}
+  .hplsplit{display:flex;min-width:0;gap:var(--hd-gap);padding:var(--hd-gap);
+    height:var(--dock-h,min(30dvh,230px));}
+  .hplbox{flex:1;display:flex;min-width:0;min-height:0;gap:var(--hd-gap);}
+  .hplbox.v{flex-direction:column;}
+  .hplpane{flex:1;min-width:0;min-height:0;overflow:hidden;padding:6px 8px;
+    background:var(--hd-bg);border:var(--hd-bw) solid var(--hd-pane);border-radius:5px;}
+  .hplcmd{font-size:10px;line-height:1.5;color:var(--hd-text);
+    white-space:pre-wrap;word-break:break-word;}
+  .hplcmd .hplps{color:var(--hd-accent);}
+  .hplcmd.hplsh{color:var(--hd-tabdim);}
+  .hpllaunch{position:absolute;left:50%;top:9%;transform:translateX(-50%);z-index:3;
+    width:min(320px,88%);max-height:84%;overflow:hidden;font-size:10px;
+    background:var(--hd-panel);border:1px solid var(--hd-accent);border-radius:8px;
+    box-shadow:0 14px 34px rgba(0,0,0,.55);}
+  .hpllaunch .hplq{padding:6px 9px;border-bottom:1px solid var(--hd-chrome);
+    color:var(--hd-tabdim);}
+  .hplact{padding:5px 9px;}
+  .hplact.on{background:var(--hd-selwash);box-shadow:inset 2px 0 0 var(--hd-accent);}
+  .hplact .hplan{color:var(--hd-text);}
+  .hplact .hplad{color:var(--hd-tabdim);margin-left:6px;}
+  .hpltag{font-size:7.5px;letter-spacing:.07em;text-transform:uppercase;
+    border:1px solid var(--hd-chrome);border-radius:4px;padding:0 4px;
+    color:var(--hd-tabdim);margin-left:6px;}
+  .hplopt{display:flex;gap:6px;padding:2px 9px 2px 20px;color:var(--hd-dim);min-width:0;}
+  .hplopt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .hplopt .hplod{color:var(--hd-tabdim);}
+  /* A separator is unselectable: dim, no wash, uppercase when it is a heading. */
+  .hplopt.hplsep{color:var(--hd-tabdim);font-size:8px;letter-spacing:.09em;
+    text-transform:uppercase;padding-top:5px;cursor:default;}
+  .hplopt.hplspacer{height:7px;padding:0;}
+  .hplform{margin:2px 9px 7px 20px;}
+  .hplform .hplfp{color:var(--hd-dim);margin-bottom:3px;}
+  .hplform .hplfi{border:1px solid var(--hd-chrome);border-radius:4px;padding:3px 6px;
+    color:var(--hd-tabdim);background:var(--hd-bg);}
+  .hplstatus{display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding:5px 8px 6px;
+    background:var(--hd-panel);border-top:1px solid var(--hd-chrome);
+    font-size:8.5px;color:var(--hd-dim);}
+  .hplchip{border:1px solid var(--hd-chrome);border-radius:9px;padding:1px 7px;
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .hplchip b{color:var(--hd-text);}
+  .hplstatus .hpltip{flex:1 1 100%;color:var(--hd-tabdim);}
+  .hplempty{padding:30px 16px;text-align:center;font-size:11px;line-height:1.8;
+    color:var(--hd-tabdim);}
 
   /* ── saved setups ─────────────────────────────────────────────────────────── */
   .svrow{display:flex;flex-direction:column;gap:7px;}
@@ -236,6 +313,9 @@ const HERDR_CSS = `
     .hterm{height:min(30dvh,200px);flex:none;font-size:calc(var(--hd-font) * .9);}
     .hpanels{grid-template-columns:1fr;}
     .hbadge span:last-child{display:none;}
+    /* Three switch buttons share the row; the studio's 1fr 1fr grid was for two. */
+    .pswbtn{flex:1 1 0;min-width:0;padding:0 6px;}
+    .hplsplit{height:var(--dock-h,min(26dvh,190px));}
   }
 `;
 
@@ -282,6 +362,7 @@ ${topBar('herdr', ghSvg)}
     <div class="paneswitch" data-pane-toggle role="tablist" aria-label="Which window to show">
       <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
       <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
+      <button type="button" class="pswbtn" data-pane="plus" role="tab" aria-selected="false">＋ herdr plus</button>
     </div>
     <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
@@ -295,6 +376,10 @@ ${topBar('herdr', ghSvg)}
     <div class="hcol hcol-after">
       <div class="hbadge"><span class="pill aft">after</span><b>Your herdr</b><span>— herding a sample agent</span></div>
       <div id="winAfter"></div>
+    </div>
+    <div class="hcol hcol-plus">
+      <div class="hbadge"><span class="pill plus">plus</span><b>herdr-plus</b><span>— what the builders below make, rendered live</span></div>
+      <div id="winPlus"></div>
     </div>
     <div class="dockgrip" id="dockgrip" role="separator" aria-orientation="horizontal" tabindex="0"
       aria-label="Resize the preview. Arrow keys adjust the height, Home resets it."
@@ -713,6 +798,9 @@ function winHTML(s,mode){
   // Sidebar width is in COLUMNS in the config; the mock scales it to pixels so dragging
   // the number visibly moves the divider instead of doing nothing.
   var sidePx=Math.round(s.sidebarWidth*4.6)+'px';
+  // The plus mode reuses the exact same window vars, so a theme or token change
+  // restyles this view too — it is the same window, showing herdr-plus instead.
+  if(mode==='plus')return plusWin(s,vars,sidePx);
   var collapsed=s.sidebarStartCollapsed&&s.sidebarCollapsedMode==='hidden';
   var side='';
   if(!collapsed){
@@ -800,6 +888,179 @@ function winHTML(s,mode){
   return '<div class="hwin" style="'+vars+'"><div class="hbody">'+side+panes+'</div></div>';
 }
 
+// ── the herdr-plus window ─────────────────────────────────────────────────────
+// Renders what the plus builders BUILD, as herdr-plus shows it: the project browser
+// in the sidebar, the active project's tabs and panes in the window, the quick-action
+// launcher floating on top, and worktree layouts as status chips — chips, because a
+// layout has no static screen upstream: it fires on herdr's own worktree events, so
+// the strip says when it applies instead of pretending it is a thing you can see.
+// Only entries that would reach a file render — the same validity rules as the server
+// builder (name + a named tab; name + command, select needs a labelled option; repo +
+// a named tab), so this view and the files box always agree.
+//
+// plusSel is which project/tab the mock LOOKS at, not payload: it never travels.
+var plusSel={proj:0,tab:0};
+function hpNamedTabs(tabs){
+  var out=[];
+  for(var i=0;i<tabs.length;i++){if(tabs[i].name)out.push(tabs[i]);}
+  return out;
+}
+function hpLiveProjects(){
+  return state.plus.projects.filter(function(p){return p.name&&hpNamedTabs(p.tabs).length;});
+}
+function hpLiveActions(){
+  return state.plus.quickActions.filter(function(a){
+    if(!a.name||!a.command)return false;
+    if(a.type==='select')return a.options.some(function(o){return o.label;});
+    return true;
+  });
+}
+function hpLiveTrees(){
+  return state.plus.worktrees.filter(function(w){return w.repo&&hpNamedTabs(w.tabs).length;});
+}
+// The browser's grouping rule, from the docs: named groups first, sorted
+// case-insensitively; group-less projects under "Ungrouped". A linear scan instead of
+// an object keyed on free text, so a group named "constructor" stays just a name.
+function plusGroups(projs){
+  var groups=[];
+  for(var i=0;i<projs.length;i++){
+    var p=projs[i],title=p.group||'Ungrouped',named=!!p.group,g=null;
+    for(var j=0;j<groups.length;j++){
+      if(groups[j].named===named&&groups[j].title===title){g=groups[j];break;}
+    }
+    if(!g){g={title:title,named:named,items:[]};groups.push(g);}
+    g.items.push({p:p,ix:i});
+  }
+  groups.sort(function(a,b){
+    if(a.named!==b.named)return a.named?-1:1;
+    var x=a.title.toLowerCase(),y=b.title.toLowerCase();
+    return x<y?-1:(x>y?1:0);
+  });
+  return groups;
+}
+function plusPane(cmd){
+  return '<div class="hplpane">'+(cmd
+    ?('<div class="hplcmd"><span class="hplps">$ </span>'+esc(cmd)+'</div>')
+    :'<div class="hplcmd hplsh">shell</div>')+'</div>';
+}
+// Pane i and the remainder share a box: the NEXT pane's split says whether the rest
+// lands below (down = a column) or beside (right = a row). The first pane is the tab
+// root and its own split is ignored — exactly the docs' rule.
+function plusTree(panes,i){
+  if(i>=panes.length-1)return plusPane(panes[i].command);
+  return '<div class="hplbox'+(panes[i+1].split==='right'?'':' v')+'">'
+    +plusPane(panes[i].command)+plusTree(panes,i+1)+'</div>';
+}
+function plusWin(s,vars,sidePx){
+  var projs=hpLiveProjects(),acts=hpLiveActions(),trees=hpLiveTrees();
+  if(!projs.length&&!acts.length&&!trees.length){
+    return '<div class="hwin" style="'+vars+'"><div class="hplempty">nothing from'
+      +' herdr-plus yet — build a project, quick action or worktree layout below'
+      +' and it renders here, live</div></div>';
+  }
+  var pi=plusSel.proj;
+  if(pi>=projs.length)pi=projs.length-1;
+  if(pi<0)pi=0;
+  // More than one project: small chips above the window pick which one is "open".
+  var pick='';
+  if(projs.length>1){
+    pick='<div class="hplpick">';
+    for(var c=0;c<projs.length;c++){
+      pick+='<button type="button" data-pp="'+c+'"'+(c===pi?' class="on"':'')+'>'
+        +esc(projs[c].name)+'</button>';
+    }
+    pick+='</div>';
+  }
+  // The sidebar is the project browser: group heading, then each project's name with
+  // its description shown dim under it. Rows pick too.
+  var side='<div class="hside" style="width:'+sidePx+'">';
+  if(projs.length){
+    plusGroups(projs).forEach(function(g){
+      side+='<div class="hgroup">'+esc(g.title)+'</div>';
+      g.items.forEach(function(it){
+        side+='<div class="hplitem'+(it.ix===pi?' on':'')+'" data-pp="'+it.ix+'">'
+          +'<div class="hplname">'+esc(it.p.name)+'</div>'
+          +(it.p.description?('<div class="hpldim">'+esc(it.p.description)+'</div>'):'')
+          +'</div>';
+      });
+    });
+  }else{
+    side+='<div class="hgroup">Projects</div>'
+      +'<div class="hplitem"><div class="hpldim">none yet — opening one builds'
+      +' a workspace from its tabs</div></div>';
+  }
+  side+='</div>';
+
+  var mid='';
+  if(projs.length){
+    var proj=projs[pi],ptabs=hpNamedTabs(proj.tabs);
+    var tix=plusSel.tab;
+    if(tix>=ptabs.length)tix=ptabs.length-1;
+    if(tix<0)tix=0;
+    var t=ptabs[tix];
+    // Opening a project makes a workspace named after it; the tabs land in file order.
+    mid='<div class="hplwsp">workspace<b>'+esc(proj.name)+'</b></div><div class="htabs">';
+    for(var k=0;k<ptabs.length;k++){
+      mid+='<div class="htab'+(k===tix?' on':'')+'" data-pt="'+k+'">'+esc(ptabs[k].name)+'</div>';
+    }
+    mid+='</div><div class="hplsplit">'
+      +(t.panes.length?plusTree(t.panes,0):plusPane(t.command))+'</div>';
+  }else{
+    mid='<div class="hplempty">no projects yet — a finished one opens here as a workspace</div>';
+  }
+
+  // The launcher palette, floated over the window the way the real one is. Each row
+  // renders what the file will make herdr-plus do: a labelled option is selectable, a
+  // label-less one is a separator — a heading makes it a dim group title, none makes a
+  // spacer — and a form asks with its prompt (default "Enter a value") over its
+  // placeholder (default "Type a value…").
+  var pal='';
+  if(acts.length){
+    pal='<div class="hpllaunch"><div class="hplq">quick actions — type to filter</div>';
+    for(var q=0;q<acts.length;q++){
+      var a=acts[q];
+      pal+='<div class="hplact'+(q===0?' on':'')+'"><span class="hplan">'+esc(a.name)+'</span>'
+        +(a.type!=='command'?('<span class="hpltag">'+esc(a.type)+'</span>'):'')
+        +(a.description?('<span class="hplad">'+esc(a.description)+'</span>'):'')+'</div>';
+      if(a.type==='select'){
+        for(var v=0;v<a.options.length;v++){
+          var o=a.options[v];
+          if(o.label){
+            pal+='<div class="hplopt"><span>'+esc(o.label)+'</span>'
+              +(o.description?('<span class="hplod">'+esc(o.description)+'</span>'):'')+'</div>';
+          }else if(o.heading){
+            pal+='<div class="hplopt hplsep">'+esc(o.heading)+'</div>';
+          }else{
+            pal+='<div class="hplopt hplspacer"></div>';
+          }
+        }
+      }
+      if(a.type==='form'){
+        pal+='<div class="hplform"><div class="hplfp">'+esc(a.form.prompt||'Enter a value')+'</div>'
+          +'<div class="hplfi">'+esc(a.form.placeholder||'Type a value…')+'</div></div>';
+      }
+    }
+    pal+='</div>';
+  }
+
+  // Worktree layouts: one chip each, and the tip that says when they fire.
+  var status='';
+  if(trees.length){
+    status='<div class="hplstatus">';
+    trees.forEach(function(w){
+      var n=hpNamedTabs(w.tabs).length;
+      status+='<span class="hplchip">worktree layout: <b>'+esc(w.repo)
+        +(w.branch?('@'+esc(w.branch)):'')+'</b> → '+n+' tab'+(n===1?'':'s')+'</span>';
+    });
+    status+='<span class="hpltip">applies when herdr creates or opens a matching'
+      +' worktree — not on a plain git worktree add</span></div>';
+  }
+
+  return pick+'<div class="hwin" style="'+vars+'">'
+    +'<div class="hbody" style="position:relative">'+side
+    +'<div class="hpanes">'+mid+'</div>'+pal+'</div>'+status+'</div>';
+}
+
 // #rrggbb + alpha -> rgba(), so a wash can be derived from whichever accent is live.
 function hexA(hex,a){
   var m=/^#([0-9a-fA-F]{6})$/.exec(String(hex));
@@ -827,6 +1088,10 @@ function palHex(t,fb){
 function drawWindows(){
   $('#winBefore').innerHTML=winHTML(defaultHerdr(),'plain');
   $('#winAfter').innerHTML=winHTML(state,'agent');
+  // The plus window redraws on the same path, so every builder edit below — a rename,
+  // a new pane, an option flipped to separator — lands in the mock on the keystroke.
+  var wp=$('#winPlus');
+  if(wp)wp.innerHTML=winHTML(state,'plus');
 }
 
 // ── controls ──────────────────────────────────────────────────────────────────
@@ -1618,6 +1883,23 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();})
       var on=x.getAttribute('data-pane')===want;
       x.classList.toggle('on',on);x.setAttribute('aria-selected',on?'true':'false');
     });
+  });
+})();
+
+// Picking a project (a chip above the plus window or a browser row) or a tab: one
+// delegated listener, because the window's markup is rebuilt on every refresh.
+(function(){
+  var wp=$('#winPlus');if(!wp)return;
+  wp.addEventListener('click',function(e){
+    var el=e.target&&e.target.closest?e.target.closest('[data-pp],[data-pt]'):null;
+    if(!el)return;
+    if(el.hasAttribute('data-pp')){
+      plusSel.proj=Number(el.getAttribute('data-pp'))||0;
+      plusSel.tab=0;
+    }else{
+      plusSel.tab=Number(el.getAttribute('data-pt'))||0;
+    }
+    drawWindows();
   });
 })();
 
