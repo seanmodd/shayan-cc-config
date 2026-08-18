@@ -186,6 +186,47 @@ const HERDR_CSS = `
   .hplstatus .hpltip{flex:1 1 100%;color:var(--hd-tabdim);}
   .hplempty{padding:30px 16px;text-align:center;font-size:11px;line-height:1.8;
     color:var(--hd-tabdim);}
+  /* ── the plus-mode first-run guide ────────────────────────────────────────
+     Shown inside the preview window while herdr-plus has nothing to render: what
+     the plugin is, what each of its three artifacts does, and buttons that jump to
+     (and briefly flash) the builder panel that makes each one. Painted with the
+     same --hd-* vars as the rest of the window, so themes restyle it too. */
+  .hplguide{padding:15px 16px 14px;background:var(--hd-bg);}
+  .hplghead{font-size:12px;line-height:1.65;color:var(--hd-text);max-width:680px;
+    margin:0 0 11px;}
+  .hplghead b{color:var(--gold);letter-spacing:.03em;}
+  .hplgcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+    gap:9px;margin-bottom:11px;}
+  .hplgcard{border:1px solid var(--hd-chrome);border-radius:8px;background:var(--hd-panel);
+    padding:9px 10px 8px;display:flex;flex-direction:column;gap:5px;min-width:0;}
+  .hplgname{font-size:11px;font-weight:600;color:var(--hd-text);letter-spacing:.04em;}
+  .hplgwhat{font-size:10px;line-height:1.55;color:var(--hd-tabdim);flex:1;}
+  .hplgbtn{cursor:pointer;font-family:inherit;font-size:10.5px;align-self:flex-start;
+    border:1px solid var(--hd-accent);background:transparent;color:var(--hd-accent);
+    border-radius:6px;padding:4px 10px;}
+  .hplgbtn:hover{background:var(--hd-selwash);}
+  .hplgex{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+  .hplgex .hplgbtn{border-color:var(--gold);color:var(--gold);}
+  .hplgex span{font-size:10px;color:var(--hd-tabdim);}
+  /* The jump buttons' landing flash: a gold ring that fades, then cleans up. */
+  .hpflash{animation:hpflashk 1.2s ease-out;}
+  @keyframes hpflashk{
+    0%,45%{box-shadow:0 0 0 3px var(--gold),0 10px 30px rgba(229,192,123,.25);}
+    100%{box-shadow:0 0 0 3px rgba(229,192,123,0);}}
+  /* The full-width group header above the herdr-plus builder panels. */
+  .hpheadrow{margin:26px 0 0;padding-top:18px;border-top:1px solid var(--border);}
+  .hpheadrow h2{margin:0 0 7px;font-size:17px;text-transform:uppercase;
+    letter-spacing:.13em;color:var(--gold);display:flex;align-items:center;gap:9px;}
+  .hpheadrow p{margin:0;font-size:12px;line-height:1.6;color:var(--dim);max-width:880px;}
+  /* The plus-mode hint chip beside the pane switch: only while the plus preview is
+     showing rendered entries, so nobody hunts for edit controls inside the mock. */
+  .paneswitch{flex-wrap:wrap;}
+  .hplhintchip{display:none;align-items:center;cursor:pointer;font-family:inherit;
+    font-size:10.5px;color:var(--faint);border:1px dashed var(--border);
+    background:transparent;border-radius:14px;padding:3px 11px;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;max-width:100%;min-width:0;}
+  .hplhintchip:hover{color:var(--dim);border-color:var(--dim);}
+  .hplhintchip.show{display:inline-flex;}
 
   /* ── saved setups ─────────────────────────────────────────────────────────── */
   .svrow{display:flex;flex-direction:column;gap:7px;}
@@ -217,6 +258,10 @@ const HERDR_CSS = `
 }
   .hpanels{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;
     align-items:start;}
+  /* Grid items refuse to shrink below their content's min width by default, and the
+     .hfiles boxes hold preformatted TOML — without this the files panels forced the
+     whole page wider than a phone, instead of scrolling inside their own boxes. */
+  .hpanels>.panel{min-width:0;}
   @media(min-width:760px){#herdrControls{grid-template-columns:repeat(auto-fit,minmax(370px,1fr));}}
 
   /* Theme chips preview in the theme's own colours. */
@@ -315,6 +360,8 @@ const HERDR_CSS = `
     .hbadge span:last-child{display:none;}
     /* Three switch buttons share the row; the studio's 1fr 1fr grid was for two. */
     .pswbtn{flex:1 1 0;min-width:0;padding:0 6px;}
+    /* On a phone the buttons fill the row, so the hint chip wraps under them. */
+    .hplhintchip.show{flex:1 1 100%;justify-content:center;}
     .hplsplit{height:var(--dock-h,min(26dvh,190px));}
   }
 `;
@@ -363,6 +410,8 @@ ${topBar('herdr', ghSvg)}
       <button type="button" class="pswbtn" data-pane="before" role="tab" aria-selected="false">Before</button>
       <button type="button" class="pswbtn on" data-pane="after" role="tab" aria-selected="true">After</button>
       <button type="button" class="pswbtn" data-pane="plus" role="tab" aria-selected="false">＋ herdr plus</button>
+      <button type="button" class="hplhintchip" id="hplHint"
+        title="Jump to the HERDR PLUS builder panels">editing happens in the HERDR PLUS panels below ↓</button>
     </div>
     <button type="button" id="pinbtn" class="pinbtn on" aria-pressed="true"
       title="Keep the preview on screen while you scroll through the controls">
@@ -438,6 +487,14 @@ ${topBar('herdr', ghSvg)}
     else's code on your machine with your permissions. Read the repo first.</p>
   </div>
 
+  <div class="hpheadrow" id="hp-build">
+    <h2>＋ HERDR PLUS — build here</h2>
+    <p>Everything the <b>＋ herdr plus</b> preview up top can show is built in the panels below:
+    projects that open whole workspaces, quick actions for the launcher, and worktree layouts.
+    herdr-plus itself is a free, MIT-licensed plugin — the installer can add it for you; just
+    tick the box in the next panel.</p>
+  </div>
+
   <div class="panel" style="margin-top:16px"><h3>➕ herdr-plus</h3>
     <p class="phint"><b>herdr-plus</b> is a free, MIT-licensed herdr plugin by Cloudmanic Labs
     (<a href="https://github.com/cloudmanic/herdr-plus" target="_blank" rel="noreferrer" style="color:var(--accent)">cloudmanic/herdr-plus</a>)
@@ -456,14 +513,14 @@ ${topBar('herdr', ghSvg)}
   </div>
 
   <div class="hpanels" style="margin-top:14px">
-    <div class="panel"><h3>\u{1F4C1} Projects</h3>
+    <div class="panel" id="hp-projects"><h3>\u{1F4C1} Projects</h3>
       <p class="phint">One workspace per file: a name, an optional group for the browser, a
       working directory (~ and $VARS expand), and 1+ tabs — each tab either runs a command or
       splits into up to 4 panes (never both; that is a load error upstream). Entries missing a
       name or a named tab are left out of the files below.</p>
       <div id="hpProjects"></div>
     </div>
-    <div class="panel"><h3>⚡ Quick actions</h3>
+    <div class="panel" id="hp-actions"><h3>⚡ Quick actions</h3>
       <p class="phint">Launcher entries: <b>command</b> just runs; <b>select</b> offers options
       (label shown, value substituted at <span class="mono">{{.Value}}</span> or appended
       shell-quoted; a row with no label is a separator — give it a heading for a group title);
@@ -471,7 +528,7 @@ ${topBar('herdr', ghSvg)}
       left out.</p>
       <div id="hpActions"></div>
     </div>
-    <div class="panel"><h3>\u{1F33F} Worktree layouts</h3>
+    <div class="panel" id="hp-trees"><h3>\u{1F33F} Worktree layouts</h3>
       <p class="phint">Fires when herdr opens a worktree whose repo basename matches
       <span class="mono">repo</span> (case-insensitive; optional exact branch narrows it) — the
       tabs/panes shape is identical to projects. Only herdr's own worktree events trigger it,
@@ -951,12 +1008,33 @@ function plusTree(panes,i){
   return '<div class="hplbox'+(panes[i+1].split==='right'?'':' v')+'">'
     +plusPane(panes[i].command)+plusTree(panes,i+1)+'</div>';
 }
+// The first-run guide: static strings only, so building it with innerHTML is safe.
+// Each card names one herdr-plus artifact for a newcomer and jumps to its builder.
+function hpGuideCard(icon,name,what,target){
+  return '<div class="hplgcard"><div class="hplgname">'+icon+' '+name+'</div>'
+    +'<div class="hplgwhat">'+what+'</div>'
+    +'<button type="button" class="hplgbtn" data-hpgo="'+target+'">build one ↓</button></div>';
+}
 function plusWin(s,vars,sidePx){
   var projs=hpLiveProjects(),acts=hpLiveActions(),trees=hpLiveTrees();
   if(!projs.length&&!acts.length&&!trees.length){
-    return '<div class="hwin" style="'+vars+'"><div class="hplempty">nothing from'
-      +' herdr-plus yet — build a project, quick action or worktree layout below'
-      +' and it renders here, live</div></div>';
+    return '<div class="hwin" style="'+vars+'"><div class="hplguide">'
+      +'<div class="hplghead"><b>herdr plus</b> — a free plugin that gives herdr'
+      +' projects, quick actions and worktree layouts. Nothing is built yet: make an'
+      +' entry in the gold HERDR PLUS panels further down this page and it renders'
+      +' here, live.</div>'
+      +'<div class="hplgcards">'
+      +hpGuideCard('📁','Projects',
+        'one file that opens a whole workspace: tabs, panes, commands','hp-projects')
+      +hpGuideCard('⚡','Quick actions',
+        'your own launcher palette entries — plain commands, pick-lists, or ask-me forms','hp-actions')
+      +hpGuideCard('🌿','Worktree layouts',
+        'tabs/panes applied automatically when herdr opens a worktree','hp-trees')
+      +'</div>'
+      +'<div class="hplgex"><button type="button" class="hplgbtn" data-hpex="1">load an'
+      +' example setup</button><span>fills the builders with a complete, editable example'
+      +' — installs nothing</span></div>'
+      +'</div></div>';
   }
   var pi=plusSel.proj;
   if(pi>=projs.length)pi=projs.length-1;
@@ -1061,6 +1139,76 @@ function plusWin(s,vars,sidePx){
     +'<div class="hpanes">'+mid+'</div>'+pal+'</div>'+status+'</div>';
 }
 
+// Jump from the guide (or the hint chip) to a builder panel. While the preview is
+// pinned it is sticky, so a plain scroll-to-top would park the panel underneath it;
+// scroll-margin-top is set to the live sticky height so the panel lands right below
+// the mock instead — you watch the preview react while you type. Unpinned, the panel
+// goes to the top of the viewport. A brief gold flash marks the landing.
+function hpJump(id){
+  var el=document.getElementById(id);
+  if(!el)return;
+  var off=10;
+  if(document.body.classList.contains('pinned')){
+    var row=document.querySelector('.switchrow'),pair=$('#pair');
+    if(row)off+=Math.round(row.getBoundingClientRect().height);
+    if(pair)off+=Math.round(pair.getBoundingClientRect().height);
+  }
+  el.style.scrollMarginTop=off+'px';
+  el.scrollIntoView({behavior:'smooth',block:'start'});
+  el.classList.remove('hpflash');
+  void el.offsetWidth; // restart the animation when the same panel is hit twice
+  el.classList.add('hpflash');
+  clearTimeout(el._hpf);
+  el._hpf=setTimeout(function(){el.classList.remove('hpflash');},1250);
+}
+// One click seeds a complete, working example of all three artifacts — through the
+// exact state shapes sanePlus()/paintPlus() use, so the builders, the mock and the
+// files box all render it instantly and every field stays editable. It never flips
+// the install toggle and never touches entries that already exist (with entries the
+// guide is not shown, but a stale click must still be harmless).
+function hpExample(){
+  var pl=state.plus;
+  if(pl.projects.length||pl.quickActions.length||pl.worktrees.length){
+    toast('You already have entries — edit them in the HERDR PLUS panels below');
+    hpJump('hp-projects');
+    return;
+  }
+  pl.projects.push({name:'My App',description:'an editable example',group:'work',
+    workingDir:'~/code/my-app',tabs:[
+      {name:'dev',command:'npm run dev',panes:[]},
+      {name:'agent',command:'',panes:[
+        {command:'top',split:'down'},
+        {command:'',split:'right'}
+      ]}
+    ]});
+  pl.quickActions.push({name:'Servers',description:'ssh to a box',type:'select',
+    command:'ssh {{.Value}}',options:[
+      {label:'',value:'',description:'',heading:'production',sep:true},
+      {label:'web-1',value:'web1.internal',description:'',heading:'',sep:false},
+      {label:'db-1',value:'db1.internal',description:'',heading:'',sep:false}
+    ],form:{prompt:'',placeholder:''}});
+  pl.quickActions.push({name:'Search logs',description:'',type:'form',
+    command:'grep {{.Value}} logs/',options:[],
+    form:{prompt:'What to find?',placeholder:''}});
+  pl.worktrees.push({repo:'my-app',branch:'',tabs:[
+    {name:'dev',command:'npm test',panes:[]}
+  ]});
+  plusSel.proj=0;plusSel.tab=0;
+  paintPlus();
+  refresh();
+  toast('Example loaded — every entry is editable in the HERDR PLUS panels below');
+}
+// The hint chip beside the pane switch: visible only while the plus pane is showing
+// rendered entries, so nobody tries to edit inside the mock. With no live entries the
+// guide in the window already says where to go, and the chip stays out of the way.
+function syncPlusHint(){
+  var chip=$('#hplHint');if(!chip)return;
+  var pair=$('#pair');
+  var on=!!pair&&pair.getAttribute('data-pane')==='plus'
+    &&!!(hpLiveProjects().length||hpLiveActions().length||hpLiveTrees().length);
+  chip.classList.toggle('show',on);
+}
+
 // #rrggbb + alpha -> rgba(), so a wash can be derived from whichever accent is live.
 function hexA(hex,a){
   var m=/^#([0-9a-fA-F]{6})$/.exec(String(hex));
@@ -1092,6 +1240,7 @@ function drawWindows(){
   // a new pane, an option flipped to separator — lands in the mock on the keystroke.
   var wp=$('#winPlus');
   if(wp)wp.innerHTML=winHTML(state,'plus');
+  syncPlusHint();
 }
 
 // ── controls ──────────────────────────────────────────────────────────────────
@@ -1883,14 +2032,29 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hideTip();})
       var on=x.getAttribute('data-pane')===want;
       x.classList.toggle('on',on);x.setAttribute('aria-selected',on?'true':'false');
     });
+    syncPlusHint();
   });
+})();
+
+// The hint chip is itself a shortcut to the builder section it points at.
+(function(){
+  var chip=$('#hplHint');if(!chip)return;
+  chip.addEventListener('click',function(){hpJump('hp-build');});
 })();
 
 // Picking a project (a chip above the plus window or a browser row) or a tab: one
 // delegated listener, because the window's markup is rebuilt on every refresh.
+// The first-run guide's buttons ride the same listener — its markup is rebuilt on
+// every refresh too, so per-node handlers would be lost on the next keystroke.
 (function(){
   var wp=$('#winPlus');if(!wp)return;
   wp.addEventListener('click',function(e){
+    var g=e.target&&e.target.closest?e.target.closest('[data-hpgo],[data-hpex]'):null;
+    if(g){
+      if(g.hasAttribute('data-hpgo'))hpJump(g.getAttribute('data-hpgo'));
+      else hpExample();
+      return;
+    }
     var el=e.target&&e.target.closest?e.target.closest('[data-pp],[data-pt]'):null;
     if(!el)return;
     if(el.hasAttribute('data-pp')){
